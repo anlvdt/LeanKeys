@@ -290,7 +290,8 @@ setup_hook() {
   local f
   for f in vendor/vikey/Tools/autoswitch/check.sh sync/check-divergence.sh \
     tests/sync/test_check_divergence.sh tests/sync/test_sync.sh tests/sync/test_release.sh \
-    tests/update/test_swap_script.sh leankeys/build.sh tests/build/test_build_output.sh; do
+    tests/update/test_swap_script.sh leankeys/build.sh tests/build/test_build_output.sh \
+    tests/build/test_signing_identity.sh; do
     printf '#!/bin/zsh\nprint -r -- "${PWD:t} %s $* git_dir=${GIT_DIR-unset}" >> "$FAKE_LOG"\n' "$f" > "$repo/$f"
     chmod +x "$repo/$f"
   done
@@ -319,7 +320,7 @@ test_prepush_ignores_git_hook_args() {
   check $0 "sync tests ran" log_has "tests/sync/test_sync.sh" &&
   check $0 "no build without --all" not log_has "test_build_output.sh" &&
   check $0 "GIT_DIR not passed to steps" not grep -q "git_dir=[^u]" "$FAKE_LOG" &&
-  check $0 "steps in order" [ "$(cut -d' ' -f2 "$FAKE_LOG" | tr '\n' ' ')" = "cargo swift vendor/vikey/Tools/autoswitch/check.sh sync/check-divergence.sh tests/sync/test_check_divergence.sh tests/sync/test_sync.sh tests/sync/test_release.sh tests/update/test_swap_script.sh " ]
+  check $0 "steps in order" [ "$(cut -d' ' -f2 "$FAKE_LOG" | tr '\n' ' ')" = "cargo swift vendor/vikey/Tools/autoswitch/check.sh sync/check-divergence.sh tests/sync/test_check_divergence.sh tests/sync/test_sync.sh tests/sync/test_release.sh tests/update/test_swap_script.sh tests/build/test_signing_identity.sh " ]
 
   # Called directly, from a subdirectory, with git's hook arguments and --all.
   : > "$FAKE_LOG"
