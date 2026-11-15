@@ -1004,6 +1004,7 @@ struct NavButton: View {
 
 struct SettingsPageView: View {
     @ObservedObject var appState: AppState
+    var part: SettingsPart = .general // LEANKEYS-HOOK: settings-engine
     @State private var isRecordingShortcut = false
     @State private var isRecordingSecondaryShortcut = false
     @State private var isRecordingRestoreShortcut = false
@@ -1011,47 +1012,32 @@ struct SettingsPageView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if appState.shouldShowSecureInputWarning {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "lock.fill")
-                        .foregroundColor(.orange)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Bộ gõ đang tạm dừng")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(SecureInputPresentation.warningMessage(holderName: appState.secureInputHolderName))
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.orange.opacity(0.10))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.orange.opacity(0.30), lineWidth: 1)
-                )
-            }
+            if part == .general { // LEANKEYS-HOOK: settings-engine
+                StatusCard(snapshot: appState.leanStatusSnapshot) // LEANKEYS-HOOK: settings-engine
+            } // LEANKEYS-HOOK: settings-engine
 
             // Bộ gõ
+            if part == .general { // LEANKEYS-HOOK: settings-engine
             VStack(spacing: 0) {
                 SettingsToggleRow("Bộ gõ tiếng Việt", isOn: $appState.isEnabled)
                 Divider().padding(.leading, 12)
                 inputMethodRow
                 if appState.currentMethod == .telex {
+                    if SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active) { // LEANKEYS-HOOK: settings-engine
                     Divider().padding(.leading, 12)
                     SettingsToggleRow("Gõ W thành Ư", indented: true, isOn: $appState.autoWShortcut)
                     Divider().padding(.leading, 12)
                     SettingsToggleRow("Gõ [ ] thành Ơ Ư", indented: true, isOn: $appState.bracketShortcut)
                     Divider().padding(.leading, 12)
                     englishAutoRestoreRow
+                    } // LEANKEYS-HOOK: settings-engine
                 }
             }
             .cardBackground()
+            } // LEANKEYS-HOOK: settings-engine
 
             // Phím tắt
+            if part == .shortcuts { // LEANKEYS-HOOK: settings-engine
             VStack(spacing: 0) {
                 ShortcutRecorderRow(shortcut: $appState.toggleShortcut,
                                     isRecording: $isRecordingShortcut)
@@ -1070,14 +1056,18 @@ struct SettingsPageView: View {
                 )
             }
             .cardBackground()
+            } // LEANKEYS-HOOK: settings-engine
 
             // Quy tắc gõ
+            if part == .general { // LEANKEYS-HOOK: settings-engine
             VStack(spacing: 0) {
                 SettingsToggleRow("Đặt dấu kiểu mới", subtitle: "oà thay vì òa, uý thay vì úy", isOn: $appState.modernTone)
                 Divider().padding(.leading, 12)
                 SettingsToggleRow("Cho phép phụ âm ngoại", subtitle: "z, w, j, f làm phụ âm đầu", isOn: $appState.allowForeignConsonants)
+                if SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active) { // LEANKEYS-HOOK: settings-engine
                 Divider().padding(.leading, 12)
                 AutoCapitalizeRow(appState: appState)
+                } // LEANKEYS-HOOK: settings-engine
             }
             .cardBackground()
 
@@ -1094,10 +1084,13 @@ struct SettingsPageView: View {
             // Hệ thống
             VStack(spacing: 0) {
                 LaunchAtLoginToggleRow(appState: appState)
+                if SettingsLayout.showsAdvancedModeToggle { // LEANKEYS-HOOK: settings-engine
                 Divider().padding(.leading, 12)
                 SettingsToggleRow("Hiển thị cài đặt nâng cao", isOn: $appState.advancedMode)
+                } // LEANKEYS-HOOK: settings-engine
             }
             .cardBackground()
+            } // LEANKEYS-HOOK: settings-engine
 
             Spacer()
         }
@@ -1876,3 +1869,36 @@ struct LaunchAtLoginToggleRow: View {
 // MARK: - Preview
 
 #Preview { MainSettingsView() }
+// LEANKEYS-HOOK-BEGIN: settings-engine
+extension AppState {
+    /// What the status card shows: the language typing now, the auto-switch state, and any Secure Input block.
+    var leanStatusSnapshot: StatusSnapshot {
+        StatusSnapshot(
+            vietnamese: isEnabled,
+            autoSwitchApplies: EngineRouter.shared.active == .vikey,
+            autoSwitchOn: EngineRouter.shared.autoSwitchOn,
+            blocked: shouldShowSecureInputWarning,
+            blockingApp: secureInputHolderName.flatMap { $0.isEmpty ? nil : $0 }
+        )
+    }
+}
+
+enum LeanSettingsWindow {
+    static func root() -> some View {
+        SettingsRootView(
+            logo: AppMetadata.logo,
+            name: AppMetadata.name,
+            version: AppMetadata.version,
+            badge: AnyView(UpdateBadgeView()),
+            general: AnyView(SettingsPageView(appState: .shared, part: .general)),
+            shortcuts: AnyView(SettingsPageView(appState: .shared, part: .shortcuts)),
+            advanced: AnyView(AdvancedSettingsView(appState: .shared)),
+            about: AnyView(AboutPageView()),
+            pageRequests: NotificationCenter.default.publisher(for: .showSettingsPage)
+                .compactMap { ($0.object as? NavigationPage)?.rawValue }
+                .compactMap { SettingsPage(legacyRawValue: $0) }
+                .eraseToAnyPublisher()
+        )
+    }
+}
+// LEANKEYS-HOOK-END

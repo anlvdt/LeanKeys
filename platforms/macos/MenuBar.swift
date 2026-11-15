@@ -461,7 +461,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
 
     @objc private func showSettings() {
         if settingsWindow == nil {
-            let controller = NSHostingController(rootView: MainSettingsView())
+            let controller = NSHostingController(rootView: LeanSettingsWindow.root()) // LEANKEYS-HOOK: settings-engine
             controller.view.wantsLayer = true
             controller.view.layer?.backgroundColor = .clear
             let window = NSWindow(contentViewController: controller)

@@ -11,3 +11,5 @@ branding	platforms/macos/AppMetadata.swift
 branding	platforms/macos/UpdateChecker.swift
 branding	platforms/macos/UpdateManager.swift
 about	platforms/macos/MainSettingsView.swift
+settings-engine	platforms/macos/MainSettingsView.swift
+settings-engine	platforms/macos/MenuBar.swift
