@@ -1,6 +1,6 @@
 # Thử tay trước khi đăng bản
 
-Cài bản trong DMG (kéo `LeanKeys.app` vào Applications, cấp quyền Accessibility nếu được hỏi). Làm mỗi mục hai lần: một lần với engine **Gõ Nhanh**, một lần với **Vikey** (menu bar → Cài đặt → Engine gõ). Kiểu gõ Telex.
+Cài bản trong DMG (kéo `LeanKeys.app` vào Applications, cấp quyền Accessibility nếu được hỏi). Mục có hai ô làm hai lần: một lần với engine **Gõ Nhanh**, một lần với **Vikey** (menu bar → Cài đặt → Engine gõ). Mục chỉ có ô Vikey (— ở cột Gõ Nhanh) làm một lần với Vikey. Kiểu gõ Telex.
 
 Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường học". Gõ thêm một từ tiếng Anh rồi Space, từ đó phải giữ nguyên: `push` với Gõ Nhanh, `more` với Vikey.
 
@@ -13,5 +13,13 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | 5 | Slack | Gõ câu thử trong ô soạn tin nhắn (chưa gửi). | [ ] | [ ] |
 | 6 | Đổi engine khi đang gõ | Gõ dở một từ (`vieej`), đổi engine trong Cài đặt, quay lại gõ tiếp. Ô nhập không hỏng, từ sau gõ đúng với engine mới. | [ ] | [ ] |
 | 7 | Đổi app có nhớ ngôn ngữ | Bật nhớ ngôn ngữ theo app. Tắt tiếng Việt ở Terminal, bật ở Slack; chuyển qua lại vài lần, mỗi app giữ đúng trạng thái của nó. | [ ] | [ ] |
+| 8 | Return/Enter sau từ Vikey khôi phục | Gõ `more` (Vikey giữ nguyên tiếng Anh) rồi Return ngay: tin nhắn được gửi trong một ô chat (Slack, kênh thử riêng) và một form trên trang web được gửi. Chữ trước đó không đổi. | — | [ ] |
+| 9 | Dấu câu sau từ đã sửa | Gõ một từ Vikey sửa (`more`, `vieejt`) rồi `,`; làm lại với `.`. Dấu phẩy, dấu chấm hiện đúng một lần. | — | [ ] |
+| 10 | Caps Lock | Bật Caps Lock, gõ câu thử: ra "TIẾNG VIỆT TRƯỜNG HỌC". Tắt Caps Lock, gõ tiếp bình thường. | [ ] | [ ] |
+| 11 | Cập nhật | Bản Developer ID: có bản mới, để máy rảnh hơn 30 giây; app tự cập nhật, tự mở lại, gõ được ngay. Bản ad-hoc: menu hiện "⟳ Khởi động lại để cập nhật", bấm một lần là cập nhật; màn "LeanKeys vừa được cập nhật" hiện ra, làm theo (chọn LeanKeys trong Trợ năng, bấm − rồi + thêm lại) thì gõ lại được. | — | [ ] |
+| 12 | Mở cùng máy | Khởi động lại máy (launch at login bật sẵn): LeanKeys tự chạy, gõ được ngay. | — | [ ] |
+| 13 | Cài mới | Trên máy hoặc tài khoản chưa từng cài: mở app, chỉ một màn hình với nút "Mở cài đặt Trợ năng"; cấp quyền xong app tự mở lại và gõ được. | — | [ ] |
+| 14 | Secure Input | Chuyển sang tiếng Anh, vào một ô mật khẩu (Terminal: `sudo -v`): cảnh báo Secure Input vẫn hiện trên menu bar. | — | [ ] |
+| 15 | Tắt hẳn ở Terminal | Tắt tiếng Việt ở Terminal (menu bar), gõ `vieejt ` và `treen `: giữ nguyên tiếng Anh, biểu tượng vẫn ở trạng thái tắt. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 14 ô đều đạt.
+Chỉ gõ `yes` khi cả 23 ô đều đạt.
