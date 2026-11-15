@@ -94,8 +94,8 @@ public struct SettingsRootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(contentBackground)
         }
-        .frame(width: 700, height: 480)
         .ignoresSafeArea()
+        .frame(width: 700, height: 480)
         .onReceive(pageRequests) { selected = $0 }
     }
 

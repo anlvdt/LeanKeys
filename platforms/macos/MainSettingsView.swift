@@ -650,12 +650,14 @@ struct SettingsToggleRow: View {
     let title: String
     let subtitle: String?
     let indented: Bool
+    let weight: Font.Weight // LEANKEYS-HOOK: settings-engine
     @Binding var isOn: Bool
 
-    init(_ title: String, subtitle: String? = nil, indented: Bool = false, isOn: Binding<Bool>) {
+    init(_ title: String, subtitle: String? = nil, indented: Bool = false, weight: Font.Weight = .regular, isOn: Binding<Bool>) { // LEANKEYS-HOOK: settings-engine
         self.title = title
         self.subtitle = subtitle
         self.indented = indented
+        self.weight = weight // LEANKEYS-HOOK: settings-engine
         _isOn = isOn
     }
 
@@ -668,14 +670,14 @@ struct SettingsToggleRow: View {
                         .foregroundColor(Color(NSColor.tertiaryLabelColor))
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 13))
+                    Text(title).font(.system(size: 13, weight: weight)) // LEANKEYS-HOOK: settings-engine
                     if let subtitle {
                         Text(subtitle).font(.system(size: 11)).foregroundColor(Color(NSColor.secondaryLabelColor))
                     }
                 }
             }
             Spacer()
-            Toggle("", isOn: $isOn).toggleStyle(.switch).labelsHidden()
+            Toggle("", isOn: $isOn).toggleStyle(.switch).controlSize(.mini).labelsHidden() // LEANKEYS-HOOK: settings-engine
         }
     }
 }
@@ -1013,13 +1015,13 @@ struct SettingsPageView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             if part == .general { // LEANKEYS-HOOK: settings-engine
-                StatusCard(snapshot: appState.leanStatusSnapshot) // LEANKEYS-HOOK: settings-engine
+                StatusCard(snapshot: appState.leanStatusSnapshot) // LEANKEYS-HOOK: settings-engine (replaces Gõ Nhanh's Secure Input banner; keep it out on upstream sync)
             } // LEANKEYS-HOOK: settings-engine
 
             // Bộ gõ
             if part == .general { // LEANKEYS-HOOK: settings-engine
             VStack(spacing: 0) {
-                SettingsToggleRow("Bộ gõ tiếng Việt", isOn: $appState.isEnabled)
+                SettingsToggleRow("Bộ gõ tiếng Việt", weight: .semibold, isOn: $appState.isEnabled) // LEANKEYS-HOOK: settings-engine
                 Divider().padding(.leading, 12)
                 inputMethodRow
                 if appState.currentMethod == .telex {
@@ -1500,6 +1502,7 @@ struct ShortcutRecorderRow: View {
                 if let isEnabled {
                     Toggle("", isOn: isEnabled)
                         .toggleStyle(.switch)
+                        .controlSize(.mini) // LEANKEYS-HOOK: settings-engine
                         .labelsHidden()
                 }
             }
@@ -1590,6 +1593,7 @@ struct RestoreShortcutRecorderRow: View {
                 shortcutDisplay
                 Toggle("", isOn: $isEnabled)
                     .toggleStyle(.switch)
+                    .controlSize(.mini) // LEANKEYS-HOOK: settings-engine
                     .labelsHidden()
             }
         }
@@ -1700,7 +1704,7 @@ struct AutoCapitalizeRow: View {
                 }
             }
             Spacer()
-            Toggle("", isOn: $appState.autoCapitalize).toggleStyle(.switch).labelsHidden()
+            Toggle("", isOn: $appState.autoCapitalize).toggleStyle(.switch).controlSize(.mini).labelsHidden() // LEANKEYS-HOOK: settings-engine
         }
         .sheet(isPresented: $showSheet) {
             AutoCapitalizeExcludedAppsSheet(appState: appState)
@@ -1841,6 +1845,7 @@ struct AppToggleRow: View {
                 set: { onToggle($0) }
             ))
             .toggleStyle(.switch)
+            .controlSize(.mini) // LEANKEYS-HOOK: settings-engine
             .labelsHidden()
         }
         .padding(.vertical, 2)
@@ -1861,6 +1866,7 @@ struct LaunchAtLoginToggleRow: View {
                 set: { appState.toggleLaunchAtLogin($0) }
             ))
             .toggleStyle(.switch)
+            .controlSize(.mini) // LEANKEYS-HOOK: settings-engine
             .labelsHidden()
         }
     }
