@@ -28,6 +28,7 @@
 		B1000001000000000000002 /* LaunchAtLoginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002000000000000002 /* LaunchAtLoginTests.swift */; };
 		B1000001000000000000003 /* SoundManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002000000000000003 /* SoundManagerTests.swift */; };
 		UPDATECHK001 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = UPDATECHK002 /* UpdateChecker.swift */; };
+		1EA4C0D1E000000000000001 /* LeanKeysKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1EA4C0D1E000000000000003 /* LeanKeysKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +74,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000001000000000000005 /* libgonhanh_core.a in Frameworks */,
+				1EA4C0D1E000000000000001 /* LeanKeysKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -149,6 +151,7 @@
 			);
 			name = GoNhanh;
 			packageProductDependencies = (
+				1EA4C0D1E000000000000003 /* LeanKeysKit */,
 			);
 			productName = GoNhanh;
 			productReference = A1000003000000000000001 /* GoNhanh.app */;
@@ -201,6 +204,7 @@
 			);
 			mainGroup = A1000005000000000000001;
 			packageReferences = (
+				1EA4C0D1E000000000000002 /* XCLocalSwiftPackageReference "../.." */,
 			);
 			productRefGroup = A1000005000000000000002 /* Products */;
 			projectDirPath = "";
@@ -540,6 +544,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		1EA4C0D1E000000000000002 /* XCLocalSwiftPackageReference "../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1EA4C0D1E000000000000003 /* LeanKeysKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LeanKeysKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 	};
 	rootObject = A1000010000000000000001 /* Project object */;

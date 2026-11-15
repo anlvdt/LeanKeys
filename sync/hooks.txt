@@ -1,2 +1,9 @@
 FILE	LICENSE
 gitignore	.gitignore
+# Only the LeanKeysKit package block (local package reference, product dependency, Frameworks build file) may be added; change nothing else.
+FILE	platforms/macos/GoNhanh.xcodeproj/project.pbxproj
+engine-dispatch	platforms/macos/RustBridge.swift
+engine-method	platforms/macos/RustBridge.swift
+engine-enabled	platforms/macos/RustBridge.swift
+engine-reset	platforms/macos/RustBridge.swift
+language-sync	platforms/macos/MenuBar.swift

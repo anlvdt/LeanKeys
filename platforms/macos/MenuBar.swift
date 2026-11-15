@@ -1,5 +1,6 @@
 import Cocoa
 import Combine
+import LeanKeysKit // LEANKEYS-HOOK: language-sync
 import SwiftUI
 
 // MARK: - Notifications
@@ -258,6 +259,14 @@ class MenuBarController: NSObject, NSWindowDelegate {
         KeyboardHookManager.shared.start()
         RustBridge.setEnabled(appState.isEnabled)
         RustBridge.setMethod(appState.currentMethod.rawValue)
+        // LEANKEYS-HOOK-BEGIN: language-sync
+        // Vikey switched language with its own hotkey: mirror it in AppState (menu bar icon, saved state).
+        // Assign only on change; the didSet reaches EngineRouter.setEnabled, which does not post again.
+        NotificationCenter.default.addObserver(forName: .leanKeysLanguageChanged, object: nil, queue: .main) { [weak self] note in
+            guard let self, let on = note.userInfo?["vietnamese"] as? Bool, appState.isEnabled != on else { return }
+            appState.isEnabled = on
+        }
+        // LEANKEYS-HOOK-END
 
         // Sync all engine settings (these were loaded before engine was ready)
         RustBridge.setModernTone(appState.modernTone)

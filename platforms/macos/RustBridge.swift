@@ -2,6 +2,7 @@ import AppKit
 import Carbon
 import Foundation
 import IOKit
+import LeanKeysKit // LEANKEYS-HOOK: engine-dispatch
 
 // MARK: - Accessibility helpers
 
@@ -645,6 +646,7 @@ class RustBridge {
     ///           Used for Option-modified keys (e.g., Option+V → √).
     static func processKey(keyCode: UInt16, caps: Bool, ctrl: Bool, shift: Bool = false, char: Character? = nil) -> (Int, [Character], Bool)? {
         guard isInitialized else { return nil }
+        if case .handled(let r) = EngineRouter.shared.intercept(keyCode: keyCode, caps: caps, ctrl: ctrl, shift: shift) { return r } // LEANKEYS-HOOK: engine-dispatch
 
         let ptr: UnsafeMutablePointer<ImeResult>?
         if let char {
@@ -671,11 +673,13 @@ class RustBridge {
 
     static func setMethod(_ method: Int) {
         ime_method(UInt8(method))
+        EngineRouter.shared.setMethod(method) // LEANKEYS-HOOK: engine-method
     }
 
     static func setEnabled(_ enabled: Bool) {
         // GATE: Only enable if input source is allowed, always allow disable
         ime_enabled(enabled && InputSourceObserver.shared.isAllowedInputSource)
+        EngineRouter.shared.setEnabled(enabled && InputSourceObserver.shared.isAllowedInputSource) // LEANKEYS-HOOK: engine-enabled
     }
 
     /// Set whether to skip w→ư shortcut in Telex mode
@@ -725,11 +729,13 @@ class RustBridge {
 
     static func clearBuffer() {
         ime_clear()
+        EngineRouter.shared.clear() // LEANKEYS-HOOK: engine-reset
     }
 
     /// Clear buffer and word history (use on mouse click, focus change)
     static func clearBufferAll() {
         ime_clear_all()
+        EngineRouter.shared.clear() // LEANKEYS-HOOK: engine-reset
     }
 
     /// Restore buffer from a Vietnamese word (for backspace-into-word editing)
