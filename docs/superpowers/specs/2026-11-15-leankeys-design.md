@@ -129,6 +129,7 @@ Mọi chỗ sửa trong file gốc phải có chú thích `// LEANKEYS-HOOK: <t�
 | Công cụ chuyển mã văn bản | OpenKey `engine/ConvertTool.cpp` | ✋ | GĐ3 |
 | Gợi ý từ khi gõ (học từ Laban Key) | Vikey `vAutoSwitchCompletions` + UI LeanKeys | 🔄 dữ liệu, ✋ UI | GĐ4 |
 | Tự đề xuất gõ tắt từ nội dung lặp lại (địa chỉ, SĐT, MST…) | LeanKeys | — | GĐ4 |
+| Tự học từ hoàn tác (từ điển cá nhân Việt/Anh) | LeanKeys | — | GĐ4 |
 
 **Bảng mã cũ** là lớp chuyển đổi đặt sau engine. Nó đổi `EngineEdit.text` từ Unicode sang bảng mã của app hiện tại, và tính lại `deleteCount` theo số đơn vị mã thực tế, vì một ký tự Việt có thể chiếm 2 byte trong VNI Windows hay Unicode tổ hợp. Nhờ vậy lớp này chạy với cả hai engine.
 
@@ -225,7 +226,7 @@ Với cả hai engine, thử trên Chrome (thanh địa chỉ và ô nhập), Sp
 
 ## 11. Giai đoạn 4: Gợi ý thông minh
 
-Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ chạy trên iOS/Android. LeanKeys chỉ học ý tưởng của nó, không dùng code và không tự cập nhật theo nó. Các tính năng chỉ có ý nghĩa trên màn hình cảm ứng (vẽ dấu, vuốt để gõ, giao diện bàn phím) nằm ngoài phạm vi. GĐ4 gồm hai kế hoạch riêng, làm **4B trước, rồi tới 4A**.
+Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ chạy trên iOS/Android. LeanKeys chỉ học ý tưởng của nó, không dùng code và không tự cập nhật theo nó. Các tính năng chỉ có ý nghĩa trên màn hình cảm ứng (vẽ dấu, vuốt để gõ, giao diện bàn phím) nằm ngoài phạm vi. GĐ4 gồm ba kế hoạch riêng, làm theo thứ tự **4C (mục 12) → 4B → 4A**. 4C đứng đầu vì gõ trộn Việt/Anh là ưu tiên số một.
 
 ### 11.1 4B: Tự đề xuất gõ tắt từ nội dung lặp lại
 
@@ -266,7 +267,7 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 - Không hiện trong ô mật khẩu hay Secure Input, và không hiện trong các app bị loại trừ ở 11.1.
 
 ### 11.3 Điểm gắn mới
-- `word-commit`: báo cho LeanKeys chữ vừa gõ xong mỗi từ hoặc cụm, với cả hai engine. Dùng cho 4B và 4A.
+- `word-commit`: báo cho LeanKeys chữ vừa gõ xong mỗi từ hoặc cụm, với cả hai engine, và cho LeanKeys trả về một bản thay thế (xoá N ký tự, chèn chuỗi). Dùng cho 4C, 4B và 4A.
 - `shortcut-store`: thêm gõ tắt vào kho của Gõ Nhanh từ LeanKeys.
 - Riêng phím Tab và ⌥1–⌥3 của 4A được xử lý trong `EngineRouter.intercept`, qua điểm `engine-dispatch` đã có.
 
@@ -274,3 +275,37 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 - **4B, test đơn vị:** nhận dạng từng loại (có các ví dụ sai: số thẻ, OTP, chuỗi ngắn), sinh tên tắt và cách tránh trùng, ngưỡng và cửa sổ 30 ngày, và kiểm tra rằng chữ thật không xuất hiện trong file lưu trước khi cụm đạt ngưỡng.
 - **4A:** xếp hạng gợi ý, Tab chèn đúng phần còn thiếu, ẩn ô khi con trỏ đổi chỗ.
 - **Thử tay:** địa chỉ hay SĐT gõ 3 lần thì có đề xuất, Thêm xong gõ `sdt` bung ra đúng; ô mật khẩu không bị học.
+
+## 12. 4C: Tự học từ hoàn tác (từ điển cá nhân Việt/Anh)
+
+Thêm ngày 2026-11-15.
+
+**Bối cảnh.** Đo bằng `tools/mixbench` (2026-11-15) cho thấy engine Vikey chỉ sai 0.1–0.2% số từ khi gõ trộn. Phần sai còn lại hầu hết là các cặp từ trùng nhau giữa tiếng Anh và Telex: `cos/có`, `car/cả`, `sex/sẽ`, `nos/nó`, `its/ít`, `queen/quên`, `moon/môn`. Không quy tắc chung nào sửa được hết mà không hỏng tiếng Anh. Đáp án đúng tuỳ người, nên LeanKeys học từ chính người dùng.
+
+### 12.1 Hành vi
+- **Tín hiệu học.** Mỗi lần người dùng hoàn tác một lần engine tự đổi từ là một tín hiệu: ⌫⌫ ngay sau khi Vikey tự sửa (Vikey D61), ESC hoặc Backspace hoàn tác auto-restore của Gõ Nhanh, hay đổi ngôn ngữ bằng tay rồi gõ lại đúng từ vừa gõ.
+- **Nội dung lưu** là một luật: (từ đứng trước, chuỗi phím của từ) → kết quả người dùng muốn (giữ nguyên phím, hay dạng tiếng Việt). Mỗi luật kèm số lần được xác nhận.
+- **Khi nào áp dụng:**
+  - Luật có ngữ cảnh (cùng từ đứng trước): áp dụng ngay sau **1** lần hoàn tác.
+  - Luật không ngữ cảnh: áp dụng sau **2** lần hoàn tác cùng chiều. Nếu người dùng hoàn tác ngược chiều thì bỏ luật, và luật đó cần thêm 2 lần xác nhận nữa mới được dùng lại.
+- **Cách áp dụng.** Khi một từ được chốt (phím cách hoặc dấu câu), nếu có luật khớp và kết quả của engine khác kết quả người dùng muốn, LeanKeys thay từ đó qua `word-commit`. Chạy với cả hai engine.
+- **Không cần thao tác.** Tính năng bật sẵn, không có bước cài đặt. Cài đặt có danh sách "Từ đã học" để xem, xoá từng mục, xoá hết, hoặc tắt hẳn.
+
+### 12.2 Bảo mật
+- Chỉ lưu những từ người dùng đã hoàn tác, không lưu văn bản khác. Lưu trên máy, mã hoá bằng khoá trong Keychain, không gửi đi đâu.
+- Không học trong Secure Input, ô mật khẩu, hay các app bị loại trừ ở 11.1.
+- Giới hạn 5.000 luật. Khi đầy, bỏ luật lâu không dùng nhất (LRU).
+
+### 12.3 Liên quan tới repo gốc
+- Không sửa `vendor/vikey`. Việc thay từ diễn ra trong LeanKeys, sau khi engine đã ra kết quả.
+- Nếu `tools/mixbench` hay báo lỗi của người dùng cho thấy một lỗi chung (không phải sở thích riêng), lỗi đó được đề xuất lên Vikey dưới dạng PR kèm ca test. Mỗi PR chỉ gửi khi người dùng đồng ý.
+
+### 12.4 Test
+- **Đơn vị:**
+  - Học sau 1 lần (có ngữ cảnh) và sau 2 lần (không ngữ cảnh).
+  - Hoàn tác ngược chiều thì bỏ luật.
+  - Giới hạn và loại bỏ theo LRU.
+  - Không học khi Secure Input bật.
+  - Xoá một luật hay xoá hết.
+- **mixbench:** thêm chế độ "người dùng tự học". Mỗi từ sai sinh một lần hoàn tác, gõ lại cả kho câu, và báo tỉ lệ sai sau khi học. Mục tiêu: lỗi lặp lại của cùng một cặp từ trong cùng ngữ cảnh giảm về 0.
+- **Thử tay:** gõ "its" trong một câu tiếng Anh, ⌫⌫, lần sau trong cùng ngữ cảnh thì giữ "its". Gõ "cos" ở đầu câu tiếng Việt thì ra "có".
