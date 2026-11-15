@@ -50,4 +50,26 @@ void lk_vikey_set_options(int modernOrthography, int autoSwitch, int telexStyle)
     if (driver) driver->autoSwitch = autoSwitch != 0;
 }
 
+int lk_vikey_word_score(int vietnamese, const char* letters) {
+    if (!letters) return LK_VIKEY_NOT_A_WORD;
+    // vAutoSwitchWordScore compares lowercase keys ("a"-"z") and rejects keys of 39 or more.
+    char key[40];
+    int n = 0;
+    for (; letters[n]; n++) {
+        if (n >= (int)sizeof(key) - 1) return LK_VIKEY_NOT_A_WORD;
+        char c = letters[n];
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        if (c < 'a' || c > 'z') return LK_VIKEY_NOT_A_WORD;
+        key[n] = c;
+    }
+    if (n == 0) return LK_VIKEY_NOT_A_WORD;
+    key[n] = 0;
+    // The Vietnamese path replays the keys through vKeyHandleEvent, which needs the hook state vKeyInit()
+    // sets up in VikeyDriver's constructor (vendor/vikey/Engine/Driver.cpp). The English path only reads
+    // static tables, but initialising is idempotent and cheap.
+    if (vietnamese) lk_vikey_init();
+    // rendered/renderedLen may be null: the engine checks (Vikey's own VKWordScore passes nullptr).
+    return vAutoSwitchWordScore(vietnamese ? 1 : 0, key, nullptr, nullptr);
+}
+
 }
