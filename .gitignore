@@ -76,3 +76,7 @@ tools/mixbench/*.tsv
 *.vk
 tools/mixbench/gn/target/
 # LEANKEYS-HOOK-END
+
+# Signing key backup (never commit)
+.signing/
+*.p12
