@@ -352,3 +352,60 @@ Chỉ **một màn**: nút cấp quyền Accessibility, cộng một công tắc
   - Bộ đếm nhàn rỗi: không cài khi vừa có phím trong 30 giây.
   - Test build kiểm tra rằng khởi động cùng máy được đăng ký ở lần chạy đầu.
   - Thử tay: cài mới, chỉ bấm cấp quyền, rồi gõ trộn được ngay.
+
+## 14. Giao diện mới: gọn, tự động, mượt
+
+Thêm ngày 2026-11-15, người dùng đã duyệt cả ba phương án A, B, C. Ba phương án được gộp thành một thiết kế: **cấu trúc B** (thanh bên nhiều trang), **trang Chung tối giản theo A**, và **ô nổi trên menu bar theo C**.
+
+**Mục tiêu:** người dùng thường chỉ cần bấm icon menu bar, không bao giờ phải mở cửa sổ Cài đặt. Trên trang chính không có mục nào vô tác dụng.
+
+### 14.1 Ô nổi trên menu bar (thay menu thả xuống)
+- Bấm trái icon LeanKeys mở một `NSPopover` viết bằng SwiftUI, rộng khoảng 280 pt. Nội dung từ trên xuống:
+  1. **Trạng thái:** một nút gạt lớn hai nấc `Tiếng Việt` / `English`, đổi ngay khi bấm (tương đương phím tắt bật/tắt). Bên dưới là một dòng nhỏ: `Tự chuyển Việt/Anh: Bật` (hoặc `Tạm dừng` khi người dùng đã tự tắt).
+  2. **Cảnh báo** (chỉ khi có): `⚠︎ <Tên app> đang chặn gõ tiếng Việt`, lấy từ `SecureInputHolder` có sẵn.
+  3. **Kiểu gõ:** menu thả xuống `Telex` / `VNI`.
+  4. **Cập nhật** (chỉ khi có bản mới sẵn sàng): nút `Cài bản mới` (chạy bộ cài an toàn).
+  5. Hàng cuối: `Cài đặt…` · `Thoát`.
+- Bấm phải, hoặc Option + bấm, mở menu cũ của Gõ Nhanh, để không mất chức năng nào.
+- Ô nổi tự đóng khi bấm ra ngoài (`.transient`).
+
+### 14.2 Icon menu bar đổi mượt
+- Khi đổi Việt/Anh, kể cả khi Vikey tự chuyển, icon chuyển bằng hiệu ứng mờ dần (crossfade) trong 150 ms.
+- Nếu người dùng bật "Giảm chuyển động" (`accessibilityDisplayShouldReduceMotion`) thì không có hiệu ứng.
+
+### 14.3 Cửa sổ Cài đặt: thanh bên bốn trang
+- **Thanh bên:** logo 48 pt cạnh tên "LeanKeys" và phiên bản trên cùng một hàng; bên dưới là `Chung` · `Phím tắt` · `Nâng cao` · `Giới thiệu`, mỗi mục có biểu tượng SF Symbol.
+- **Chung:**
+  - Thẻ trạng thái giống phần đầu của ô nổi: trạng thái, dòng tự chuyển, cảnh báo nếu có.
+  - Công tắc `Bộ gõ tiếng Việt`, chữ đậm hơn các mục khác.
+  - `Kiểu gõ`.
+  - Các mục chỉ dành cho Gõ Nhanh (`Gõ W thành Ư`, `Gõ [ ] thành Ơ Ư`, `Tự khôi phục tiếng Anh`, `Tự viết hoa đầu câu`) **chỉ hiện khi** engine là "Chỉ dùng Gõ Nhanh". Ở chế độ "Tự động", chúng không xuất hiện.
+- **Phím tắt:** các dòng phím tắt bật/tắt hiện có của Gõ Nhanh, chuyển nguyên sang trang này.
+- **Nâng cao:** thẻ thu gọn `Engine gõ` (mục 13), rồi các phần hiệu năng, tương thích và tuỳ chỉnh theo app hiện có của Gõ Nhanh.
+- **Giới thiệu:** giữ như hiện tại, có ghi công.
+- **Ghi chú trên giao diện tối đa một dòng.** Giải thích dài hơn nằm trong tooltip của biểu tượng ⓘ. Không đưa chữ kỹ thuật như "giai đoạn 4" ra giao diện.
+- **Màu:** chữ phụ phải đạt tương phản ≥ 4.5:1 ở cả chế độ sáng và tối; dùng màu hệ thống `secondaryLabelColor`, không dùng xám tự chọn.
+
+### 14.4 Cách gắn vào code gốc
+- Toàn bộ giao diện mới nằm trong LeanKeysKit (`leankeys/LeanKeysKit/UI/`): `StatusPopoverView`, `SettingsRootView`, `StatusCard`, `MenuBarIconAnimator`.
+- Các trang dùng lại phần có sẵn của Gõ Nhanh (phím tắt, nâng cao, giới thiệu) bằng cách truyền view vào: điểm gắn dựng `SettingsRootView(general:shortcuts:advanced:about:)` với các view của Gõ Nhanh bọc trong `AnyView`. Không chép code của Gõ Nhanh sang.
+- Điểm gắn:
+  - `menubar-popover` (tên mới) trong `MenuBar.swift`, nơi gắn hành động bấm vào icon.
+  - Điểm thay gốc cửa sổ Cài đặt dùng lại tên `settings-engine`.
+  - Tổng số tên hook ≤ 9.
+- Nếu một view của Gõ Nhanh là `private` và không truyền được, điểm gắn chỉ được đổi mức truy cập (`private` → `internal`) ở dòng đó, có đánh dấu hook. Không sửa nội dung view.
+
+### 14.5 Test
+- **Đơn vị:**
+  - Logic hiện hoặc ẩn các mục chỉ dành cho Gõ Nhanh theo engine.
+  - Nội dung thẻ trạng thái (Việt/Anh, tự chuyển bật/tạm dừng, cảnh báo Secure Input).
+  - Bộ đổi icon tôn trọng "Giảm chuyển động".
+- **Ảnh chụp để duyệt:**
+  - Một script dựng `StatusPopoverView` và các trang của `SettingsRootView` ra PNG bằng `ImageRenderer`, ở cả chế độ sáng và tối, lưu vào `docs/ui/`.
+  - Người dùng duyệt các ảnh này trước khi merge.
+- **Thử tay:** thêm vào `sync/manual-checklist.md`:
+  - bấm icon thì ô nổi mở, đổi Việt/Anh ngay;
+  - bấm phải thì mở menu cũ;
+  - icon đổi mượt khi Vikey tự chuyển;
+  - chế độ tối;
+  - "Giảm chuyển động".
