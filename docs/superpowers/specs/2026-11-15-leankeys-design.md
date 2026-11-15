@@ -107,7 +107,7 @@ Mọi chỗ sửa trong file gốc phải có chú thích `// LEANKEYS-HOOK: <t�
 
 ### 3.5 Quy tắc khi chọn engine
 
-- Mặc định dùng engine Gõ Nhanh.
+- Mặc định dùng engine **Vikey** (đổi ngày 2026-11-15, xem mục 13). Gõ Nhanh chọn được trong Cài đặt, và là engine dự phòng khi Vikey lỗi hoặc khi dùng VNI.
 - Kiểu gõ VNI chỉ chạy với engine Gõ Nhanh. Khi chọn engine Vikey, mục VNI bị khoá và có ghi chú giải thích.
 - Khi dùng engine Vikey, "tự khôi phục từ tiếng Anh" của Gõ Nhanh bị ẩn hoặc tắt, vì Vikey có cơ chế tự chuyển riêng.
 - Các cài đặt chung (dấu kiểu mới, viết hoa đầu câu…) được chuyển cho engine nào có hỗ trợ. Engine không hỗ trợ thì mục đó bị làm mờ.
@@ -309,3 +309,46 @@ Thêm ngày 2026-11-15.
   - Xoá một luật hay xoá hết.
 - **mixbench:** thêm chế độ "người dùng tự học". Mỗi từ sai sinh một lần hoàn tác, gõ lại cả kho câu, và báo tỉ lệ sai sau khi học. Mục tiêu: lỗi lặp lại của cùng một cặp từ trong cùng ngữ cảnh giảm về 0.
 - **Thử tay:** gõ "its" trong một câu tiếng Anh, ⌫⌫, lần sau trong cùng ngữ cảnh thì giữ "its". Gõ "cos" ở đầu câu tiếng Việt thì ra "có".
+
+## 13. Mặc định "cài xong là gõ"
+
+Thêm ngày 2026-11-15. **Mục tiêu:** người dùng chỉ cần mở máy và gõ. Mọi thứ khác tự chạy.
+
+### 13.1 Những bước không bỏ được
+- **Cấp quyền Accessibility một lần** khi cài. macOS bắt buộc với mọi bộ gõ kiểu này.
+- **Khi còn ký ad-hoc** thì có thêm hai bước: chạy `xattr -cr` khi cài, và cấp lại quyền Accessibility sau mỗi lần cập nhật. Có Developer ID (mục 6.4) là bỏ được cả hai. **Khuyến nghị mua Developer ID** để đạt đúng mục tiêu này.
+
+### 13.2 Mặc định
+
+| Mục | Mặc định |
+|---|---|
+| Engine | Vikey: tự chuyển Việt/Anh theo ngữ cảnh, để yên code, ⌫⌫ để hoàn tác. Lý do: `tools/mixbench` đo được Vikey sai 0.13–0.23% số từ khi gõ trộn, còn Gõ Nhanh có auto-restore sai 0.46–3.50% |
+| Khởi động cùng máy | Bật sẵn, không hỏi (dùng `LaunchAtLogin` có sẵn của Gõ Nhanh) |
+| Cập nhật | Tự tải và tự cài ngầm. Chỉ áp dụng khi không có phím nào trong 30 giây, và không bao giờ áp dụng giữa lúc đang gõ |
+| Nhớ ngôn ngữ theo app | Bật (có sẵn) |
+| Sửa lỗi theo app (Chrome, Spotlight, IDE…) | Tự động (có sẵn) |
+| Cảnh báo app đang chặn gõ (Secure Input) | Bật (có sẵn). Với engine Vikey, cảnh báo hiện cả khi đang ở chế độ Anh, vì engine vẫn chạy |
+| Tự học từ hoàn tác (4C) | Bật sẵn |
+| Gợi ý từ (4A) | Bật sẵn, Esc để ẩn |
+| Đề xuất gõ tắt (4B) | Hỏi một lần duy nhất ở màn chào. Bật rồi thì mỗi đề xuất chỉ cần một cú bấm "Thêm" |
+
+### 13.3 Màn chào
+Chỉ **một màn**: nút cấp quyền Accessibility, cộng một công tắc cho 4B. Không có lựa chọn engine, kiểu gõ hay phím tắt ở lần đầu; những thứ đó nằm trong Cài đặt cho ai cần.
+
+### 13.4 Hai chỗ cố ý không tự động hoàn toàn
+- 4B không tự thêm gõ tắt khi người dùng chưa đồng ý, vì một gõ tắt sai sẽ tự bung chữ lạ lúc gõ.
+- 4B không tự bật ngầm, vì nó đếm cả dữ liệu cá nhân (địa chỉ, SĐT, MST).
+
+### 13.5 Triển khai
+- Làm thành một task bổ sung của GĐ1, ngay sau Task 8. Nội dung:
+  - đổi engine mặc định sang Vikey;
+  - bật khởi động cùng máy khi chạy lần đầu;
+  - cài cập nhật ngầm, kèm điều kiện nhàn rỗi 30 giây;
+  - gộp màn chào còn một màn;
+  - cho cảnh báo Secure Input hiện với Vikey ở chế độ Anh.
+- Cần thêm điểm gắn `auto-update` (cài ngầm, trong `UpdateManager`) và `onboarding` (gộp màn chào). Tổng số tên hook vẫn ≤ 12; nếu vượt thì gộp vào `branding`.
+- **Test:**
+  - Router: mặc định là `.vikey` khi chưa có giá trị lưu.
+  - Bộ đếm nhàn rỗi: không cài khi vừa có phím trong 30 giây.
+  - Test build kiểm tra rằng khởi động cùng máy được đăng ký ở lần chạy đầu.
+  - Thử tay: cài mới, chỉ bấm cấp quyền, rồi gõ trộn được ngay.
