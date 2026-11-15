@@ -325,3 +325,50 @@ Chữ hiển thị (cố định):
 - [ ] **Step 4:** Viết `.githooks/pre-push` (zsh, `set -e`). Thêm hướng dẫn `git config core.hooksPath .githooks` vào `.github/README.md`, mục "Phát triển".
 - [ ] **Step 5:** Chạy `zsh tests/sync/test_release.sh` (kết quả mong đợi PASS), rồi `.githooks/pre-push --all` (kết quả mong đợi thoát 0).
 - [ ] **Step 6:** Commit `"Add release script and pre-push gate"`. **Không chạy `release.sh` thật.** Lần đăng bản đầu tiên do bạn quyết định.
+
+### Task 9: Mặc định "cài xong là gõ" (spec §13)
+
+Task này được thêm sau khi kế hoạch đã duyệt, theo spec mục 13.
+
+**Files:**
+- Modify: `leankeys/LeanKeysKit/Engine/LeanSettings.swift`. Khi chưa có giá trị lưu, mặc định là `.vikey`.
+- Modify: `leankeys/LeanKeysKit/UI/EngineSettingsSection.swift`. Nhãn lựa chọn đổi thành `Vikey — tự chuyển Việt/Anh theo ngữ cảnh (mặc định)` và `Gõ Nhanh`.
+- Create: `leankeys/LeanKeysKit/FirstRun/IdleGate.swift`, `leankeys/LeanKeysKit/FirstRun/FirstRun.swift`, `leankeys/LeanKeysKit/UI/LeanOnboardingView.swift`
+- Modify, hook `branding` (đã đăng ký cho file này): `platforms/macos/UpdateManager.swift`. Bản cập nhật tìm được thì tự tải, và chỉ cài khi `IdleGate.isIdle` là true; nếu chưa nhàn rỗi thì thử lại mỗi 60 giây. Không hiện hộp thoại hỏi.
+- Modify, hook `onboarding` (tên mới): nơi app mở onboarding (`MenuBar.swift`, quanh dòng 34-38) dùng `LeanOnboardingView` thay cho `OnboardingView`. Điểm gọi `FirstRun.performIfNeeded()` lúc khởi động cũng nằm ở đây.
+- Modify, hook `language-sync` (đã đăng ký cho MenuBar.swift): chỗ gọi `SecureInputPresentation.shouldShow(engineEnabled:…)` truyền `appState.isEnabled || EngineRouter.shared.active == .vikey`.
+- Test: `leankeys/Tests/LeanKeysKitTests/FirstRunTests.swift`, `IdleGateTests.swift`. Sửa `EngineRouterTests.testDefaultIsGoNhanh` thành `testDefaultIsVikey`, và cập nhật các test mặc định khác cho khớp.
+
+**Interfaces:**
+- Produces:
+  ```swift
+  public struct IdleGate {
+      public init(threshold: TimeInterval = 30, secondsSinceLastKey: @escaping () -> TimeInterval = { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown) })
+      public var isIdle: Bool { get }
+  }
+  public enum FirstRun {
+      // Chạy một lần: đăng ký khởi động cùng máy. Ghi cờ UserDefaults "LeanKeys.firstRunDone".
+      public static func performIfNeeded(defaults: UserDefaults = .standard, enableLaunchAtLogin: () throws -> Void)
+  }
+  public struct LeanOnboardingView: View { public init(isTrusted: @escaping () -> Bool, openSettings: @escaping () -> Void, onDone: @escaping () -> Void) }
+  ```
+- Chữ hiển thị (cố định) của `LeanOnboardingView`:
+  - Tiêu đề: `Chào mừng đến với LeanKeys`.
+  - Dòng mô tả: `Chỉ cần cấp quyền Trợ năng một lần, sau đó cứ thế gõ — LeanKeys tự chuyển Việt/Anh cho bạn.`
+  - Nút: `Mở cài đặt Trợ năng`.
+  - Khi đã có quyền: `Xong! Bạn có thể bắt đầu gõ.`
+  - Theo R22, chưa có công tắc 4B ở giai đoạn này.
+
+- [ ] **Step 1: Viết test hỏng:**
+  - `testDefaultIsVikey`: router dựng trên UserDefaults trống thì `selected == .vikey`. Dùng VNI thì vẫn quay về Gõ Nhanh như cũ.
+  - `IdleGateTests`: ngưỡng 30; 29.9 giây thì không nhàn rỗi, 30 giây thì nhàn rỗi.
+  - `FirstRunTests`: lần đầu gọi `enableLaunchAtLogin` đúng một lần và ghi cờ; lần sau không gọi lại; nếu closure ném lỗi thì không ghi cờ, để lần chạy sau thử lại.
+- [ ] **Step 2:** Chạy `swift test`. Kết quả mong đợi: FAIL.
+- [ ] **Step 3:** Viết code và các hook. `enableLaunchAtLogin` gọi API khởi động cùng máy có sẵn của Gõ Nhanh (đọc `LaunchAtLogin.swift`).
+- [ ] **Step 4:** Chạy `swift test` (PASS), `xcodebuild` Debug (BUILD SUCCEEDED), `sync/check-divergence.sh v1.0.165` (thoát 0, tổng số tên hook ≤ 10), và `zsh tests/build/test_build_output.sh` (PASS).
+- [ ] **Step 5:** Ghi danh sách thử tay vào báo cáo:
+  - Cài mới, chỉ bấm cấp quyền, rồi gõ trộn được ngay.
+  - Khởi động lại máy, LeanKeys tự chạy.
+  - Có bản cập nhật trong lúc đang gõ thì không cài; ngừng gõ 30 giây thì cài.
+  - App giữ Secure Input khi dùng Vikey ở chế độ Anh thì vẫn hiện cảnh báo.
+- [ ] **Step 6:** Commit `"Zero-friction defaults: Vikey default, launch at login, silent idle updates, one-screen onboarding"`.
