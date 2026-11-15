@@ -655,11 +655,11 @@ class RustBridge {
             return r
         }
         // Gõ Nhanh decides from here: its result (nil on every early return) feeds the mirror. Ctrl chords (and
-        // Option+key, sent with ctrl) and other input sources type nothing the US keycode map can tell: reset.
+        // Option+key, sent with ctrl) and other input sources type nothing the US keycode map can tell: discard.
         var observed: (Int, [Character], Bool)?
         defer {
             if ctrl || !InputSourceObserver.shared.isAllowedInputSource {
-                EngineRouter.shared.mirror.reset()
+                EngineRouter.shared.discardPending()
             } else {
                 EngineRouter.shared.observeGoNhanh(keyCode: keyCode, shift: shift, caps: caps, result: observed)
             }
@@ -1087,11 +1087,13 @@ class KeyboardHookManager {
         case .unchanged:
             return
         case .becameBlocked:
+            EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
             RustBridge.clearBufferAll()
             let holder = SecureInputHolder.currentName()
             AppState.shared.setSecureInputBlocked(true, holderName: holder)
             Log.info("secure input: blocked by \(holder ?? "unknown process")")
         case .becameAvailable:
+            EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
             RustBridge.clearBufferAll()
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
@@ -1434,6 +1436,7 @@ private func triggerRestoreShortcut(flags: CGEventFlags, proxy: CGEventTapProxy)
     // Don't bypass IME for restore shortcut - modifiers are part of the shortcut itself
     // Always pass ctrl=false so engine performs the restore action
     let (method, delays) = detectMethod()
+    EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
     if let (bs, chars, _) = RustBridge.processKey(keyCode: UInt16(KeyCode.esc), caps: caps, ctrl: false, shift: shift) {
         Log.key(UInt16(KeyCode.esc), "restore: bs=\(bs) chars='\(String(chars))'")
         sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
@@ -1535,6 +1538,7 @@ private func keyboardCallback(
         let isControlNowPressed = flags.contains(.maskControl)
         if isControlNowPressed, !wasControlPressed {
             // Control just pressed - clear buffer to break rhythm
+            EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
             RustBridge.clearBuffer()
         }
         wasControlPressed = isControlNowPressed
@@ -1672,6 +1676,7 @@ private func keyboardCallback(
         // Any Cmd+key shortcut invalidates the current composition context:
         // Cmd+T/N/W switches tab/window, Cmd+A/V/X/Z modifies text, Cmd+1-9 switches tabs, etc.
         // Issue #365: without this, buffer leaks across tab switches (Cmd+T) in browsers.
+        EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
         RustBridge.clearBufferAll()
         return Unmanaged.passUnretained(event)
     }
@@ -1679,6 +1684,7 @@ private func keyboardCallback(
     // Issue #293: Option+Backspace deletes whole word at OS level
     // Clear engine buffer so state doesn't become stale after word deletion
     if keyCode == KeyCode.backspace, hasOption {
+        EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
         RustBridge.clearBuffer()
         return Unmanaged.passUnretained(event)
     }

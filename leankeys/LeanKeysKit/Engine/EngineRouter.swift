@@ -74,7 +74,7 @@ public final class EngineRouter {
         // A Ctrl chord is a shortcut, not typing: the word ends and the key goes through untouched.
         if ctrl {
             vikey.resetContext()
-            mirror.reset()
+            mirror.discard()
             return .handled(nil)
         }
         guard let edit = vikey.process(keyCode: keyCode, caps: caps, shift: shift) else {
@@ -95,7 +95,7 @@ public final class EngineRouter {
     }
 
     /// Gõ Nhanh's result for a key (`RustBridge.processKey`, nil = the key goes through), fed to `mirror` by the
-    /// same rules as Vikey's. Ctrl chords are not passed here: the caller resets `mirror` for those.
+    /// same rules as Vikey's. Ctrl chords are not passed here: the caller calls `discardPending()` for those.
     public func observeGoNhanh(keyCode: UInt16, shift: Bool, caps: Bool, result: (Int, [Character], Bool)?) {
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
     }
@@ -111,25 +111,33 @@ public final class EngineRouter {
         switch keyCode {
         case Self.backspaceKey: mirror.apply(deleteCount: 1, insert: [])
         case Self.tabKey: mirror.typed("\t")
+        case _ where Self.cursorKeys.contains(keyCode): mirror.reset()
         default:
-            // Arrows, Home/End, Page Up/Down, Esc, forward delete and anything else without a known character move
-            // the cursor or change text out of sight.
             if let c = VikeyEngine.typedCharacter(keyCode: keyCode, shift: shift, caps: caps) {
                 mirror.typed(c)
             } else {
-                mirror.reset()
+                // Forward delete, function keys and anything else without a known character: text changed out of sight.
+                mirror.discard()
             }
         }
     }
 
     private static let backspaceKey: UInt16 = 51
     private static let tabKey: UInt16 = 48
+    /// Arrows, Home, End, Page Up, Page Down, Esc: the cursor moves, so the phrase is finished (`TextMirror.reset`).
+    private static let cursorKeys: Set<UInt16> = [123, 124, 125, 126, 115, 119, 116, 121, 53]
     /// RustBridge's break keys without Space: Tab, Return, Enter, Esc, arrows and punctuation; digits with Shift.
     private static let breakKeys: Set<UInt16> = [48, 36, 76, 53, 123, 124, 125, 126, 47, 43, 44, 41, 39, 33, 30, 42, 27, 24, 50]
     private static let digitKeys: Set<UInt16> = [29, 18, 19, 20, 21, 23, 22, 26, 28, 25]
 
     private static func keyFollowsEdit(_ keyCode: UInt16, shift: Bool) -> Bool {
         breakKeys.contains(keyCode) || (shift && digitKeys.contains(keyCode))
+    }
+
+    /// Drops the mirror's pending word and phrase without emitting them: Cmd/Ctrl chords, Option+Backspace, the
+    /// restore shortcut, Secure Input, other input sources.
+    public func discardPending() {
+        mirror.discard()
     }
 
     /// Gõ Nhanh's input method: 0 = Telex, 1 = VNI.
@@ -167,8 +175,9 @@ public final class EngineRouter {
         vikey?.setModernTone(modern)
     }
 
-    /// Every place the macOS app drops the word (click, app switch, Secure Input, Cmd/Ctrl, modified arrows)
-    /// goes through `RustBridge.clearBuffer*` to here, so the mirror resets with it.
+    /// Every place the macOS app drops the word goes through `RustBridge.clearBuffer*` to here, so the mirror
+    /// resets with it and emits the pending phrase (a click, an app switch or a modified arrow moves the cursor).
+    /// Bypass and Secure Input sites call `discardPending()` first, which leaves nothing to emit.
     public func clear() {
         vikey?.resetContext()
         mirror.reset()

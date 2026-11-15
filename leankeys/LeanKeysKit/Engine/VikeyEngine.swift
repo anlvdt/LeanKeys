@@ -103,8 +103,13 @@ public final class VikeyEngine: TypingEngine {
     /// What the key types when the app gets it untouched: `caps` (Shift or Caps Lock) cases letters, Shift picks
     /// the symbol. nil for keys without a character (arrows, Esc, Backspace, function keys).
     static func typedCharacter(keyCode: UInt16, shift: Bool, caps: Bool) -> Character? {
-        ownCharacter(keyCode: keyCode, shift: letterKeys.contains(keyCode) ? caps : shift)
+        keypad[keyCode] ?? ownCharacter(keyCode: keyCode, shift: letterKeys.contains(keyCode) ? caps : shift)
     }
+
+    /// Keypad digits and decimal point (Carbon kVK_ANSI_Keypad0…9, kVK_ANSI_KeypadDecimal). Only for `typedCharacter`.
+    private static let keypad: [UInt16: Character] = [
+        82: "0", 83: "1", 84: "2", 85: "3", 86: "4", 87: "5", 88: "6", 89: "7", 91: "8", 92: "9", 65: ".",
+    ]
 
     /// What the key types by itself.
     private static func ownCharacter(keyCode: UInt16, shift: Bool) -> Character? {

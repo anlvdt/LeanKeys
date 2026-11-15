@@ -6,8 +6,9 @@ public struct CommittedWord: Equatable {
     public let breakChar: Character
 }
 
-/// A phrase the user just finished with `. ! ?` or Return/Enter, without that terminator and trimmed.
-/// A reset (navigation, click, bypass, app switch, Secure Input) ends a phrase by discarding it, never by emitting it.
+/// A phrase the user just finished, trimmed and without its terminator. It ends at `. ! ?` followed by Space,
+/// Return/Enter or a cursor move; at Return/Enter; or at a cursor move (`reset`: click, arrows, Home/End,
+/// Page Up/Down, Esc, Tab, app switch). Bypass and Secure Input (`discard`) drop it instead.
 public struct CommittedPhrase: Equatable {
     public let text: String
 }
@@ -28,6 +29,9 @@ public final class TextMirror {
     private var wordStart = 0
     /// The phrase grew past `phraseLimit`: drop it at its end.
     private var overflowed = false
+    /// A `. ! ?` just typed. It ends the word at once, but the phrase only if Space, Return/Enter or a reset comes
+    /// next; any other character puts it back inside the phrase ("an@vidu.vn", "3.5", "0912.345.678").
+    private var pendingTerminator: Character?
     /// An edit deleted more than the mirror holds, so the text left of the cursor is unknown. The current word is
     /// not known to be whole (no `onWord`, empty `currentWord`) until the next break; the phrase is dropped.
     private var wordUnknown = false
@@ -43,24 +47,41 @@ public final class TextMirror {
     /// An engine edit: delete `deleteCount` characters before the cursor, then insert `insert`. Inserted breaks
     /// commit exactly like typed ones.
     public func apply(deleteCount: Int, insert: [Character]) {
+        var deleteCount = deleteCount
+        if deleteCount > 0, pendingTerminator != nil {
+            // The pending terminator is the last character on screen: the word before it is current again.
+            pendingTerminator = nil
+            deleteCount -= 1
+            findWordStart()
+        }
         if deleteCount > 0 { delete(deleteCount) }
         for c in insert { typed(c) }
     }
 
     /// A key that reached the app by itself.
     public func typed(_ c: Character) {
+        if let pending = pendingTerminator {
+            pendingTerminator = nil
+            if Self.closesPending.contains(c) {
+                emitPhrase()
+                discard()
+                return
+            }
+            append(pending)
+            wordStart = buffer.count
+        }
         guard Self.wordBreaks.contains(c) else { append(c); return }
         let word = String(buffer[wordStart...])
         if !wordUnknown, !word.isEmpty { onWord?(CommittedWord(text: word, breakChar: c)) }
         wordUnknown = false
-        if Self.phraseEnds.contains(c) {
-            if !overflowed, !phraseUnknown {
-                let text = String(buffer).trimmingCharacters(in: .whitespacesAndNewlines)
-                if !text.isEmpty, text.count <= Self.phraseLimit { onPhrase?(CommittedPhrase(text: text)) }
-            }
-            reset()
+        if Self.sentenceEnds.contains(c) {
+            pendingTerminator = c
+            wordStart = buffer.count
+        } else if c == "\n" || c == "\r" {
+            emitPhrase()
+            discard()
         } else if c == "\t" {
-            // Tab ends the word (shortcuts expand there) but moves focus in most fields: the phrase is gone.
+            // Tab ends the word (shortcuts expand there) and moves focus in most fields: a cursor move.
             reset()
         } else {
             append(c)
@@ -68,13 +89,31 @@ public final class TextMirror {
         }
     }
 
-    /// Navigation, click, bypass, app switch, Secure Input: forget the word and the phrase, emit nothing.
+    /// The cursor moved (click, arrows, Home/End, Page Up/Down, Esc, Tab, app switch): the pending phrase, with
+    /// the word being typed, is finished and emitted. No `onWord`: no break key was typed.
     public func reset() {
+        emitPhrase()
+        discard()
+    }
+
+    /// Bypass and Secure Input (Cmd/Ctrl chords, Option+Backspace, restore shortcut, unknown keys): forget the word
+    /// and the phrase, emit nothing.
+    public func discard() {
         buffer.removeAll()
         wordStart = 0
         overflowed = false
+        pendingTerminator = nil
         wordUnknown = false
         phraseUnknown = false
+    }
+
+    private func emitPhrase() {
+        guard !overflowed, !phraseUnknown else { return }
+        var text = String(buffer).trimmingCharacters(in: .whitespacesAndNewlines)
+        // "Hả?!": the last terminator was pending, the ones before it went into the buffer.
+        while let last = text.last, Self.sentenceEnds.contains(last) { text.removeLast() }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty, text.count <= Self.phraseLimit { onPhrase?(CommittedPhrase(text: text)) }
     }
 
     private func append(_ c: Character) {
@@ -92,14 +131,17 @@ public final class TextMirror {
 
     private func delete(_ count: Int) {
         guard count <= buffer.count else {
-            reset()
+            discard()
             wordUnknown = true
             phraseUnknown = true
             return
         }
         buffer.removeLast(count)
-        guard wordStart > buffer.count else { return }
         // Deleted back into the previous word, which is current again.
+        if wordStart > buffer.count { findWordStart() }
+    }
+
+    private func findWordStart() {
         if let i = buffer.lastIndex(where: { Self.wordBreaks.contains($0) }) {
             wordStart = i + 1
         } else {
@@ -110,5 +152,7 @@ public final class TextMirror {
     }
 
     private static let wordBreaks: Set<Character> = [" ", ",", ".", ";", ":", "!", "?", "\n", "\r", "\t"]
-    private static let phraseEnds: Set<Character> = [".", "!", "?", "\n", "\r"]
+    private static let sentenceEnds: Set<Character> = [".", "!", "?"]
+    /// What turns a pending `. ! ?` into the end of the phrase (a reset does too).
+    private static let closesPending: Set<Character> = [" ", "\n", "\r"]
 }
