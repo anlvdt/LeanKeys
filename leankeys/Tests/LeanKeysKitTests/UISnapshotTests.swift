@@ -1,0 +1,138 @@
+import AppKit
+import Combine
+import SwiftUI
+import XCTest
+@testable import LeanKeysKit
+
+/// Writes review images to docs/ui/ when LEANKEYS_SNAPSHOTS=1. Otherwise it is skipped, so swift test writes nothing.
+/// Rendering goes through NSHostingView and cacheDisplay: ImageRenderer draws AppKit-backed Toggle and Picker as placeholders.
+final class UISnapshotTests: XCTestCase {
+    private struct RenderError: Error {
+        let message: String
+    }
+
+    @MainActor
+    func testRenderReviewImages() throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["LEANKEYS_SNAPSHOTS"] == "1",
+            "Set LEANKEYS_SNAPSHOTS=1 to write review images to docs/ui/"
+        )
+
+        // This file is leankeys/Tests/LeanKeysKitTests/UISnapshotTests.swift, so four levels up is the repo root.
+        let outDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("docs/ui", isDirectory: true)
+        try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+
+        let appearances: [(label: String, appearance: NSAppearance.Name)] = [
+            ("light", .aqua),
+            ("dark", .darkAqua),
+        ]
+        let vietnameseOn = StatusSnapshot(vietnamese: true, autoSwitchApplies: true, autoSwitchOn: true, blocked: false, blockingApp: nil)
+        let blockedByOnePassword = StatusSnapshot(vietnamese: true, autoSwitchApplies: true, autoSwitchOn: true, blocked: true, blockingApp: "1Password")
+
+        for (label, name) in appearances {
+            let appearance = try XCTUnwrap(NSAppearance(named: name))
+
+            let popover = StatusPopoverView(model: StatusPopoverModel(actions: Self.popoverActions(vietnameseOn)))
+                .background(Color(NSColor.windowBackgroundColor))
+            try Self.render(
+                popover, width: 280, height: nil, appearance: appearance,
+                to: outDir.appendingPathComponent("popover-\(label).png")
+            )
+
+            let blocked = StatusPopoverView(model: StatusPopoverModel(actions: Self.popoverActions(blockedByOnePassword)))
+                .background(Color(NSColor.windowBackgroundColor))
+            try Self.render(
+                blocked, width: 280, height: nil, appearance: appearance,
+                to: outDir.appendingPathComponent("popover-blocked-\(label).png")
+            )
+
+            let settings = SettingsRootView(
+                logo: Self.logo(),
+                name: "LeanKeys",
+                version: "1.0",
+                badge: AnyView(Text("Vikey")),
+                general: AnyView(Text("Chung")),
+                shortcuts: AnyView(Text("Phím tắt")),
+                advanced: AnyView(Text("Nâng cao")),
+                about: AnyView(Text("Giới thiệu")),
+                pageRequests: Empty<SettingsPage, Never>().eraseToAnyPublisher()
+            )
+            try Self.render(
+                settings, width: 700, height: 480, appearance: appearance,
+                to: outDir.appendingPathComponent("settings-root-\(label).png")
+            )
+        }
+    }
+
+    private static func popoverActions(_ snapshot: StatusSnapshot) -> StatusPopoverActions {
+        StatusPopoverActions(
+            snapshot: { snapshot },
+            method: { 0 },
+            updateReady: { true },
+            setVietnamese: { _ in },
+            setMethod: { _ in },
+            installUpdate: {},
+            openSettings: {},
+            quit: {}
+        )
+    }
+
+    /// A plain placeholder icon, so the snapshot does not depend on the test host's app icon.
+    private static func logo() -> NSImage {
+        NSImage(size: NSSize(width: 48, height: 48), flipped: false) { rect in
+            NSColor.systemBlue.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10).fill()
+            return true
+        }
+    }
+
+    /// Lays the view out in an offscreen window, then draws it at 2x into a PNG. A nil height fits the content.
+    @MainActor
+    private static func render<V: View>(
+        _ view: V, width: CGFloat, height: CGFloat?, appearance: NSAppearance, to url: URL
+    ) throws {
+        let host = NSHostingView(rootView: view)
+        host.appearance = appearance
+        host.frame = NSRect(x: 0, y: 0, width: width, height: height ?? 1000)
+
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.appearance = appearance
+        window.contentView = host
+        if height == nil {
+            host.frame.size.height = ceil(host.fittingSize.height)
+            window.setContentSize(host.frame.size)
+        }
+        host.layoutSubtreeIfNeeded()
+        host.displayIfNeeded()
+
+        let size = host.bounds.size
+        let scale: CGFloat = 2
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(size.width * scale),
+            pixelsHigh: Int(size.height * scale),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            throw RenderError(message: "could not allocate bitmap for \(url.lastPathComponent)")
+        }
+        rep.size = size
+        host.cacheDisplay(in: host.bounds, to: rep)
+
+        guard let data = rep.representation(using: .png, properties: [:]), !data.isEmpty else {
+            throw RenderError(message: "could not encode \(url.lastPathComponent)")
+        }
+        try data.write(to: url, options: .atomic)
+        window.orderOut(nil)
+    }
+}
