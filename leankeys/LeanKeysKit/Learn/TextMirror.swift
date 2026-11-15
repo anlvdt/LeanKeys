@@ -44,6 +44,15 @@ public final class TextMirror {
         wordUnknown ? "" : String(buffer[wordStart...])
     }
 
+    /// The current word comes straight after a break other than whitespace (`gov.vn`, `a,vn`, `an@vidu.vn`), or
+    /// what comes before it is unknown (after an overflow). Shortcuts expand only when this is false, as in Gõ Nhanh,
+    /// which matches ".vn" there, not "vn".
+    public var currentWordFollowsBreak: Bool {
+        guard wordStart > 0 else { return overflowed }
+        let before = buffer[wordStart - 1]
+        return !(before == " " || before == "\n" || before == "\r" || before == "\t")
+    }
+
     /// An engine edit: delete `deleteCount` characters before the cursor, then insert `insert`. Inserted breaks
     /// commit exactly like typed ones.
     public func apply(deleteCount: Int, insert: [Character]) {

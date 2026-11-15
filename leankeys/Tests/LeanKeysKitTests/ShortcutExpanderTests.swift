@@ -29,9 +29,16 @@ private func isPass(_ result: InterceptResult) -> Bool {
 /// US-layout key codes used here.
 private enum Key {
     static let letters: [Character: UInt16] = [
-        "a": 0, "c": 8, "e": 14, "k": 40, "n": 45, "o": 31, "p": 35, "r": 15, "s": 1, "v": 9, "x": 7,
+        "a": 0, "c": 8, "d": 2, "e": 14, "g": 5, "h": 4, "i": 34, "k": 40, "n": 45, "o": 31, "p": 35, "r": 15, "s": 1,
+        "u": 32, "v": 9, "x": 7,
     ]
     static let space: UInt16 = 49
+    static let dot: UInt16 = 47
+    /// Keys that are not letters, typed by `type` as they are.
+    static let others: [Character: (key: UInt16, shift: Bool)] = [
+        " ": (49, false), ".": (47, false), ",": (43, false), "@": (19, true), "1": (18, false), "4": (21, false),
+        "9": (25, false),
+    ]
     static let comma: UInt16 = 43
     static let returnKey: UInt16 = 36
     static let tab: UInt16 = 48
@@ -65,6 +72,10 @@ final class ShortcutExpanderTests: XCTestCase {
     /// Types `word` through the router, letter by letter; uppercase letters are sent with caps.
     private func type(_ word: String, into router: EngineRouter) {
         for c in word {
+            if let (key, shift) = Key.others[c] {
+                _ = router.intercept(keyCode: key, caps: false, ctrl: false, shift: shift)
+                continue
+            }
             let key = Key.letters[Character(c.lowercased())]!
             _ = router.intercept(keyCode: key, caps: c.isUppercase, ctrl: false, shift: c.isUppercase)
         }
@@ -174,5 +185,46 @@ final class ShortcutExpanderTests: XCTestCase {
         XCTAssertEqual(vni.active, .gonhanh)
         for key: UInt16 in [9, 45] { vni.observeGoNhanh(keyCode: key, shift: false, caps: false, result: nil) }
         XCTAssertTrue(isPass(vni.intercept(keyCode: Key.space, caps: false, ctrl: false, shift: false)))
+    }
+
+    func testNoExpansionAfterInWordPunctuation() {
+        // Gõ Nhanh matches ".vn" here (its shortcut_prefix), never "vn".
+        for text in ["gov.vn", "a,vn", "an@vidu.vn"] {
+            let router = makeRouter()
+            type(text, into: router)
+            XCTAssertEqual(router.mirror.currentWord, "vn", text)
+            let r = handled(router.intercept(keyCode: Key.space, caps: false, ctrl: false, shift: false))
+            XCTAssertEqual(r.map { $0 == nil }, true, "\(text) + Space must not expand")
+        }
+        let router = makeRouter()
+        type("xin chao vn", into: router)
+        let r = handled(router.intercept(keyCode: Key.space, caps: false, ctrl: false, shift: false))
+        XCTAssertEqual(r??.1, Array("Việt Nam "))
+    }
+
+    func testExpandsWithVietnameseOff() {
+        // Gõ Nhanh expands with the IME off too.
+        let router = makeRouter()
+        router.setEnabled(false, explicit: true)
+        type("vn", into: router)
+        let r = handled(router.intercept(keyCode: Key.space, caps: false, ctrl: false, shift: false))
+        XCTAssertEqual(r??.1, Array("Việt Nam "))
+    }
+
+    func testNoExpansionWhenMirrorLostTrack() {
+        let router = makeRouter()
+        // An edit that deletes more than the mirror holds: the text left of the cursor is unknown.
+        router.mirror.apply(deleteCount: 3, insert: [])
+        type("vn", into: router)
+        let r = handled(router.intercept(keyCode: Key.space, caps: false, ctrl: false, shift: false))
+        XCTAssertEqual(r.map { $0 == nil }, true)
+    }
+
+    func testNoExpansionInsideNumberWord() {
+        let router = makeRouter()
+        router.setShortcuts([("k", "nghìn")])
+        type("149k", into: router)
+        let r = handled(router.intercept(keyCode: Key.space, caps: false, ctrl: false, shift: false))
+        XCTAssertEqual(r.map { $0 == nil }, true, "149k is no trigger k")
     }
 }

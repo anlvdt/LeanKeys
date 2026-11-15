@@ -114,6 +114,7 @@ public final class EngineRouter {
         guard !shortcuts.isEmpty else { return nil }
         let isSpace = keyCode == Self.spaceKey
         guard isSpace || Self.triggersShortcut(keyCode, shift: shift) else { return nil }
+        guard !mirror.currentWordFollowsBreak else { return nil }
         let word = mirror.currentWord
         guard let replacement = shortcuts.expand(word: word) else { return nil }
         return (word.count, Array(replacement) + (isSpace ? [" "] : []), isSpace)

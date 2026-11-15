@@ -1,7 +1,9 @@
 import Foundation
 
 /// The user's gõ tắt (text shortcuts) for the Vikey engine; Gõ Nhanh's own engine keeps its copy in Rust
-/// (core/src/engine/shortcut.rs), and this follows its rules. A trigger matches a whole word, ignoring case. The
+/// (core/src/engine/shortcut.rs), and this follows its case rules. A trigger matches a whole word, ignoring case:
+/// triggers are stored lowercased and any word goes in, which is more permissive than Gõ Nhanh (it builds the word
+/// from its own buffer and break-character prefix, so some words never reach its table). The
 /// result takes the word's case: all capitals give an all-capitals result ("VN" → "VIỆT NAM"), a capital first
 /// letter capitalises the result ("Vn" → "Việt Nam"), anything else gives the replacement as stored.
 public struct ShortcutExpander {
