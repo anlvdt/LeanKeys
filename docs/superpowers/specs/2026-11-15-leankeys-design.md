@@ -176,11 +176,11 @@ Dùng lại `UpdateChecker` / `UpdateManager` của Gõ Nhanh (kiểm tra GitHub
 
 ### 6.3 Quyền Accessibility
 
-Ký ad-hoc khiến mỗi bản build có thể làm macOS mất quyền Accessibility. Khi khởi động, nếu `AXIsProcessTrusted()` trả về false, app hiện màn hướng dẫn cấp lại quyền. Màn này dùng lại onboarding của Gõ Nhanh, chỉ đổi nội dung cho trường hợp "sau khi cập nhật".
+Từ mục 15 (2026-11-15): app được ký bằng một chứng chỉ tự cấp cố định, nên macOS giữ quyền Accessibility qua các bản cập nhật. Màn hướng dẫn cấp lại quyền chỉ còn dùng cho lần cập nhật chuyển từ ad-hoc sang chứng chỉ, hoặc khi chứng chỉ bị đổi. Xem mục 15.
 
 ### 6.4 Ký app
 
-- Hiện tại: ký ad-hoc (`codesign -s -`). README hướng dẫn chạy `xattr -cr /Applications/LeanKeys.app`.
+- Hiện tại: ký bằng chứng chỉ tự cấp `LeanKeys Self-Signed` trong Keychain của máy build (mục 15). Không có chứng chỉ thì `build.sh` quay về ký ad-hoc (`codesign -s -`). README vẫn hướng dẫn chạy `xattr -cr /Applications/LeanKeys.app`, vì Gatekeeper không tin chứng chỉ tự cấp.
 - Về sau: `release.sh` đọc biến `LEANKEYS_SIGN_IDENTITY` và `LEANKEYS_NOTARY_PROFILE`. Nếu có đủ thì ký Developer ID và notarize. Kiến trúc không đổi.
 
 ## 7. Test
@@ -316,7 +316,7 @@ Thêm ngày 2026-11-15. **Mục tiêu:** người dùng chỉ cần mở máy v�
 
 ### 13.1 Những bước không bỏ được
 - **Cấp quyền Accessibility một lần** khi cài. macOS bắt buộc với mọi bộ gõ kiểu này.
-- **Khi còn ký ad-hoc** thì có thêm hai bước: chạy `xattr -cr` khi cài, và cấp lại quyền Accessibility sau mỗi lần cập nhật. **Quyết định 2026-11-15: không dùng Apple Developer ID.** LeanKeys luôn ký ad-hoc. Hai bước này được giảm nhẹ bằng hướng dẫn trong app: cài bằng một cú bấm, và màn hướng dẫn cấp lại quyền cho người dùng cũ. Đường ký Developer ID trong `build.sh` vẫn giữ nhưng không dùng.
+- **Khi còn ký ad-hoc** thì có thêm hai bước: chạy `xattr -cr` khi cài, và cấp lại quyền Accessibility sau mỗi lần cập nhật. **Quyết định 2026-11-15: không dùng Apple Developer ID.** Bước `xattr -cr` vẫn còn. Bước cấp lại quyền sau mỗi lần cập nhật được bỏ bằng chứng chỉ tự cấp cố định (mục 15). Đường ký Developer ID trong `build.sh` vẫn giữ nhưng không dùng.
 
 ### 13.2 Mặc định
 
@@ -409,3 +409,27 @@ Thêm ngày 2026-11-15, người dùng đã duyệt cả ba phương án A, B, C
   - icon đổi mượt khi Vikey tự chuyển;
   - chế độ tối;
   - "Giảm chuyển động".
+
+
+## 15. Quyền Trợ năng: bấm một lần, giữ qua cập nhật
+
+Thêm ngày 2026-11-15, người dùng đã duyệt. macOS không cho app tự bật quyền Trợ năng; mục tiêu là người dùng chỉ gạt **một** công tắc lúc cài, và **không bao giờ** phải cấp lại sau cập nhật. Không sửa cơ sở dữ liệu TCC của hệ thống.
+
+### 15.1 Cấp quyền bằng một lần bấm
+- Nút trên màn chào gọi `AXIsProcessTrustedWithOptions` với `kAXTrustedCheckOptionPrompt = true` (LeanKeys có sẵn trong danh sách Trợ năng), rồi mở trang `Privacy_Accessibility`.
+- Nhận biết quyền đã được cấp bằng hai tín hiệu: `AXIsProcessTrusted()`, hoặc tạo thử được một event tap chỉ-nghe (`listenOnly`) rồi huỷ ngay. Một trong hai đúng là đủ.
+- Một bộ đếm 1 giây chạy trong LeanKeysKit, **độc lập với cửa sổ màn chào**: khi quyền có, app khởi động lại đúng một lần như hiện nay. Cửa sổ bị che hay bị đóng cũng không làm lỡ bước này.
+
+### 15.2 Chứng chỉ ký cố định
+- `sync/make-signing-cert.sh` (người dùng chạy một lần trên máy build): tạo chứng chỉ tự cấp dùng cho ký mã, tên `LeanKeys Self-Signed`, hạn 20 năm, nhập vào login keychain, cho `codesign` dùng khoá không cần hỏi; xuất bản sao lưu `.p12` có mật khẩu do người dùng nhập ra một đường dẫn họ chọn. Script không bao giờ in hay lưu mật khẩu.
+- `leankeys/build.sh`: ưu tiên Developer ID (đường cũ, nếu có biến môi trường); nếu không, dùng `LeanKeys Self-Signed` khi có trong keychain; nếu không nữa, ký ad-hoc như cũ. Ghi rõ đã ký bằng gì.
+- `UpdateInstallPolicy`: coi bản đang chạy được ký bằng chứng chỉ (không ad-hoc, có chứng chỉ lá) như bản có TeamIdentifier, tức là được cài ngầm khi máy rảnh.
+
+### 15.3 Lần chuyển từ ad-hoc sang chứng chỉ
+- Người dùng cũ (`ReturningUser.wasTrusted`) mở bản mới mà mất quyền: app chạy `tccutil reset Accessibility io.github.anlvdt.leankeys` cho đúng bundle của mình, rồi đi lại luồng 15.1. Người dùng chỉ gạt lại công tắc.
+- Nếu `tccutil` thất bại, quay về hướng dẫn −/+ hiện có.
+
+### 15.4 Test
+- **Đơn vị:** chính sách cài ngầm theo loại chữ ký; logic "đã có quyền" từ hai tín hiệu; bộ đếm gọi khởi động lại đúng một lần; chọn danh tính ký trong `build.sh` (test shell).
+- **Kiểm chứng trên máy thật (bắt buộc trước khi merge):** cấp quyền cho bản A ký bằng chứng chỉ; build bản B; thay bản A bằng B; B phải gõ được ngay, không cần cấp lại. Ghi kết quả vào báo cáo.
+- **Thử tay:** thêm vào `sync/manual-checklist.md`: cài mới chỉ gạt một công tắc; cửa sổ màn chào bị che vẫn tự khởi động lại; cập nhật không mất quyền.
