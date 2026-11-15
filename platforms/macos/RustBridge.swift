@@ -679,13 +679,13 @@ class RustBridge {
 
     static func setMethod(_ method: Int) {
         ime_method(UInt8(method))
-        EngineRouter.shared.setMethod(method) // LEANKEYS-HOOK: engine-method
+        EngineRouter.shared.setMethod(method) // LEANKEYS-HOOK: engine-dispatch
     }
 
     static func setEnabled(_ enabled: Bool) {
         // GATE: Only enable if input source is allowed, always allow disable
         ime_enabled(enabled && InputSourceObserver.shared.isAllowedInputSource)
-        EngineRouter.shared.setEnabled(enabled && InputSourceObserver.shared.isAllowedInputSource) // LEANKEYS-HOOK: engine-enabled
+        EngineRouter.shared.setEnabled(enabled && InputSourceObserver.shared.isAllowedInputSource) // LEANKEYS-HOOK: engine-dispatch
     }
 
     /// Set whether to skip w→ư shortcut in Telex mode
@@ -735,13 +735,13 @@ class RustBridge {
 
     static func clearBuffer() {
         ime_clear()
-        EngineRouter.shared.clear() // LEANKEYS-HOOK: engine-reset
+        EngineRouter.shared.clear() // LEANKEYS-HOOK: engine-dispatch
     }
 
     /// Clear buffer and word history (use on mouse click, focus change)
     static func clearBufferAll() {
         ime_clear_all()
-        EngineRouter.shared.clear() // LEANKEYS-HOOK: engine-reset
+        EngineRouter.shared.clear() // LEANKEYS-HOOK: engine-dispatch
     }
 
     /// Restore buffer from a Vietnamese word (for backspace-into-word editing)

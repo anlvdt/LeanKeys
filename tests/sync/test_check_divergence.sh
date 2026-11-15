@@ -181,11 +181,31 @@ test_git_failure_fails_closed() {
   expect_out test_git_failure_fails_closed "check-divergence: git diff failed"
 }
 
+# Ruling R29: 12 distinct names pass (FILE entries, comments and a name repeated
+# for another file don't count); a 13th fails.
+test_hook_name_cap() {
+  local repo; repo="$(make_repo cap)"
+  {
+    print -r -- '# comment'
+    printf 'FILE\tLICENSE\nFILE\tY\n'
+    for i in {1..12}; do printf 'h%d\tX\n' "$i"; done
+    printf 'h1\tY\n'
+  } > "$repo/sync/hooks.txt"
+  commit_all "$repo"
+  run_check "$repo"
+  expect_rc "test_hook_name_cap (12)" 0 || return 1
+  printf 'h13\tX\n' >> "$repo/sync/hooks.txt"
+  commit_all "$repo"
+  run_check "$repo"
+  expect_rc "test_hook_name_cap (13)" 1 &&
+  expect_out test_hook_name_cap "13 distinct hook names registered, at most 12 allowed"
+}
+
 for t in test_clean_passes test_hooked_line_passes test_unhooked_line_fails \
          test_unregistered_hook_fails test_file_allowlist test_new_files_ignored \
          test_hook_block_passes test_unterminated_block_fails test_pure_deletion_fails \
          test_deleted_upstream_file_fails test_renamed_upstream_file_fails \
-         test_git_failure_fails_closed; do
+         test_git_failure_fails_closed test_hook_name_cap; do
   if ( $t ); then
     print -r -- "PASS $t"
     (( passed++ )) || true

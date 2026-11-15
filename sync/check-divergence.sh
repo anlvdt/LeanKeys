@@ -36,6 +36,15 @@ fi
 hooks="sync/hooks.txt"
 [[ -f "$hooks" ]] || hooks=/dev/null
 
+# Ruling R29: at most this many distinct hook names (FILE entries and comments
+# don't count). Every name is a seam to re-check on each upstream sync.
+max_hook_names=12
+hook_names="$(awk -F'\t' '!/^#/ && NF >= 2 && $1 != "FILE" { print $1 }' "$hooks" | sort -u | grep -c .)" || true
+if (( hook_names > max_hook_names )); then
+  print -r -- "sync/hooks.txt:0: $hook_names distinct hook names registered, at most $max_hook_names allowed"
+  exit 1
+fi
+
 excludes=(
   ':!vendor' ':!leankeys' ':!sync' ':!tests/sync' ':!docs/superpowers'
   ':!Package.swift' ':!.github/README.md' ':!ACKNOWLEDGEMENTS.md'
