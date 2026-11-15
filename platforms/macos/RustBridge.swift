@@ -712,6 +712,7 @@ class RustBridge {
     /// Set whether to use modern orthography for tone placement
     static func setModernTone(_ modern: Bool) {
         ime_modern(modern)
+        EngineRouter.shared.setModernTone(modern) // LEANKEYS-HOOK: engine-dispatch
     }
 
     /// Set whether to enable English auto-restore (experimental)

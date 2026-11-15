@@ -53,6 +53,9 @@ public final class EngineSettingsModel: ObservableObject {
 
 /// The "Engine gõ" card. Mirrors Gõ Nhanh's SettingsRow + CardBackground, which live in the app target.
 public struct EngineSettingsSection: View {
+    /// Spec §3.5: Gõ Nhanh settings that do nothing under Vikey (ruling R26).
+    static let vikeyNote = "Khi dùng Vikey, các mục chỉ dành cho Gõ Nhanh không có tác dụng: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]. Gõ tắt sẽ chạy với cả hai engine từ giai đoạn 4."
+
     @StateObject private var model: EngineSettingsModel
 
     /// `onEngineChanged` runs after each switch; the app passes a closure that clears Gõ Nhanh's word buffer.
@@ -69,7 +72,7 @@ public struct EngineSettingsSection: View {
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
-            Text("Khi dùng Vikey, các mục Tự khôi phục tiếng Anh và VNI của Gõ Nhanh không có tác dụng.")
+            Text(Self.vikeyNote)
                 .font(.system(size: 11))
                 .foregroundColor(Color(NSColor.secondaryLabelColor))
                 .fixedSize(horizontal: false, vertical: true)

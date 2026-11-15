@@ -104,4 +104,9 @@ final class EngineSettingsModelTests: XCTestCase {
         model.selected = .gonhanh
         XCTAssertEqual(calls, 2)
     }
+
+    func testVikeyNoteListsEveryGoNhanhOnlySetting() {
+        XCTAssertEqual(EngineSettingsSection.vikeyNote,
+                       "Khi dùng Vikey, các mục chỉ dành cho Gõ Nhanh không có tác dụng: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]. Gõ tắt sẽ chạy với cả hai engine từ giai đoạn 4.")
+    }
 }
