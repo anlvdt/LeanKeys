@@ -1,0 +1,40 @@
+Anh ơi em đã push code lên branch develop rồi, anh review giúp em nhé
+Chiều nay họp online qua Google Meet lúc 2 giờ, mọi người nhớ join đúng giờ
+Bên khách hàng muốn đổi deadline sang thứ sáu tuần sau
+Em đang fix bug ở màn hình login, chắc tối nay xong
+File báo cáo em để trong folder shared trên Google Drive
+Server production bị down từ sáng, team DevOps đang check log
+Nhớ update lại file README trước khi merge vào main nhé
+Mình cần thêm một API endpoint để lấy danh sách user
+Sếp bảo cuối tháng này phải release version mới
+Cho mình xin link Figma của design mới với
+Hôm qua deploy xong thì database bị lock, phải restart lại
+Bạn gửi invoice qua email cho kế toán giúp mình
+Chị ơi số điện thoại của shipper là bao nhiêu ạ
+Tuần này em xin nghỉ phép hai ngày để về quê
+Dự án này dùng React với TypeScript, backend viết bằng Go
+Đừng quên chạy unit test trước khi tạo pull request
+Khách phàn nàn app chạy chậm trên điện thoại cũ
+Mai team building ở Vũng Tàu, xe đón lúc 6 giờ sáng
+Em gửi anh bản draft hợp đồng, anh xem có cần sửa gì không
+Cái task này priority cao, làm trước giúp mình nhé
+Tối nay xem bóng đá không, Việt Nam đá với Thái Lan
+Mình order trà sữa trên Grab, ai uống thì comment nhé
+Slide thuyết trình em đã upload lên Notion
+Hệ thống thanh toán đang bị lỗi timeout khi gọi sang ngân hàng
+Anh ấy là senior engineer, có nhiều kinh nghiệm về cloud
+Em chưa hiểu lắm phần authentication, anh giải thích lại được không
+Nhớ backup dữ liệu trước khi migrate sang server mới
+Cả nhà ơi tối nay ăn lẩu nhé, mình book bàn rồi
+Ticket này mình assign cho bạn Lan, deadline thứ tư
+Website bị lỗi khi mở trên Safari nhưng Chrome thì bình thường
+Mình vừa nhận được feedback rất tốt từ khách hàng
+Bạn có thể share màn hình được không, mình không thấy gì cả
+Chương trình khuyến mãi Black Friday giảm giá 50%
+Em đang học thêm khoá machine learning trên Coursera
+Cuối tuần này mình đi cafe rồi đi xem phim nhé
+Phải refactor lại module này vì code cũ quá rối
+Mình thấy cái UI này hơi khó dùng, nên đổi màu button
+Ngày mai nộp report tiến độ cho ban giám đốc
+Anh check giúp em sao build trên CI bị fail
+Bên marketing cần số liệu traffic của tháng trước

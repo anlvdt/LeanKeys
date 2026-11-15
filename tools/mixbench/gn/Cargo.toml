@@ -1,0 +1,6 @@
+[package]
+name = "gnbench"
+version = "0.1.0"
+edition = "2021"
+[dependencies]
+gonhanh-core = { path = "../../../core" }
