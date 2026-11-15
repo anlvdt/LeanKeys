@@ -140,7 +140,7 @@ class UpdateManager: NSObject, ObservableObject {
             _ = dmgPath
             return // Ruling R23: a Debug build never updates itself.
         #else
-            installSafely(dmgPath)
+            installSafely(dmgPath, silent: false)
         #endif
         // LEANKEYS-HOOK-END
     }
@@ -634,21 +634,26 @@ extension UpdateManager {
             return false
         }
         guard IdleGate().isIdle else { return false }
-        installSafely(dmgPath)
+        installSafely(dmgPath, silent: true)
         return true
     }
 
     /// Not Gõ Nhanh's restartToUpdate: SafeInstaller mounts and checks the update off the main thread, and the app
     /// quits only once the swap script (which always relaunches an app) has started. Any failure drops the update,
-    /// logs it, and leaves this app running.
-    private func installSafely(_ dmgPath: URL) {
+    /// logs it, and leaves this app running. `silent` (the unattended install) also requires the update to carry the
+    /// running app's designated requirement; when it does not, the update stays ready for the one-click item.
+    private func installSafely(_ dmgPath: URL, silent: Bool) {
         let installedApp = URL(fileURLWithPath: Bundle.main.bundlePath)
         let bundleID = Bundle.main.bundleIdentifier
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let prepared = SafeInstaller.prepare(dmg: dmgPath, appName: LeanBranding.name, expectedBundleID: bundleID)
+            let preparation = SafeInstaller.prepare(dmg: dmgPath, appName: LeanBranding.name, expectedBundleID: bundleID,
+                                                    requireSameIdentity: silent)
             DispatchQueue.main.async {
                 guard let self else { return }
-                if let prepared, SafeInstaller.launchSwap(prepared, dmg: dmgPath, installedApp: installedApp) {
+                if case .rejected(.differentIdentity) = preparation { return }
+                if case let .prepared(prepared) = preparation,
+                   SafeInstaller.launchSwap(prepared, dmg: dmgPath, installedApp: installedApp)
+                {
                     UserDefaults.standard.removeObject(forKey: self.dmgKey)
                     UserDefaults.standard.removeObject(forKey: self.versionKey)
                     NSApp.terminate(nil)

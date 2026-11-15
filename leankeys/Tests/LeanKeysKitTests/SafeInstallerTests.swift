@@ -6,20 +6,22 @@ final class SafeInstallerTests: XCTestCase {
     private let app = URL(fileURLWithPath: "/Volumes/LeanKeys/LeanKeys.app")
     private let bundleID = "io.github.anlvdt.leankeys"
 
-    private func checks(exists: Bool = true, id: String? = "io.github.anlvdt.leankeys", codesign: Bool = true)
-        -> SafeInstaller.Checks
+    private func checks(exists: Bool = true, id: String? = "io.github.anlvdt.leankeys", codesign: Bool = true,
+                        sameIdentity: Bool = true) -> SafeInstaller.Checks
     {
         SafeInstaller.Checks(
             appExists: { _ in exists },
             bundleIdentifier: { _ in id },
-            codesignValid: { _ in codesign }
+            codesignValid: { _ in codesign },
+            sameIdentity: { _ in sameIdentity }
         )
     }
 
-    private func verify(_ checks: SafeInstaller.Checks, expected: String? = "io.github.anlvdt.leankeys")
-        -> SafeInstaller.Verdict
+    private func verify(_ checks: SafeInstaller.Checks, expected: String? = "io.github.anlvdt.leankeys",
+                        requireSameIdentity: Bool = false) -> SafeInstaller.Verdict
     {
-        SafeInstaller.verify(mountPoint: mount, appName: "LeanKeys", expectedBundleID: expected, checks: checks)
+        SafeInstaller.verify(mountPoint: mount, appName: "LeanKeys", expectedBundleID: expected, checks: checks,
+                             requireSameIdentity: requireSameIdentity)
     }
 
     func testAcceptsValidUpdate() {
@@ -44,9 +46,28 @@ final class SafeInstallerTests: XCTestCase {
     func testChecksRunInOrderAndStopAtFirstFailure() {
         var codesignCalls = 0
         let c = SafeInstaller.Checks(appExists: { _ in true }, bundleIdentifier: { _ in "other" },
-                                     codesignValid: { _ in codesignCalls += 1; return true })
+                                     codesignValid: { _ in codesignCalls += 1; return true },
+                                     sameIdentity: { _ in true })
         XCTAssertEqual(verify(c), .wrongBundleID(found: "other"))
         XCTAssertEqual(codesignCalls, 0)
+    }
+
+    // Silent install only: the candidate must satisfy the running app's designated requirement.
+    func testSilentInstallRejectsDifferentIdentity() {
+        XCTAssertEqual(verify(checks(sameIdentity: false), requireSameIdentity: true), .differentIdentity)
+    }
+
+    func testSilentInstallAcceptsSameIdentity() {
+        XCTAssertEqual(verify(checks(sameIdentity: true), requireSameIdentity: true), .valid(app))
+    }
+
+    // The one-click path (restartToUpdate) does not require the identity: the user chose to install.
+    func testOneClickInstallDoesNotCheckIdentity() {
+        XCTAssertEqual(verify(checks(sameIdentity: false)), .valid(app))
+    }
+
+    func testIdentityIsCheckedAfterCodesign() {
+        XCTAssertEqual(verify(checks(codesign: false, sameIdentity: false), requireSameIdentity: true), .codesignFailed)
     }
 
     func testOnlySuccessfulHTTPDownloadsAreKept() {

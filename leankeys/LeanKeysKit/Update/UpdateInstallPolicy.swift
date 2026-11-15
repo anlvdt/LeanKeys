@@ -74,17 +74,22 @@ public enum UpdateInstallPolicy {
         return .adhoc
     }
 
-    /// The running process's TeamIdentifier, or nil when unsigned, ad-hoc signed, or unreadable.
-    public static func currentTeamIdentifier() -> String? {
+    /// True when the app bundle at `candidate` satisfies the running app's designated requirement. That is what macOS
+    /// checks when it decides a new build is the same app (keeps the Accessibility grant). False when either side
+    /// cannot be read. A silent install requires this on top of installsSilently(): see SafeInstaller.Checks.
+    public static func candidateMatchesRunningIdentity(_ candidate: URL) -> Bool {
         var code: SecCode?
-        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
-        var staticCode: SecStaticCode?
-        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
-        var info: CFDictionary?
-        let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
-        guard SecCodeCopySigningInformation(staticCode, flags, &info) == errSecSuccess,
-              let dict = info as? [String: Any]
-        else { return nil }
-        return dict[kSecCodeInfoTeamIdentifier as String] as? String
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return false }
+        var runningStatic: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, [], &runningStatic) == errSecSuccess, let runningStatic else { return false }
+        var requirement: SecRequirement?
+        guard SecCodeCopyDesignatedRequirement(runningStatic, [], &requirement) == errSecSuccess,
+              let requirement
+        else { return false }
+        var candidateStatic: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(candidate as CFURL, [], &candidateStatic) == errSecSuccess,
+              let candidateStatic
+        else { return false }
+        return SecStaticCodeCheckValidity(candidateStatic, [], requirement) == errSecSuccess
     }
 }

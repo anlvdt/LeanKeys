@@ -417,13 +417,14 @@ Thêm ngày 2026-11-15, người dùng đã duyệt. macOS không cho app tự b
 
 ### 15.1 Cấp quyền bằng một lần bấm
 - Nút trên màn chào gọi `AXIsProcessTrustedWithOptions` với `kAXTrustedCheckOptionPrompt = true` (LeanKeys có sẵn trong danh sách Trợ năng), rồi mở trang `Privacy_Accessibility`.
-- Nhận biết quyền đã được cấp bằng hai tín hiệu: `AXIsProcessTrusted()`, hoặc tạo thử được một event tap chỉ-nghe (`listenOnly`) rồi huỷ ngay. Một trong hai đúng là đủ.
+- Nhận biết quyền đã được cấp bằng hai tín hiệu: `AXIsProcessTrusted()`, hoặc tạo thử được một event tap chủ động (`defaultTap`) rồi huỷ ngay. Một trong hai đúng là đủ. Dùng tap chủ động vì tap chỉ-nghe (`listenOnly`) bị macOS gắn với quyền Giám sát đầu vào (Input Monitoring), và hộp thoại quyền đó sẽ làm người dùng bối rối.
 - Một bộ đếm 1 giây chạy trong LeanKeysKit, **độc lập với cửa sổ màn chào**: khi quyền có, app khởi động lại đúng một lần như hiện nay. Cửa sổ bị che hay bị đóng cũng không làm lỡ bước này.
 
 ### 15.2 Chứng chỉ ký cố định
 - `sync/make-signing-cert.sh` (người dùng chạy một lần trên máy build): tạo chứng chỉ tự cấp dùng cho ký mã, tên `LeanKeys Self-Signed`, hạn 20 năm, nhập vào login keychain, cho `codesign` dùng khoá không cần hỏi; xuất bản sao lưu `.p12` có mật khẩu do người dùng nhập ra một đường dẫn họ chọn. Script không bao giờ in hay lưu mật khẩu.
 - `leankeys/build.sh`: ưu tiên Developer ID (đường cũ, nếu có biến môi trường); nếu không, dùng `LeanKeys Self-Signed` khi có trong keychain; nếu không nữa, ký ad-hoc như cũ. Ghi rõ đã ký bằng gì.
-- `UpdateInstallPolicy`: coi bản đang chạy được ký bằng chứng chỉ (không ad-hoc, có chứng chỉ lá) như bản có TeamIdentifier, tức là được cài ngầm khi máy rảnh.
+- `UpdateInstallPolicy`: coi bản đang chạy được ký bằng chứng chỉ (không ad-hoc, có chứng chỉ lá) như bản có TeamIdentifier.
+- Cài ngầm khi máy rảnh cần **cả hai** điều kiện: (1) app đang chạy được ký ổn định, như trên; và (2) bản tải về khớp yêu cầu chỉ định (designated requirement) của app đang chạy, kiểm bằng `SecStaticCodeCheckValidity` sau khi DMG được gắn và kiểm tra. Nếu không khớp, bản đó không được cài ngầm, và vẫn còn sẵn sàng để cài bằng một lần bấm trên mục menu "cập nhật sẵn sàng".
 
 ### 15.3 Lần chuyển từ ad-hoc sang chứng chỉ
 - Người dùng cũ (`ReturningUser.wasTrusted`) mở bản mới mà mất quyền: app chạy `tccutil reset Accessibility io.github.anlvdt.leankeys` cho đúng bundle của mình, rồi đi lại luồng 15.1. Người dùng chỉ gạt lại công tắc.

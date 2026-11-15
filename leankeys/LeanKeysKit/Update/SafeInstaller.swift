@@ -4,14 +4,24 @@ import Foundation
 /// restartToUpdate it checks the update before quitting, and its swap script always relaunches an app.
 ///
 /// Order: `prepare` mounts the DMG read-only and `verify`s it (LeanKeys.app at the root, same bundle ID as the
-/// running app, `codesign --verify --deep --strict` passes); on failure it detaches and returns nil, and the caller
-/// keeps running. `launchSwap` then starts swap-update.sh; the caller quits only if that process started.
+/// running app, `codesign --verify --deep --strict` passes; for a silent install also the running app's designated
+/// requirement); on failure it detaches and reports why, and the caller keeps running. `launchSwap` then starts
+/// swap-update.sh; the caller quits only if that process started.
 public enum SafeInstaller {
     public enum Verdict: Equatable {
         case valid(URL)
         case missingApp
         case wrongBundleID(found: String?)
         case codesignFailed
+        /// Silent install only: the candidate is signed with a different identity than the running app.
+        case differentIdentity
+    }
+
+    /// Outcome of `prepare`. `rejected` and `unmounted` have already detached the image.
+    public enum Preparation {
+        case prepared(Prepared)
+        case rejected(Verdict)
+        case unmounted
     }
 
     /// The checks `verify` runs, injectable for tests.
@@ -19,13 +29,16 @@ public enum SafeInstaller {
         public var appExists: (URL) -> Bool
         public var bundleIdentifier: (URL) -> String?
         public var codesignValid: (URL) -> Bool
+        /// True when the app satisfies the running app's designated requirement (UpdateInstallPolicy).
+        public var sameIdentity: (URL) -> Bool
 
         public init(appExists: @escaping (URL) -> Bool, bundleIdentifier: @escaping (URL) -> String?,
-                    codesignValid: @escaping (URL) -> Bool)
+                    codesignValid: @escaping (URL) -> Bool, sameIdentity: @escaping (URL) -> Bool)
         {
             self.appExists = appExists
             self.bundleIdentifier = bundleIdentifier
             self.codesignValid = codesignValid
+            self.sameIdentity = sameIdentity
         }
 
         public static let live = Checks(
@@ -38,7 +51,8 @@ public enum SafeInstaller {
             },
             codesignValid: { url in
                 SafeInstaller.run("/usr/bin/codesign", ["--verify", "--deep", "--strict", url.path]).status == 0
-            }
+            },
+            sameIdentity: { url in UpdateInstallPolicy.candidateMatchesRunningIdentity(url) }
         )
     }
 
@@ -49,13 +63,17 @@ public enum SafeInstaller {
     }
 
     /// Decides whether `<mountPoint>/<appName>.app` may replace the running app. Stops at the first failed check.
-    /// A nil `expectedBundleID` (nothing to compare against) is a rejection.
-    public static func verify(mountPoint: URL, appName: String, expectedBundleID: String?, checks: Checks) -> Verdict {
+    /// A nil `expectedBundleID` (nothing to compare against) is a rejection. `requireSameIdentity` (silent installs)
+    /// adds the designated-requirement check, run last.
+    public static func verify(mountPoint: URL, appName: String, expectedBundleID: String?, checks: Checks,
+                              requireSameIdentity: Bool = false) -> Verdict
+    {
         let app = mountPoint.appendingPathComponent("\(appName).app")
         guard checks.appExists(app) else { return .missingApp }
         let found = checks.bundleIdentifier(app)
         guard let expectedBundleID, found == expectedBundleID else { return .wrongBundleID(found: found) }
         guard checks.codesignValid(app) else { return .codesignFailed }
+        if requireSameIdentity, !checks.sameIdentity(app) { return .differentIdentity }
         return .valid(app)
     }
 
@@ -72,19 +90,22 @@ public enum SafeInstaller {
     }
 
     /// Mounts `dmg` read-only and verifies it. Blocking (hdiutil, codesign): call off the main thread.
-    /// Returns nil, with the image detached and the reason logged, on any failure.
-    public static func prepare(dmg: URL, appName: String, expectedBundleID: String?, checks: Checks = .live) -> Prepared? {
+    /// On any failure the image is detached, the reason is logged, and the outcome says which check failed.
+    public static func prepare(dmg: URL, appName: String, expectedBundleID: String?, requireSameIdentity: Bool = false,
+                               checks: Checks = .live) -> Preparation
+    {
         guard let mount = mount(dmg) else {
             log("could not mount \(dmg.path)")
-            return nil
+            return .unmounted
         }
-        let verdict = verify(mountPoint: mount, appName: appName, expectedBundleID: expectedBundleID, checks: checks)
+        let verdict = verify(mountPoint: mount, appName: appName, expectedBundleID: expectedBundleID, checks: checks,
+                             requireSameIdentity: requireSameIdentity)
         guard case let .valid(app) = verdict else {
             log("rejected update \(dmg.path): \(verdict)")
             detach(mount)
-            return nil
+            return .rejected(verdict)
         }
-        return Prepared(mountPoint: mount, app: app)
+        return .prepared(Prepared(mountPoint: mount, app: app))
     }
 
     /// Starts the swap script for `prepared` (it waits for `pid` to exit). Returns false, with the image detached,

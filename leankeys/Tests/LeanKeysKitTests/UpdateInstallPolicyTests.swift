@@ -30,6 +30,17 @@ final class UpdateInstallPolicyTests: XCTestCase {
         XCTAssertFalse(UpdateInstallPolicy.installsSilently(signature: .developerID(team: "")))
     }
 
+    /// A path that is not signed code never matches the running app's designated requirement.
+    func testUnsignedCandidateDoesNotMatchRunningIdentity() {
+        XCTAssertFalse(UpdateInstallPolicy.candidateMatchesRunningIdentity(URL(fileURLWithPath: "/nonexistent/LeanKeys.app")))
+    }
+
+    /// The running binary satisfies its own designated requirement.
+    func testRunningBinaryMatchesItself() throws {
+        let exe = try XCTUnwrap(Bundle.main.executableURL)
+        XCTAssertTrue(UpdateInstallPolicy.candidateMatchesRunningIdentity(exe))
+    }
+
     /// The live read must not crash; its value depends on how the test runner is signed.
     func testLiveReadIsConsistentWithPolicy() {
         XCTAssertEqual(
