@@ -9,7 +9,8 @@
 #   2. swift test                                  (TypingEngine, LeanKeysKit)
 #   3. vendor/vikey/Tools/autoswitch/check.sh      (Vikey engine)
 #   4. sync/check-divergence.sh <gonhanh tag in sync/upstream.json>
-#   5. tests/sync/test_check_divergence.sh, test_sync.sh, test_release.sh
+#   5. tests/sync/test_check_divergence.sh, test_sync.sh, test_release.sh,
+#      tests/update/test_swap_script.sh
 #   6. --all only: tests/build/test_build_output.sh, which runs
 #      leankeys/build.sh (Release, universal) and checks the bundle
 # Stops at the first failing step (exit non-zero). Works from any directory in
@@ -47,7 +48,8 @@ tag="$(jq -r .gonhanh sync/upstream.json)"
 
 core_tests() { ( cd core && cargo test ) }
 sync_tests() {
-  zsh tests/sync/test_check_divergence.sh && zsh tests/sync/test_sync.sh && zsh tests/sync/test_release.sh
+  zsh tests/sync/test_check_divergence.sh && zsh tests/sync/test_sync.sh && zsh tests/sync/test_release.sh &&
+    zsh tests/update/test_swap_script.sh
 }
 
 run "cargo test (core)" core_tests
