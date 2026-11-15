@@ -160,6 +160,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
         ShortcutSuggestionsModel.shared.start(
             router: .shared,
             existingTriggers: { AppState.shared.shortcuts.map(\.key) },
+            existingReplacements: { AppState.shared.shortcuts.map(\.value) },
             addShortcut: { AppState.shared.addLearnedShortcut(trigger: $0, text: $1) }
         )
         // LEANKEYS-HOOK-END

@@ -120,7 +120,7 @@ final class TextMirrorTests: XCTestCase {
         XCTAssertEqual(rec.words.last?.breakChar, "\t")
         XCTAssertEqual(rec.phrases.last, "Nam Dia")
 
-        // A click or app switch reaches the router as clear() (RustBridge.clearBuffer*), terminator pending or not.
+        // A click reaches the router as clear() (RustBridge.clearBuffer*), terminator pending or not.
         typeKeys(dia, router)
         router.clear()
         XCTAssertEqual(rec.phrases.last, "Dia")

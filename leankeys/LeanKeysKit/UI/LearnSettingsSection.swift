@@ -168,6 +168,8 @@ public struct LearnSettingsSection: View {
 
     private static let knownNames = [
         "com.1password.1password": "1Password",
+        "com.agilebits.onepassword7": "1Password 7",
+        "org.keepassxc.keepassxc": "KeePassXC",
         "com.bitwarden.desktop": "Bitwarden",
         "com.apple.keychainaccess": "Keychain Access",
         "com.apple.Passwords": "Passwords",

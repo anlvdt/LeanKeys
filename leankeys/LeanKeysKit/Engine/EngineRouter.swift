@@ -170,7 +170,7 @@ public final class EngineRouter {
     }
 
     /// Drops the mirror's pending word and phrase without emitting them: Cmd/Ctrl chords, Option+Backspace, the
-    /// restore shortcut, Secure Input, other input sources.
+    /// restore shortcut, Secure Input, other input sources, an app switch (ruling R20).
     public func discardPending() {
         mirror.discard()
     }
@@ -211,8 +211,8 @@ public final class EngineRouter {
     }
 
     /// Every place the macOS app drops the word goes through `RustBridge.clearBuffer*` to here, so the mirror
-    /// resets with it and emits the pending phrase (a click, an app switch or a modified arrow moves the cursor).
-    /// Bypass and Secure Input sites call `discardPending()` first, which leaves nothing to emit.
+    /// resets with it and emits the pending phrase (a click, Tab or a modified arrow moves the cursor in the app).
+    /// Bypass, Secure Input and app-switch sites call `discardPending()` first, which leaves nothing to emit.
     public func clear() {
         vikey?.resetContext()
         mirror.reset()

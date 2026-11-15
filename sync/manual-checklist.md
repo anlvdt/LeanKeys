@@ -36,8 +36,9 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | A3 | Cập nhật self-signed | Cập nhật từ bản self-signed sang bản self-signed khác: gõ vẫn được, không phải cấp quyền lại. | — | [ ] |
 | A4 | Từ ad-hoc lên self-signed | Máy đang chạy bản ad-hoc đã cấp quyền. Cập nhật lên bản self-signed đầu tiên: LeanKeys tự reset mục của chính nó trong Trợ năng, chỉ cần gạt một công tắc là gõ được. | — | [ ] |
 | S1 | Đề xuất gõ tắt | Cài đặt → Chung → bật "Đề xuất gõ tắt": màn giải thích hiện ra; bấm Huỷ thì công tắc vẫn tắt, bấm Bật thì công tắc bật. | — | [ ] |
-| S2 | Đề xuất gõ tắt | Gõ cùng một số điện thoại thử (`0900 000 000`) rồi Return, 3 lần trong Notes: ô nổi hiện "Có 1 gợi ý gõ tắt". Bấm vào, bấm Thêm; gõ `sdt` + cách thì ra đúng số đó. | [ ] | [ ] |
+| S2 | Đề xuất gõ tắt | Làm với từng engine: gõ cùng một số điện thoại thử (`0900 000 000`) rồi Return, 3 lần trong Notes: ô nổi hiện "Có 1 gợi ý gõ tắt". Bấm vào, bấm Thêm; gõ `sdt` + cách thì ra đúng số đó, đúng một lần (với Gõ Nhanh: Gõ Nhanh tự bung, không bung đôi). Gõ `sdt` + Return thêm 3 lần: không có gợi ý mới. | [ ] | [ ] |
 | S3 | Đề xuất gõ tắt | Gõ cùng một chuỗi 3 lần trong ô mật khẩu của Safari (Return sau mỗi lần): không có gợi ý nào. | — | [ ] |
 | S4 | Đề xuất gõ tắt | Cài đặt → Nâng cao → "Xoá dữ liệu đã học" → Xoá: ô nổi không còn dòng gợi ý, danh sách gợi ý trống. | — | [ ] |
+| S5 | Chữ hoa với Shift | Gõ `DDaif Loan` trong Notes, giữ Shift (không bật Caps Lock) khi gõ `DD` và `L`: ra "Đài Loan", không ra "đài Loan". | [ ] | [ ] |
 
-Chỉ gõ `yes` khi cả 44 ô đều đạt.
+Chỉ gõ `yes` khi cả 46 ô đều đạt.

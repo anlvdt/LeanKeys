@@ -2382,6 +2382,7 @@ class PerAppModeManager {
         currentBundleId = bundleId
 
         Log.refresh() // Re-check debug log file existence on app switch
+        EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch (R20: a phrase is never credited to the app switched to)
         RustBridge.clearBuffer()
         clearDetectionCache() // Clear injection method cache on app switch
 

@@ -300,6 +300,20 @@ final class KeychainEncryptedFileStoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: dir)
     }
 
+    /// Ruling R21: the launchd sync job runs without an unlocked GUI session, where the login keychain answers
+    /// errSecInteractionNotAllowed. It sets LEANKEYS_SKIP_KEYCHAIN_TESTS=1; a locked keychain skips too.
+    private func requireKeychain() throws {
+        if ProcessInfo.processInfo.environment["LEANKEYS_SKIP_KEYCHAIN_TESTS"] == "1" {
+            throw XCTSkip("LEANKEYS_SKIP_KEYCHAIN_TESTS=1")
+        }
+        let probe: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service!,
+                                    kSecAttrAccount as String: "probe", kSecValueData as String: Data([0])]
+        let status = SecItemAdd(probe as CFDictionary, nil)
+        if status == errSecInteractionNotAllowed { throw XCTSkip("keychain locked (errSecInteractionNotAllowed)") }
+        SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service!,
+                       kSecAttrAccount as String: "probe"] as CFDictionary)
+    }
+
     private func items() -> Int {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service!,
                                     kSecMatchLimit as String: kSecMatchLimitAll, kSecReturnAttributes as String: true]
@@ -309,6 +323,7 @@ final class KeychainEncryptedFileStoreTests: XCTestCase {
     }
 
     func testRoundTripThroughKeychain() throws {
+        try requireKeychain()
         let url = dir.appendingPathComponent("LeanKeys/learn.bin")
         let store = KeychainEncryptedFileStore(url: url, keychainService: service)
         XCTAssertNil(try store.load())
@@ -341,6 +356,7 @@ final class KeychainEncryptedFileStoreTests: XCTestCase {
     /// Off by default must mean no trace: a learner that never counts anything creates no Keychain item, and erasing
     /// leaves none behind.
     func testDisabledLearnerLeavesNoKeychainItem() throws {
+        try requireKeychain()
         let url = dir.appendingPathComponent("learn.bin")
         let idle = PhraseLearner(store: KeychainEncryptedFileStore(url: url, keychainService: service))
         idle.observe(CommittedPhrase(text: "Cảm ơn anh nhiều nhé"),
@@ -366,6 +382,7 @@ final class KeychainEncryptedFileStoreTests: XCTestCase {
     }
 
     func testUnreadableFileLoadsAsNothing() throws {
+        try requireKeychain()
         let url = dir.appendingPathComponent("learn.bin")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try Data("not a sealed box".utf8).write(to: url)

@@ -31,6 +31,7 @@ final class ShortcutSuggestionsModelTests: XCTestCase {
         store = MemoryStore()
         added = []
         existing = []
+        replacements = []
         learnersMade = 0
     }
 
@@ -39,7 +40,9 @@ final class ShortcutSuggestionsModelTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeModel() -> ShortcutSuggestionsModel {
+    private var replacements: [String] = []
+
+    private func makeModel(onLearnerQueue: @escaping (@escaping () -> Void) -> Void = { $0() }) -> ShortcutSuggestionsModel {
         let model = ShortcutSuggestionsModel(
             defaults: defaults,
             makeLearner: { [unowned self] threshold in
@@ -47,11 +50,12 @@ final class ShortcutSuggestionsModelTests: XCTestCase {
                 return PhraseLearner(store: store, threshold: threshold)
             },
             eraseStore: { [unowned self] in try? store.erase() },
-            onLearnerQueue: { $0() },
+            onLearnerQueue: onLearnerQueue,
             onMain: { $0() },
             suggest: { candidate, taken in Abbreviation.suggest(for: candidate, existing: taken) }
         )
         model.existingTriggers = { [unowned self] in existing }
+        model.existingReplacements = { [unowned self] in replacements }
         model.addShortcut = { [unowned self] trigger, text in
             added.append((trigger, text))
             existing.append(trigger)
@@ -223,6 +227,8 @@ final class ShortcutSuggestionsModelTests: XCTestCase {
         model.addExcludedApp("com.example.secret")
         XCTAssertTrue(model.excludedBundleIDs.contains("com.example.secret"))
         XCTAssertTrue(model.excludedBundleIDs.isSuperset(of: Exclusions.defaultBundleIDs))
+        XCTAssertTrue(Exclusions.defaultBundleIDs.isSuperset(of: ["com.agilebits.onepassword7", "org.keepassxc.keepassxc"]),
+                      "ruling R22")
         let secret = LearnContext(bundleID: "com.example.secret", secureInput: false, secureField: false, now: Date())
         for _ in 0..<3 { model.observe(CommittedPhrase(text: "0912 345 678"), context: secret) }
         XCTAssertEqual(model.suggestionCount, 0)
@@ -251,6 +257,53 @@ final class ShortcutSuggestionsModelTests: XCTestCase {
         model.dismiss(row)
         model.publish(stale)
         XCTAssertEqual(model.suggestionCount, 0)
+    }
+
+    /// An expansion reaches the mirror as typed text: `sdt` + Return three times must not suggest the number.
+    func testExpandedShortcutIsNotSuggested() {
+        existing = ["sdt"]
+        replacements = ["0912 345 678"]
+        let model = enabledModel()
+        type("0912  345 678", into: model)
+        XCTAssertEqual(model.suggestionCount, 0)
+        // Dismissed in the learner: removing the gõ tắt later does not bring it back.
+        replacements = []
+        type("0912 345 678", into: model)
+        XCTAssertEqual(model.suggestionCount, 0)
+    }
+
+    func testPhraseHoldingLongReplacementIsNotSuggested() {
+        replacements = ["Số 1 đường Mẫu", "ok"]
+        let model = enabledModel()
+        type("Gửi về số 1 đường mẫu giúp em", into: model)
+        XCTAssertEqual(model.suggestionCount, 0, "a phrase holding an 8+ character replacement")
+        type("ok anh nhé, mai gặp", into: model)
+        XCTAssertEqual(model.suggestionCount, 1, "a replacement under 8 characters inside a phrase is fine")
+    }
+
+    func testShortcutAddedLaterHidesRowWhenListOpens() {
+        let model = enabledModel()
+        type("0912 345 678", into: model)
+        XCTAssertEqual(model.suggestionCount, 1)
+        replacements = ["0912 345 678"]
+        model.prepareSuggestions()
+        XCTAssertTrue(model.rows.isEmpty)
+    }
+
+    /// An observe queued before an erase publishes its text when it runs; the erase must publish last.
+    func testEraseIsTheLastPublish() {
+        var pending: [() -> Void] = []
+        let model = makeModel(onLearnerQueue: { pending.append($0) })
+        model.setEnabled(true)
+        model.confirmConsent()
+        func drain() { while !pending.isEmpty { pending.removeFirst()() } }
+        drain()
+        type("0912 345 678", into: model)
+        model.eraseAll()
+        XCTAssertEqual(model.suggestionCount, 0)
+        drain()
+        XCTAssertEqual(model.suggestionCount, 0, "queued observes ran before the erase; the erase published last")
+        XCTAssertEqual(store.erased, 1)
     }
 
     func testSuggestionLine() {

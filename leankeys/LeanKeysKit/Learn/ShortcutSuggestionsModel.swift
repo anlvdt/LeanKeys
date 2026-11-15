@@ -75,6 +75,9 @@ public final class ShortcutSuggestionsModel: ObservableObject {
 
     /// The app's current gõ tắt triggers. Set by the app.
     public var existingTriggers: () -> [String] = { [] }
+    /// The app's current gõ tắt replacements. An expansion reaches the mirror as typed text, so a phrase that is
+    /// (or holds) one is never suggested. Set by the app.
+    public var existingReplacements: () -> [String] = { [] }
     /// Adds a gõ tắt to the app's store (which saves it and syncs both engines); false when it was refused.
     public var addShortcut: (_ trigger: String, _ text: String) -> Bool = { _, _ in false }
     /// Phrases typed in LeanKeys itself (the Sửa field) are not learned.
@@ -94,6 +97,8 @@ public final class ShortcutSuggestionsModel: ObservableObject {
 
     /// Learner-queue state: touched only inside `onLearnerQueue`.
     private var learner: PhraseLearning?
+    /// Learner queue: the latest replacements handed over from main, normalised.
+    private var queueReplacements: [String] = []
     /// Main: ids added or dismissed here, filtered out of any `ready` list still on its way from the queue.
     private var handled: Set<String> = []
 
@@ -183,8 +188,10 @@ public final class ShortcutSuggestionsModel: ObservableObject {
     /// Hooks the router's mirror up to this model and takes the app's gõ tắt store. Main thread.
     public func start(router: EngineRouter,
                       existingTriggers: @escaping () -> [String],
+                      existingReplacements: @escaping () -> [String],
                       addShortcut: @escaping (String, String) -> Bool) {
         self.existingTriggers = existingTriggers
+        self.existingReplacements = existingReplacements
         self.addShortcut = addShortcut
         contextReader = LearnContextReader.current
         router.mirror.onPhrase = { [weak self] phrase in self?.phraseCommitted(phrase) }
@@ -199,8 +206,10 @@ public final class ShortcutSuggestionsModel: ObservableObject {
     /// Main thread. Hands the phrase to the learner queue unless learning is off or it was typed in LeanKeys.
     public func observe(_ phrase: CommittedPhrase, context: LearnContext) {
         guard enabled, context.bundleID == nil || context.bundleID != ownBundleID else { return }
+        let replacements = existingReplacements()
         onLearnerQueue { [self] in
             guard let learner, learner.enabled else { return }
+            queueReplacements = Self.normalized(replacements)
             learner.observe(phrase, context: context)
             publishReady(learner)
         }
@@ -215,10 +224,31 @@ public final class ShortcutSuggestionsModel: ObservableObject {
         return made
     }
 
-    /// Learner queue: reads `ready` and hands it to main.
+    /// Learner queue: reads `ready`, dismisses what an existing gõ tắt already covers, and hands the rest to main.
     private func publishReady(_ learner: PhraseLearning) {
-        let ready = learner.ready
+        var ready = learner.ready
+        let covered = ready.filter { Self.isCovered($0.text, byNormalized: queueReplacements) }
+        if !covered.isEmpty {
+            covered.forEach(learner.dismiss)
+            let ids = Set(covered.map(\.id))
+            ready.removeAll { ids.contains($0.id) }
+        }
         onMain { [weak self] in self?.publish(ready) }
+    }
+
+    /// Replacements to compare with, as `PhraseDetector.normalizedKey` makes them; empty ones dropped.
+    static func normalized(_ replacements: [String]) -> [String] {
+        replacements.map(PhraseDetector.normalizedKey).filter { !$0.isEmpty }
+    }
+
+    /// Minimum length of a replacement that, found inside a phrase, makes the phrase covered.
+    static let containedReplacementMinLength = 8
+
+    /// `text` is a gõ tắt's replacement, or holds one of 8 characters or more.
+    static func isCovered(_ text: String, byNormalized replacements: [String]) -> Bool {
+        guard !replacements.isEmpty else { return false }
+        let key = PhraseDetector.normalizedKey(text)
+        return replacements.contains { $0 == key || ($0.count >= containedReplacementMinLength && key.contains($0)) }
     }
 
     /// Main thread.
@@ -239,7 +269,8 @@ public final class ShortcutSuggestionsModel: ObservableObject {
     /// called when the list opens (the engine replay resets the typing context, as the click that opened it did).
     public func prepareSuggestions() {
         var taken = Set(existingTriggers().map { $0.lowercased() })
-        rows = candidates.map { candidate in
+        let replacements = Self.normalized(existingReplacements())
+        rows = candidates.filter { !Self.isCovered($0.text, byNormalized: replacements) }.map { candidate in
             let trigger = suggest(candidate, taken)
             taken.insert(trigger.lowercased())
             return SuggestionRow(candidate: candidate, trigger: trigger)
@@ -314,6 +345,8 @@ public final class ShortcutSuggestionsModel: ObservableObject {
         onLearnerQueue { [self] in
             if let learner {
                 learner.eraseAll()
+                // An observe queued before the erase may have published its text: the last word is the empty list.
+                publishReady(learner)
             } else {
                 eraseStore()
             }

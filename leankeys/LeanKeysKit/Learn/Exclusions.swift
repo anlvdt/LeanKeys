@@ -5,9 +5,11 @@ public enum Exclusions {
     /// Apps never learned from, by default.
     public static let defaultBundleIDs: Set<String> = [
         "com.1password.1password",
+        "com.agilebits.onepassword7",
         "com.bitwarden.desktop",
         "com.apple.keychainaccess",
         "com.apple.Passwords",
+        "org.keepassxc.keepassxc",
     ]
 
     /// A number as typed: digit groups joined by single spaces, dots or dashes ("4111 1111 1111 1111",

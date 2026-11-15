@@ -8,7 +8,7 @@ public struct CommittedWord: Equatable {
 
 /// A phrase the user just finished, trimmed and without its terminator. It ends at `. ! ?` followed by Space,
 /// Return/Enter or a cursor move; at Return/Enter; or at a cursor move (`reset`: click, arrows, Home/End,
-/// Page Up/Down, Esc, Tab, app switch). Bypass and Secure Input (`discard`) drop it instead.
+/// Page Up/Down, Esc, Tab). Bypass, Secure Input and app switch (`discard`) drop it instead.
 public struct CommittedPhrase: Equatable {
     public let text: String
 }
@@ -98,15 +98,16 @@ public final class TextMirror {
         }
     }
 
-    /// The cursor moved (click, arrows, Home/End, Page Up/Down, Esc, Tab, app switch): the pending phrase, with
+    /// The cursor moved inside the app (click, arrows, Home/End, Page Up/Down, Esc, Tab): the pending phrase, with
     /// the word being typed, is finished and emitted. No `onWord`: no break key was typed.
     public func reset() {
         emitPhrase()
         discard()
     }
 
-    /// Bypass and Secure Input (Cmd/Ctrl chords, Option+Backspace, restore shortcut, unknown keys): forget the word
-    /// and the phrase, emit nothing.
+    /// Bypass, Secure Input and app switch (Cmd/Ctrl chords, Option+Backspace, restore shortcut, unknown keys, the
+    /// frontmost app changing): forget the word and the phrase, emit nothing. An app switch discards (ruling R20):
+    /// by the time it is seen the phrase would be credited to the new app, past its exclusion and secure-field checks.
     public func discard() {
         buffer.removeAll()
         wordStart = 0

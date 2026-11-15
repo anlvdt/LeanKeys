@@ -158,11 +158,11 @@ extension ShortcutSuggestionsModel {
 
     /// A model that learns nothing and touches no store, showing `candidates` (with triggers) as if learning were on.
     static func preview(candidates: [Candidate] = [], enabled: Bool = true) -> ShortcutSuggestionsModel {
-        let suite = "LeanKeys.preview"
+        // Values go in the registration domain only, which is volatile: nothing reaches ~/Library/Preferences.
+        let suite = "LeanKeys.preview.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        defaults.set(enabled, forKey: enabledKey)
-        defaults.set(true, forKey: consentKey)
+        defaults.register(defaults: [enabledKey: enabled, consentKey: true])
+        defer { defaults.removePersistentDomain(forName: suite) }
         let model = ShortcutSuggestionsModel(
             defaults: defaults,
             makeLearner: { _ in PreviewLearner() },

@@ -349,7 +349,9 @@ main() {
     fail 1 "không commit được upstream.json/Versions.json"
   say "- LeanKeys $old_ver → $ver."
 
-  # Tests, in the worktree.
+  # Tests, in the worktree. Under launchd the login keychain may be locked (errSecInteractionNotAllowed), so the
+  # Keychain store tests skip themselves (ruling R21).
+  export LEANKEYS_SKIP_KEYCHAIN_TESTS=1
   local test_cmd="${LEANKEYS_TEST_CMD:-}"
   if [[ -z "$test_cmd" ]]; then
     [[ -x "$wt/.githooks/pre-push" ]] ||
