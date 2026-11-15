@@ -6,8 +6,9 @@
 #   --dmg          also write dist/LeanKeys-X.Y.dmg
 # Output: dist/LeanKeys.app (universal: arm64 + x86_64). Exits non-zero if any step fails.
 #
-# Signing: ad-hoc by default. When LEANKEYS_SIGN_IDENTITY and LEANKEYS_NOTARY_PROFILE are both set, signs with that
-# Developer ID identity (hardened runtime) and notarizes with that notarytool keychain profile.
+# Signing: when LEANKEYS_SIGN_IDENTITY and LEANKEYS_NOTARY_PROFILE are both set, signs with that Developer ID identity
+# (hardened runtime) and notarizes with that notarytool keychain profile. Otherwise signs with the "LeanKeys Self-Signed"
+# identity when it is in the keychain (see sync/make-signing-cert.sh), and ad-hoc when it is not.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,6 +27,20 @@ while [[ $# -gt 0 ]]; do
         *) echo "build.sh: unknown argument: $1" >&2; exit 2 ;;
     esac
 done
+
+# Prints the signing kind for step 5: developer-id, self-signed or adhoc.
+# $1 is the output of `security find-identity -p codesigning` (no -v, so untrusted identities count too).
+pick_signing_kind() {
+    local identities="$1"
+    if [[ -n "${LEANKEYS_SIGN_IDENTITY:-}" && -n "${LEANKEYS_NOTARY_PROFILE:-}" ]]; then
+        echo developer-id
+    elif [[ "$identities" == *'"LeanKeys Self-Signed"'* ]]; then
+        echo self-signed
+    else
+        echo adhoc
+    fi
+}
+[[ "${LEANKEYS_SOURCE_ONLY:-}" == 1 ]] && return 0
 
 if [[ -z "$VERSION" ]]; then
     VERSION="$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["leankeys"])' \
@@ -87,7 +102,8 @@ cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
 
 # 5. Sign.
 ENTITLEMENTS_PROD="$ROOT/platforms/macos/GoNhanh.entitlements.production"
-if [[ -n "${LEANKEYS_SIGN_IDENTITY:-}" && -n "${LEANKEYS_NOTARY_PROFILE:-}" ]]; then
+SIGN_KIND="$(pick_signing_kind "$(security find-identity -p codesigning 2>/dev/null || true)")"
+if [[ "$SIGN_KIND" == developer-id ]]; then
     echo "==> Signing with Developer ID: $LEANKEYS_SIGN_IDENTITY"
     codesign --force --deep --options runtime --timestamp \
         --entitlements "$ENTITLEMENTS_PROD" -s "$LEANKEYS_SIGN_IDENTITY" "$APP"
@@ -99,6 +115,20 @@ if [[ -n "${LEANKEYS_SIGN_IDENTITY:-}" && -n "${LEANKEYS_NOTARY_PROFILE:-}" ]]; 
     xcrun notarytool submit "$ZIP" --keychain-profile "$LEANKEYS_NOTARY_PROFILE" --wait
     xcrun stapler staple "$APP"
     rm -f "$ZIP"
+elif [[ "$SIGN_KIND" == self-signed ]]; then
+    # Stable identity: macOS keeps the Accessibility grant across updates because the designated requirement stays the same.
+    # Never falls back to ad-hoc: an ad-hoc build would cost every user their grant.
+    echo "==> Signing self-signed"
+    if ! codesign --force --deep --entitlements "$ENTITLEMENTS_PROD" -s "LeanKeys Self-Signed" "$APP"; then
+        echo "Signing with LeanKeys Self-Signed failed — unlock the login keychain or run sync/make-signing-cert.sh" >&2
+        exit 1
+    fi
+    codesign --verify --deep --strict "$APP"
+    reqs="$(codesign -dr - "$APP" 2>&1)"
+    if [[ "$reqs" != *"certificate leaf"* ]]; then
+        echo "Signing with LeanKeys Self-Signed failed — unlock the login keychain or run sync/make-signing-cert.sh" >&2
+        exit 1
+    fi
 else
     # Ruling R28: the production entitlements, never the Debug ones (get-task-allow). No hardened runtime yet.
     echo "==> Signing ad-hoc"
