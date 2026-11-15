@@ -277,7 +277,7 @@ final class EngineRouterTests: XCTestCase {
         XCTAssertEqual(handled(press(router))??.2, true, "an ordinary edit stays consumed")
     }
 
-    // MARK: - Ruling R25: an explicit off stays off; the echo of Vikey's own switch does not
+    // MARK: - Ruling R25: only the user's own off pauses auto switch; on always restores it
 
     /// Vikey switches to English by itself; the router announces it.
     private func selfSwitchToEnglish(_ router: EngineRouter) {
@@ -287,43 +287,51 @@ final class EngineRouterTests: XCTestCase {
         fake.scripted = nil
     }
 
-    func testExplicitOffDisablesAutoSwitch() {
+    func testExplicitOffPausesAutoSwitch() {
         let router = makeRouter()
-        router.setEnabled(false)
+        router.setEnabled(false, explicit: true)
         XCTAssertEqual(fake.setAutoSwitchCalls.last, false)
         XCTAssertEqual(fake.setVietnameseCalls.last, false)
     }
 
-    func testEchoOfVikeysOwnSwitchKeepsAutoSwitch() {
-        let router = makeRouter()
-        router.setEnabled(true)
-        selfSwitchToEnglish(router)
-        let calls = fake.setAutoSwitchCalls
-        router.setEnabled(false) // the app mirroring the announcement
-        XCTAssertEqual(fake.setAutoSwitchCalls, calls, "an echo must not touch auto switch")
-        XCTAssertEqual(fake.setAutoSwitchCalls.last, true)
-    }
-
-    func testOnlyTheFirstMatchingCallIsAnEcho() {
+    /// The echo of Vikey's switch, and any later replay of that off (input source change, launch), leave auto
+    /// switch on.
+    func testOffAfterAnAutoSwitchWithoutExplicitKeepsAutoSwitch() {
         let router = makeRouter()
         selfSwitchToEnglish(router)
-        router.setEnabled(false) // echo
-        router.setEnabled(true) // the user
-        router.setEnabled(false) // the user again: explicit, not a stale echo
-        XCTAssertEqual(fake.setAutoSwitchCalls.suffix(2), [true, false])
+        router.setEnabled(false) // the app mirroring the switch
+        router.setEnabled(false) // e.g. InputSourceManager replaying AppState later
+        XCTAssertFalse(fake.setAutoSwitchCalls.contains(false), "auto switch must stay on")
+        XCTAssertEqual(fake.setVietnameseCalls.last, false)
     }
 
-    func testExplicitOnRestoresAutoSwitch() {
+    func testOnAlwaysRestoresAutoSwitch() {
         let router = makeRouter()
-        router.setEnabled(false)
-        router.setEnabled(true)
+        router.setEnabled(false, explicit: true)
+        router.setEnabled(true) // not explicit: launch, input source, per-app "Bật"
         XCTAssertEqual(fake.setAutoSwitchCalls.last, true)
         XCTAssertEqual(fake.setVietnameseCalls.last, true)
     }
 
+    func testLanguageBeforeAutoSwitchIsTheUsersUntilTheNextExplicitChoice() {
+        let router = makeRouter()
+        router.setEnabled(true, explicit: true)
+        XCTAssertNil(router.languageBeforeAutoSwitch)
+        selfSwitchToEnglish(router)
+        XCTAssertEqual(router.languageBeforeAutoSwitch, true)
+        router.setEnabled(false) // echo: not the user's choice
+        fake.isVietnamese = true
+        fake.scripted = .some(EngineEdit(deleteCount: 0, text: [], languageChanged: true))
+        _ = press(router) // back to Vietnamese, then English again
+        selfSwitchToEnglish(router)
+        XCTAssertEqual(router.languageBeforeAutoSwitch, true, "the first automatic switch keeps the user's value")
+        router.setEnabled(false, explicit: true)
+        XCTAssertNil(router.languageBeforeAutoSwitch)
+    }
+
     func testOffAndModernToneApplyWhenVikeyIsBuiltLater() {
         let router = makeRouter(stored: .gonhanh)
-        router.setEnabled(false)
+        router.setEnabled(false, explicit: true)
         router.setModernTone(false)
         XCTAssertEqual(factoryCalls, 0)
         router.selected = .vikey

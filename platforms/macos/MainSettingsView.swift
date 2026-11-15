@@ -61,6 +61,10 @@ class AppState: ObservableObject {
         didSet {
             RustBridge.setEnabled(isEnabled)
             guard !isSilentUpdate else { return }
+            // LEANKEYS-HOOK-BEGIN: language-sync
+            // A non-silent change is the user's own (toggle hotkey, menu, settings): off pauses Vikey's auto switch.
+            EngineRouter.shared.setEnabled(isEnabled && InputSourceObserver.shared.isAllowedInputSource, explicit: true)
+            // LEANKEYS-HOOK-END
 
             if perAppModeEnabled {
                 // Per-app mode: only save per-app state, don't update global
@@ -366,6 +370,7 @@ class AppState: ObservableObject {
                 profileSavedEnabled = isEnabled
             }
             RustBridge.setEnabled(false)
+            EngineRouter.shared.setEnabled(false, explicit: true) // LEANKEYS-HOOK: language-sync
             setEnabledSilently(false)
             return
         }

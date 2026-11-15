@@ -85,6 +85,19 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertTrue(engine.isVietnamese)
     }
 
+    /// Ruling R25: an off that is not the user's (the echo of an automatic switch, a replay) keeps auto switch.
+    func testNonExplicitOffThroughRouterStillSwitchesBack() {
+        let suite = "VikeyEngineTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let engine = self.engine!
+        let router = EngineRouter(defaults: defaults, makeVikey: { engine })
+        router.setEnabled(false)
+        engine.resetContext()
+        XCTAssertEqual(Field(engine).type("vieejt "), "việt ")
+        XCTAssertTrue(engine.isVietnamese)
+    }
+
     /// Ruling R25: the user's explicit off (through the router) stays off.
     func testExplicitOffThroughRouterStaysEnglish() {
         let suite = "VikeyEngineTests.\(UUID().uuidString)"
@@ -92,7 +105,7 @@ final class VikeyEngineTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let engine = self.engine!
         let router = EngineRouter(defaults: defaults, makeVikey: { engine })
-        router.setEnabled(false)
+        router.setEnabled(false, explicit: true)
         engine.resetContext()
         XCTAssertEqual(Field(engine).type("vieejt "), "vieejt ")
         XCTAssertFalse(engine.isVietnamese)

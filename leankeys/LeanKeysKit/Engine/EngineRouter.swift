@@ -31,10 +31,11 @@ public final class EngineRouter {
     private var vietnamese = true
     private var autoSwitch = true
     private var modernTone = true
-    /// The language this router last announced (`leanKeysLanguageChanged`), until the next `setEnabled`. The
-    /// app mirrors that announcement into its on/off state, which comes back here as `setEnabled`: an echo, not
-    /// the user's choice (ruling R25).
-    private var announcedLanguage: Bool?
+
+    /// The language the user had before Vikey's first switch by itself since the user's last explicit choice;
+    /// nil when no automatic switch happened since. The app stores this, not the switched state, when it
+    /// remembers a language for a newly seen app: automatic switches are never remembered.
+    public private(set) var languageBeforeAutoSwitch: Bool?
 
     public private(set) var fallbackReason: String?
 
@@ -72,8 +73,8 @@ public final class EngineRouter {
         guard let edit = vikey.process(keyCode: keyCode, caps: caps, shift: shift) else { return .handled(nil) }
         if edit.languageChanged {
             let on = vikey.isVietnamese
+            if languageBeforeAutoSwitch == nil { languageBeforeAutoSwitch = vietnamese }
             vietnamese = on
-            announcedLanguage = on
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .leanKeysLanguageChanged, object: nil, userInfo: ["vietnamese": on])
             }
@@ -89,16 +90,25 @@ public final class EngineRouter {
         refresh()
     }
 
-    /// The app's on/off state. An explicit change (not the echo of the router's own announcement) also sets
-    /// Vikey's auto switch: off means English stays English until the user turns it on again (ruling R25).
-    public func setEnabled(_ vietnamese: Bool) {
-        let echo = announcedLanguage == vietnamese
-        announcedLanguage = nil
+    /// The app's on/off state (ruling R25). On always turns Vikey's auto switch back on. Off pauses it only when
+    /// `explicit`: the user's own choice (toggle hotkey, menu or settings toggle, a per-app "Tắt" profile, or a
+    /// remembered per-app "off", which only the user can have set). Every other caller (the app mirroring
+    /// Vikey's own switch, input-source changes, launch) leaves auto switch as it is, so English typed after an
+    /// automatic switch can still switch back.
+    public func setEnabled(_ vietnamese: Bool, explicit: Bool = false) {
         self.vietnamese = vietnamese
         vikey?.setVietnamese(vietnamese)
-        guard !echo else { return }
-        autoSwitch = vietnamese
-        vikey?.setAutoSwitch(vietnamese)
+        if explicit { languageBeforeAutoSwitch = nil }
+        if vietnamese {
+            setAutoSwitch(true)
+        } else if explicit {
+            setAutoSwitch(false)
+        }
+    }
+
+    private func setAutoSwitch(_ on: Bool) {
+        autoSwitch = on
+        vikey?.setAutoSwitch(on)
     }
 
     /// Gõ Nhanh's modern-tone setting, forwarded to Vikey (spec §3.5).

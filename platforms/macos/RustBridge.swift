@@ -2381,7 +2381,7 @@ class PerAppModeManager {
             restorePerAppMode(for: bundleId)
         } else {
             // New app: save current state so it will be remembered next time
-            AppState.shared.savePerAppMode(bundleId: bundleId, enabled: AppState.shared.isEnabled)
+            AppState.shared.savePerAppMode(bundleId: bundleId, enabled: EngineRouter.shared.languageBeforeAutoSwitch ?? AppState.shared.isEnabled) // LEANKEYS-HOOK: engine-dispatch
         }
     }
 
@@ -2400,6 +2400,7 @@ class PerAppModeManager {
         let mode = AppState.shared.getPerAppMode(bundleId: bundleId)
         Log.info("PerApp: \(mode ? "ON" : "OFF")")
         RustBridge.setEnabled(mode)
+        EngineRouter.shared.setEnabled(mode && InputSourceObserver.shared.isAllowedInputSource, explicit: true) // LEANKEYS-HOOK: engine-dispatch
         AppState.shared.setEnabledSilently(mode)
         NotificationCenter.default.post(name: .inputSourceChanged, object: nil)
     }

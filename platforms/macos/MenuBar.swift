@@ -262,11 +262,12 @@ class MenuBarController: NSObject, NSWindowDelegate {
         RustBridge.setEnabled(appState.isEnabled)
         RustBridge.setMethod(appState.currentMethod.rawValue)
         // LEANKEYS-HOOK-BEGIN: language-sync
-        // Vikey switched language with its own hotkey: mirror it in AppState (menu bar icon, saved state).
-        // Assign only on change; the didSet reaches EngineRouter.setEnabled, which does not post again.
+        // Vikey switched language by itself: mirror it in the menu bar icon only. Silent, so the automatic switch
+        // is never saved as a per-app or global choice (ruling R25); the didSet's EngineRouter.setEnabled is not
+        // explicit and leaves auto switch on.
         NotificationCenter.default.addObserver(forName: .leanKeysLanguageChanged, object: nil, queue: .main) { [weak self] note in
             guard let self, let on = note.userInfo?["vietnamese"] as? Bool, appState.isEnabled != on else { return }
-            appState.isEnabled = on
+            appState.setEnabledSilently(on)
         }
         // LEANKEYS-HOOK-END
 
