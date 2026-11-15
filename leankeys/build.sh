@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 && -n "$2" ]] || { echo "build.sh: --version needs a value" >&2; exit 2; }
             VERSION="$2"; shift 2 ;;
         --dmg) MAKE_DMG=true; shift ;;
-        -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
         *) echo "build.sh: unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -124,7 +124,7 @@ elif [[ "$SIGN_KIND" == self-signed ]]; then
         exit 1
     fi
     codesign --verify --deep --strict "$APP"
-    reqs="$(codesign -dr - "$APP" 2>&1)"
+    reqs="$(codesign -dr - "$APP" 2>&1 || true)"
     if [[ "$reqs" != *"certificate leaf"* ]]; then
         echo "Signing with LeanKeys Self-Signed failed — unlock the login keychain or run sync/make-signing-cert.sh" >&2
         exit 1

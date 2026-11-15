@@ -27,6 +27,8 @@ fi
 # 2. Generate the key and self-signed certificate in a private temp dir, removed on exit.
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 print -r -- "==> Generating key and certificate (20 years)"
 $openssl_bin req -x509 -newkey rsa:2048 -days 7300 -nodes \
   -subj "/CN=$CN" \
