@@ -26,6 +26,8 @@ public final class VikeyEngine: TypingEngine {
         if Self.returnKeys.contains(keyCode) { resetContext() }
 
         if edit.deleteCount == 0 && edit.text.isEmpty && !edit.languageChanged { return nil }
+        // Ruling R9: a plain Backspace (delete one, nothing typed) is the key's native effect.
+        if keyCode == 51 && edit.deleteCount == 1 && edit.text.isEmpty && !edit.languageChanged { return nil }
         if edit.deleteCount == 0 && !edit.languageChanged,
            let own = Self.ownCharacter(keyCode: keyCode, shift: vikeyShift), edit.text == [own] {
             return nil

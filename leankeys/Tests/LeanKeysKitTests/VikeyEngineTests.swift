@@ -109,6 +109,18 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertEqual(field.languageChanges, 1)
     }
 
+    func testPlainBackspacePassesThrough() {
+        // Ruling R9: a Backspace whose edit is just "delete one" is the key's native effect, so it goes through.
+        let field = Field(engine)
+        XCTAssertEqual(field.type("vieejt"), "việt")
+        XCTAssertNil(engine.process(keyCode: kBackspace, caps: false, shift: false), "Vietnamese mode")
+
+        engine.setVietnamese(false)
+        engine.resetContext()
+        XCTAssertEqual(Field(engine).type("more"), "more")
+        XCTAssertNil(engine.process(keyCode: kBackspace, caps: false, shift: false), "English mode")
+    }
+
     func testCapsLockXorShiftForLetters() {
         // Ruling R3: for letters Vikey's shift is shift XOR caps. "dd" with Caps Lock is "Đ"; with Caps Lock and Shift, "đ".
         let d = macKey["d"]!
