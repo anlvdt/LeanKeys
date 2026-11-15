@@ -101,6 +101,7 @@ final class UISnapshotTests: XCTestCase {
         host.frame = NSRect(x: 0, y: 0, width: width, height: height ?? 1000)
 
         let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        defer { window.orderOut(nil) }
         window.appearance = appearance
         window.contentView = host
         if height == nil {
@@ -133,6 +134,33 @@ final class UISnapshotTests: XCTestCase {
             throw RenderError(message: "could not encode \(url.lastPathComponent)")
         }
         try data.write(to: url, options: .atomic)
-        window.orderOut(nil)
+        try verifyPNG(at: url, pointWidth: width, pointHeight: size.height)
+    }
+
+    /// Reads the written PNG back and checks its size at 2x, and that it is not a single flat color.
+    private static func verifyPNG(at url: URL, pointWidth: CGFloat, pointHeight: CGFloat) throws {
+        let data = try Data(contentsOf: url)
+        XCTAssertFalse(data.isEmpty, "\(url.lastPathComponent) is empty")
+        let read = try XCTUnwrap(NSBitmapImageRep(data: data), "\(url.lastPathComponent) is not a readable PNG")
+        XCTAssertEqual(read.pixelsWide, Int(pointWidth * 2), "\(url.lastPathComponent) width is not 2x")
+        XCTAssertEqual(read.pixelsHigh, Int(pointHeight * 2), "\(url.lastPathComponent) height is not 2x")
+        XCTAssertGreaterThan(read.pixelsHigh, 0, "\(url.lastPathComponent) has no height")
+
+        // Sample a coarse 8x8 grid; a blank or single-color render has no luminance spread.
+        var low = 1.0
+        var high = 0.0
+        for row in 1...8 {
+            for col in 1...8 {
+                let x = read.pixelsWide * col / 9
+                let y = read.pixelsHigh * row / 9
+                guard let color = read.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
+                let luminance = 0.2126 * Double(color.redComponent)
+                    + 0.7152 * Double(color.greenComponent)
+                    + 0.0722 * Double(color.blueComponent)
+                low = min(low, luminance)
+                high = max(high, luminance)
+            }
+        }
+        XCTAssertGreaterThan(high - low, 0.1, "\(url.lastPathComponent) looks like a single flat color")
     }
 }
