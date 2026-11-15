@@ -1,0 +1,51 @@
+import SwiftUI
+
+@main
+struct GoNhanhApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+    var body: some Scene {
+        Settings {
+            EmptyView()
+        }
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var menuBar: MenuBarController?
+    func applicationDidFinishLaunching(_: Notification) {
+        // Register default settings before anything else
+        registerDefaultSettings()
+
+        NSApp.setActivationPolicy(.accessory)
+        // Resolve the current source before MenuBarController starts the engine, so
+        // native Vietnamese/non-Latin sources are gated correctly on cold launch.
+        InputSourceObserver.shared.start()
+        menuBar = MenuBarController()
+    }
+
+    func applicationWillTerminate(_: Notification) {
+        // Cancel any pending restart-on-close (window may have closed during quit)
+        menuBar?.cancelPendingRestart()
+        KeyboardHookManager.shared.stop()
+        InputSourceObserver.shared.stop()
+    }
+
+    private func registerDefaultSettings() {
+        UserDefaults.standard.register(defaults: [
+            SettingsKey.enabled: true,
+            SettingsKey.method: InputMode.telex.rawValue,
+            SettingsKey.perAppMode: true,
+            SettingsKey.autoWShortcut: true,
+            SettingsKey.bracketShortcut: false,
+            SettingsKey.restoreShortcutEnabled: false,
+            SettingsKey.modernTone: true,
+            SettingsKey.englishAutoRestore: true,
+            SettingsKey.autoCapitalize: false,
+            SettingsKey.soundEnabled: false,
+            SettingsKey.allowForeignConsonants: false,
+            SettingsKey.advancedMode: false,
+            SettingsKey.sessionTapMode: false,
+        ])
+    }
+}
