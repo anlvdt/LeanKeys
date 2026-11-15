@@ -1,6 +1,7 @@
 import Foundation
 
-/// What the router did with a key. `.handled` carries `RustBridge.processKey`'s return value as is.
+/// What the router did with a key. `.handled` carries `RustBridge.processKey`'s return value as is; its third
+/// element (keyConsumed) is false when the key itself must still be typed after the edit.
 /// Not Equatable (it holds a tuple): match it with `if case`.
 public enum InterceptResult {
     /// Gõ Nhanh's own engine decides.
@@ -69,7 +70,7 @@ public final class EngineRouter {
                 NotificationCenter.default.post(name: .leanKeysLanguageChanged, object: nil, userInfo: ["vietnamese": on])
             }
         }
-        return .handled((edit.deleteCount, edit.text, true))
+        return .handled((edit.deleteCount, edit.text, !edit.keyPassesThrough))
     }
 
     /// Gõ Nhanh's input method: 0 = Telex, 1 = VNI.

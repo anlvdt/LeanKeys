@@ -3,11 +3,14 @@ public struct EngineEdit: Equatable {
     public let deleteCount: Int
     public let text: [Character]
     public let languageChanged: Bool
+    /// The key itself still has to be typed after the edit (its own character is not in `text`).
+    public let keyPassesThrough: Bool
 
-    public init(deleteCount: Int, text: [Character], languageChanged: Bool) {
+    public init(deleteCount: Int, text: [Character], languageChanged: Bool, keyPassesThrough: Bool = false) {
         self.deleteCount = deleteCount
         self.text = text
         self.languageChanged = languageChanged
+        self.keyPassesThrough = keyPassesThrough
     }
 }
 

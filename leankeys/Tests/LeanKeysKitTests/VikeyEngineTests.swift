@@ -5,12 +5,16 @@ import XCTest
 private let macKey: [Character: UInt16] = [
     "a": 0, "b": 11, "c": 8, "d": 2, "e": 14, "f": 3, "g": 5, "h": 4, "i": 34, "j": 38, "k": 40, "l": 37, "m": 46,
     "n": 45, "o": 31, "p": 35, "q": 12, "r": 15, "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7, "y": 16, "z": 6,
-    " ": 49, ",": 43, ".": 47,
+    " ": 49, ",": 43, ".": 47, "\n": 36,
 ]
 private let kBackspace: UInt16 = 51
 private let kLeftArrow: UInt16 = 123
+private let kReturn: UInt16 = 36
+private let kComma: UInt16 = 43
+private let kSpace: UInt16 = 49
 
-/// A text field driven by the engine: apply deleteCount then append text; nil lets the key do its own thing.
+/// A text field driven by the engine: apply deleteCount then append text; nil lets the key do its own thing,
+/// and so does an edit with keyPassesThrough, after the edit.
 private final class Field {
     let engine: TypingEngine
     var text: [Character] = []
@@ -41,6 +45,7 @@ private final class Field {
         if let edit {
             text.removeLast(min(edit.deleteCount, text.count))
             text.append(contentsOf: edit.text)
+            if edit.keyPassesThrough, let own { text.append(own) }
             if edit.languageChanged { languageChanges += 1 }
         } else if code == kBackspace {
             if !text.isEmpty { text.removeLast() }
@@ -129,5 +134,38 @@ final class VikeyEngineTests: XCTestCase {
         engine.resetContext()
         _ = engine.process(keyCode: d, caps: true, shift: true)
         XCTAssertEqual(engine.process(keyCode: d, caps: true, shift: true)?.text, ["đ"])
+    }
+
+    // Ruling R12: after Vikey fixes a word, a break key is typed by the key itself, not injected as text.
+
+    func testReturnAfterRestoreLetsKeyThrough() {
+        let field = Field(engine)
+        let typed = field.type("test")
+        XCTAssertNotEqual(typed, "test", "precondition: Telex transforms the word")
+        let edit = field.press(kReturn, shift: false, own: "\n")
+        XCTAssertNotNil(edit, "Vikey restores the word on Return")
+        XCTAssertEqual(edit?.keyPassesThrough, true)
+        XCTAssertFalse(edit?.text.contains("\n") ?? true)
+        XCTAssertEqual(String(field.text), "test\n")
+    }
+
+    func testCommaAfterRestoreLetsKeyThrough() {
+        let field = Field(engine)
+        XCTAssertNotEqual(field.type("test"), "test", "precondition: Telex transforms the word")
+        let edit = field.press(kComma, shift: false, own: ",")
+        XCTAssertNotNil(edit, "Vikey restores the word on a comma")
+        XCTAssertEqual(edit?.keyPassesThrough, true)
+        XCTAssertFalse(edit?.text.contains(",") ?? true)
+        XCTAssertEqual(String(field.text), "test,", "comma appears once")
+    }
+
+    func testSpaceKeepsCharacter() {
+        let field = Field(engine)
+        XCTAssertNotEqual(field.type("test"), "test", "precondition: Telex transforms the word")
+        let edit = field.press(kSpace, shift: false, own: " ")
+        XCTAssertNotNil(edit, "Vikey restores the word on Space")
+        XCTAssertEqual(edit?.keyPassesThrough, false)
+        XCTAssertEqual(edit?.text.last, " ")
+        XCTAssertEqual(String(field.text), "test ")
     }
 }

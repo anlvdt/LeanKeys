@@ -646,7 +646,13 @@ class RustBridge {
     ///           Used for Option-modified keys (e.g., Option+V → √).
     static func processKey(keyCode: UInt16, caps: Bool, ctrl: Bool, shift: Bool = false, char: Character? = nil) -> (Int, [Character], Bool)? {
         guard isInitialized else { return nil }
-        if case .handled(let r) = EngineRouter.shared.intercept(keyCode: keyCode, caps: caps, ctrl: ctrl, shift: shift) { return r } // LEANKEYS-HOOK: engine-dispatch
+        // LEANKEYS-HOOK-BEGIN: engine-dispatch
+        // Vikey runs only on an allowed input source; elsewhere stock Gõ Nhanh (gated off by ime_enabled) decides.
+        if InputSourceObserver.shared.isAllowedInputSource,
+           case .handled(let r) = EngineRouter.shared.intercept(keyCode: keyCode, caps: caps, ctrl: ctrl, shift: shift) {
+            return r
+        }
+        // LEANKEYS-HOOK-END
 
         let ptr: UnsafeMutablePointer<ImeResult>?
         if let char {

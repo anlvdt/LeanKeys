@@ -227,4 +227,18 @@ final class EngineRouterTests: XCTestCase {
         router.clear()
         XCTAssertEqual(fake.resetCalls, resets + 1)
     }
+
+    func testKeyPassesThroughIsNotConsumed() {
+        // Ruling R12: an edit whose key must still be typed reports keyConsumed == false.
+        let router = makeRouter()
+        router.selected = .vikey
+        fake.scripted = .some(EngineEdit(deleteCount: 4, text: Array("test"), languageChanged: false, keyPassesThrough: true))
+        let r = handled(press(router))
+        XCTAssertEqual(r??.0, 4)
+        XCTAssertEqual(r??.1, Array("test"))
+        XCTAssertEqual(r??.2, false)
+
+        fake.scripted = .some(EngineEdit(deleteCount: 1, text: ["x"], languageChanged: false))
+        XCTAssertEqual(handled(press(router))??.2, true, "an ordinary edit stays consumed")
+    }
 }

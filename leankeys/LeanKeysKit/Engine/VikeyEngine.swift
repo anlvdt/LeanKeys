@@ -32,6 +32,16 @@ public final class VikeyEngine: TypingEngine {
            let own = Self.ownCharacter(keyCode: keyCode, shift: vikeyShift), edit.text == [own] {
             return nil
         }
+        // Ruling R12: a break key (Return/Enter, punctuation) that Vikey appends after fixing the word is typed by
+        // the key itself, so Return still submits and the host sees the real key. Space stays in the text: the
+        // key handler does not let Space through after an edit.
+        if let own = Self.ownCharacter(keyCode: keyCode, shift: vikeyShift), Self.isBreakCharacter(own),
+           edit.text.last == own {
+            let text = Array(edit.text.dropLast())
+            if edit.deleteCount == 0 && text.isEmpty && !edit.languageChanged { return nil }
+            return EngineEdit(deleteCount: edit.deleteCount, text: text, languageChanged: edit.languageChanged,
+                              keyPassesThrough: true)
+        }
         return edit
     }
 
@@ -65,6 +75,12 @@ public final class VikeyEngine: TypingEngine {
         24: ("=", "+"), 42: ("\\", "|"), 41: (";", ":"), 39: ("'", "\""), 44: ("/", "?"),
         49: (" ", " "), 36: ("\n", "\n"), 76: ("\n", "\n"),
     ]
+
+    /// Characters whose key the macOS key handler lets through after an edit: Return/Enter and the punctuation
+    /// it counts as break keys. Not Space, letters or digits.
+    private static func isBreakCharacter(_ c: Character) -> Bool {
+        c == "\n" || !(c == " " || c.isLetter || c.isNumber)
+    }
 
     /// What the key types by itself.
     private static func ownCharacter(keyCode: UInt16, shift: Bool) -> Character? {
