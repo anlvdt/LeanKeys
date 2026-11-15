@@ -59,7 +59,7 @@ public final class StatusPopoverModel: ObservableObject {
     }
 
     public func choose(vietnamese: Bool) {
-        if vietnamese != snapshot.vietnamese {
+        if vietnamese != actions.snapshot().vietnamese {
             actions.setVietnamese(vietnamese)
         }
         reload()
@@ -109,11 +109,17 @@ public struct StatusPopoverView: View {
                 Text(autoSwitchLine)
                     .font(.system(size: 11))
                     .foregroundColor(Color(NSColor.secondaryLabelColor))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(autoSwitchLine)
             }
             if let warningLine = model.snapshot.warningLine {
                 Text(warningLine)
                     .font(.system(size: 11))
                     .foregroundColor(.orange)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(warningLine)
             }
 
             HStack {
@@ -150,28 +156,46 @@ public struct StatusPopoverView: View {
 }
 
 /// Owns the NSPopover shown from the menu-bar status item.
-public final class StatusPopoverController {
+public final class StatusPopoverController: NSObject, NSPopoverDelegate {
+    /// A click on the status item closes a transient popover on mouseDown and sends its action on mouseUp.
+    /// Opening again within this window would undo that close, so the toggle is ignored.
+    static let reopenGap: TimeInterval = 0.3
+
     private let model: StatusPopoverModel
     private let popover = NSPopover()
+    private var lastClose: Date?
 
     public init(model: StatusPopoverModel) {
         self.model = model
+        super.init()
         let host = NSHostingController(rootView: StatusPopoverView(model: model))
         host.sizingOptions = .preferredContentSize
         popover.behavior = .transient
+        popover.delegate = self
         popover.contentViewController = host
         model.closePopover = { [weak self] in self?.popover.performClose(nil) }
     }
 
     public var isShown: Bool { popover.isShown }
 
+    /// Pure decision: open unless the popover closed less than `reopenGap` seconds before `now`.
+    public static func shouldOpen(lastClose: Date?, now: Date) -> Bool {
+        guard let lastClose else { return true }
+        return now.timeIntervalSince(lastClose) >= reopenGap
+    }
+
     public func toggle(relativeTo button: NSStatusBarButton) {
         if popover.isShown {
             popover.performClose(nil)
             return
         }
+        guard Self.shouldOpen(lastClose: lastClose, now: Date()) else { return }
         model.reload()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    }
+
+    public func popoverDidClose(_ notification: Notification) {
+        lastClose = Date()
     }
 }
 

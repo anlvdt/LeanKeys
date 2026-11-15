@@ -25,6 +25,13 @@ final class StatusPopoverTests: XCTestCase {
         }
     }
 
+    func testDoesNotReopenRightAfterTransientClose() {
+        let now = Date()
+        XCTAssertTrue(StatusPopoverController.shouldOpen(lastClose: nil, now: now))
+        XCTAssertFalse(StatusPopoverController.shouldOpen(lastClose: now.addingTimeInterval(-0.1), now: now))
+        XCTAssertTrue(StatusPopoverController.shouldOpen(lastClose: now.addingTimeInterval(-0.5), now: now))
+    }
+
     func testRouteLeftClickOpensPopover() {
         XCTAssertEqual(StatusClickRoute.route(type: .leftMouseUp, modifiers: []), .popover)
     }
