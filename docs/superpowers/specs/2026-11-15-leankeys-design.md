@@ -94,7 +94,7 @@ Trong `KeyboardHookManager` / `keyboardCallback` của Gõ Nhanh, lệnh gọi `
 
 ### 3.4 Điểm gắn vào file gốc
 
-Mọi chỗ sửa trong file gốc phải có chú thích `// LEANKEYS-HOOK: <tên>` và được đăng ký trong `sync/hooks.txt`. Mục tiêu tối đa 10 điểm. Dự kiến:
+Mọi chỗ sửa trong file gốc phải có chú thích `// LEANKEYS-HOOK: <tên>` và được đăng ký trong `sync/hooks.txt`. Tối đa 12 tên hook (10 cho GĐ1–3, thêm 2 cho GĐ4, xem mục 11). Dự kiến:
 
 1. `engine-dispatch`: gọi `EngineRouter` thay cho `RustBridge.processKey`.
 2. `engine-reset`: báo `resetContext()` khi con trỏ hoặc ô nhập đổi.
@@ -127,6 +127,8 @@ Mọi chỗ sửa trong file gốc phải có chú thích `// LEANKEYS-HOOK: <t�
 | Bảng chọn emoji (tìm tiếng Việt và tiếng Anh) | Vikey `App/Views/EmojiPicker.swift`, `App/Model/EmojiSearch.swift`, `Emoji.json` | ✋ (dữ liệu 🔄) | GĐ2 |
 | Bảng mã cũ: TCVN3, VNI Windows, CP1258, Unicode tổ hợp, nhớ theo app | OpenKey `engine/` | ✋ | GĐ3 |
 | Công cụ chuyển mã văn bản | OpenKey `engine/ConvertTool.cpp` | ✋ | GĐ3 |
+| Gợi ý từ khi gõ (học từ Laban Key) | Vikey `vAutoSwitchCompletions` + UI LeanKeys | 🔄 dữ liệu, ✋ UI | GĐ4 |
+| Tự đề xuất gõ tắt từ nội dung lặp lại (địa chỉ, SĐT, MST…) | LeanKeys | — | GĐ4 |
 
 **Bảng mã cũ** là lớp chuyển đổi đặt sau engine. Nó đổi `EngineEdit.text` từ Unicode sang bảng mã của app hiện tại, và tính lại `deleteCount` theo số đơn vị mã thực tế, vì một ký tự Việt có thể chiếm 2 byte trong VNI Windows hay Unicode tổ hợp. Nhờ vậy lớp này chạy với cả hai engine.
 
@@ -220,3 +222,55 @@ Với cả hai engine, thử trên Chrome (thanh địa chỉ và ô nhập), Sp
 - **Vikey đổi API `VikeyDriver`:** build shim lỗi, job dừng và báo.
 - **Kích thước app:** dữ liệu của Vikey (bigram khoảng 4.8MB, từ điển dạng từ khoảng 0.3MB) làm app nặng thêm vài MB. Chấp nhận được.
 - **macOS thu hồi quyền Accessibility sau mỗi cập nhật do ký ad-hoc:** đã có màn hướng dẫn. Hết hẳn khi có Developer ID.
+
+## 11. Giai đoạn 4: Gợi ý thông minh
+
+Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ chạy trên iOS/Android. LeanKeys chỉ học ý tưởng của nó, không dùng code và không tự cập nhật theo nó. Các tính năng chỉ có ý nghĩa trên màn hình cảm ứng (vẽ dấu, vuốt để gõ, giao diện bàn phím) nằm ngoài phạm vi. GĐ4 gồm hai kế hoạch riêng, làm **4B trước, rồi tới 4A**.
+
+### 11.1 4B: Tự đề xuất gõ tắt từ nội dung lặp lại
+
+**Hành vi**
+- LeanKeys đếm các cụm đã gõ xong: câu, cụm từ, địa chỉ, số điện thoại, mã số thuế, email, tên riêng. Một cụm kết thúc ở dấu câu, Enter, hoặc khi con trỏ đổi chỗ.
+- **Ngưỡng đề xuất** (mặc định, chỉnh được trong Cài đặt): cụm lặp lại ≥ 3 lần trong 30 ngày và dài ≥ 8 ký tự.
+- Khi có đề xuất, menu bar hiện "Có N gợi ý gõ tắt". Màn duyệt có ba nút cho từng mục: **Thêm**, **Sửa tên tắt**, **Bỏ qua**. Mục đã bỏ qua được nhớ và không đề xuất lại. Không có gì được thêm khi người dùng chưa bấm Thêm.
+- Gõ tắt được ghi vào danh sách gõ tắt có sẵn của Gõ Nhanh, nên chạy với cả hai engine.
+
+**Tự đặt tên tắt**
+
+| Loại nội dung | Nhận dạng | Tên tắt |
+|---|---|---|
+| Số điện thoại | `0` + 9 số, hoặc `+84` + 9 số; chấp nhận dấu cách, `.`, `-` | `sdt` |
+| Mã số thuế | 10 số, hoặc 10 số + `-` + 3 số | `mst` |
+| Địa chỉ | có ít nhất 2 trong các từ: số, đường, phố, phường, xã, quận, huyện, thị xã, TP, tỉnh | `dc` |
+| Email | định dạng email | `em` |
+| Câu / cụm khác | — | chữ cái đầu mỗi từ, bỏ dấu, viết thường (ví dụ "Cảm ơn anh chị đã quan tâm" → `caqt`) |
+
+- Nếu tên đã có thì thêm số: `sdt2`, `sdt3`…
+- Tên tắt trùng một từ tiếng Việt hoặc tiếng Anh có thật thì bị loại, rồi thử tên kế tiếp. Việc kiểm tra dùng điểm từ của engine Vikey (`vAutoSwitchWordScore`).
+
+**Bảo mật**
+- Mặc định tắt. Lần đầu bật có màn giải thích tính năng làm gì.
+- Chỉ xử lý và lưu trên máy, không gửi đi đâu.
+- Cụm chưa đạt ngưỡng chỉ được lưu dưới dạng HMAC-SHA256 (khoá ngẫu nhiên giữ trong Keychain) kèm số lần và các ngày gặp. Chữ thật chỉ được giữ khi cụm đạt ngưỡng, và chỉ để hiện trong màn duyệt.
+- File dữ liệu được mã hoá bằng khoá trong Keychain. Có nút "Xoá toàn bộ dữ liệu đã học". Mục đã Thêm hay Bỏ qua thì xoá chữ thật khỏi bộ đếm.
+- Không bao giờ học từ:
+  - Secure Input và ô mật khẩu (AX subrole `AXSecureTextField`);
+  - chuỗi 13–19 số đạt kiểm tra Luhn (số thẻ);
+  - chuỗi 4–8 số gõ đứng riêng (mã OTP);
+  - các app trong danh sách loại trừ. Mặc định danh sách có trình quản lý mật khẩu (1Password, Bitwarden, Keychain Access) và người dùng thêm được app khác.
+
+### 11.2 4A: Gợi ý từ khi gõ
+- Khi đang gõ dở một từ, một ô nổi cạnh con trỏ hiện tối đa 3 gợi ý. **Tab** chọn gợi ý đầu, **⌥1–⌥3** chọn theo thứ tự, **Esc** ẩn ô. Mặc định tắt.
+- Nguồn gợi ý là `vAutoSwitchCompletions` của engine Vikey (từ tiếng Việt và tiếng Anh, có điểm). Dữ liệu này 🔄 tự cập nhật theo Vikey. Gõ tắt của người dùng khớp tiền tố được xếp lên đầu.
+- Vị trí con trỏ lấy qua Accessibility (`kAXBoundsForRangeParameterizedAttribute`). App nào không cung cấp thì không hiện ô gợi ý.
+- Không hiện trong ô mật khẩu hay Secure Input, và không hiện trong các app bị loại trừ ở 11.1.
+
+### 11.3 Điểm gắn mới
+- `word-commit`: báo cho LeanKeys chữ vừa gõ xong mỗi từ hoặc cụm, với cả hai engine. Dùng cho 4B và 4A.
+- `shortcut-store`: thêm gõ tắt vào kho của Gõ Nhanh từ LeanKeys.
+- Riêng phím Tab và ⌥1–⌥3 của 4A được xử lý trong `EngineRouter.intercept`, qua điểm `engine-dispatch` đã có.
+
+### 11.4 Test
+- **4B, test đơn vị:** nhận dạng từng loại (có các ví dụ sai: số thẻ, OTP, chuỗi ngắn), sinh tên tắt và cách tránh trùng, ngưỡng và cửa sổ 30 ngày, và kiểm tra rằng chữ thật không xuất hiện trong file lưu trước khi cụm đạt ngưỡng.
+- **4A:** xếp hạng gợi ý, Tab chèn đúng phần còn thiếu, ẩn ô khi con trỏ đổi chỗ.
+- **Thử tay:** địa chỉ hay SĐT gõ 3 lần thì có đề xuất, Thêm xong gõ `sdt` bung ra đúng; ô mật khẩu không bị học.
