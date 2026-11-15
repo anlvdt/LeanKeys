@@ -38,8 +38,11 @@ public struct Candidate: Identifiable, Equatable {
 /// field, in an excluded app or an unknown one (no bundle ID), or from a phrase holding a card number or an OTP.
 /// Nothing is logged. Single-threaded, like `TextMirror`.
 public final class PhraseLearner {
-    /// Off until the user turns it on.
-    public var enabled = false
+    /// Off until the user turns it on. Turning it off also wipes every stored text (the digests and day counts stay),
+    /// so nothing readable is kept while learning is off.
+    public var enabled = false {
+        didSet { if !enabled { wipePlaintext() } }
+    }
     public var excludedBundleIDs: Set<String> = Exclusions.defaultBundleIDs
 
     private let store: LearnStore
@@ -131,6 +134,16 @@ public final class PhraseLearner {
         var v = 1
         var entries: [String: Entry]
         var handled: [String]
+    }
+
+    private func wipePlaintext() {
+        guard loaded, entries.values.contains(where: { $0.text != nil || $0.kind != nil }) else { return }
+        for (id, var entry) in entries where entry.text != nil || entry.kind != nil {
+            entry.text = nil
+            entry.kind = nil
+            entries[id] = entry
+        }
+        save()
     }
 
     private func handle(_ c: Candidate) {
@@ -238,6 +251,12 @@ enum PhraseDetector {
         pattern: #"(?<![\p{L}\p{N}])(?:số|đường|phố|phường|thị xã|xã|quận|huyện|tp|tỉnh)(?![\p{L}\p{N}])"#,
         options: [.caseInsensitive])
 
+    /// "mst" or "thuế" (which covers "mã số thuế") as a word, ignoring case and diacritics.
+    static func mentionsTax(_ text: String) -> Bool {
+        let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        return folded.range(of: #"(?<![\p{L}\p{N}])(?:mst|thue)(?![\p{L}\p{N}])"#, options: .regularExpression) != nil
+    }
+
     /// `text` must be `normalizedDisplay` output. The whole phrase comes first, as `.phrase` unless one piece
     /// covers all of it (then only that piece).
     static func items(in text: String) -> [Item] {
@@ -250,8 +269,14 @@ enum PhraseDetector {
             let s = ns.substring(with: m.range)
             pieces.append((m.range, Item(kind: .email, key: "email:" + s.lowercased(), display: s)))
         }
+        let taxContext = mentionsTax(text)
         for m in phone.matches(in: text, range: all) where !overlaps(m.range) {
             let s = ns.substring(with: m.range)
+            // A bare 0xxxxxxxxx next to "MST", "mã số thuế" or "thuế" is a tax code.
+            if taxContext, s.range(of: #"^0\d{9}$"#, options: .regularExpression) != nil {
+                pieces.append((m.range, Item(kind: .taxCode, key: "taxCode:" + s, display: s)))
+                continue
+            }
             var digits = s.filter(\.isNumber)
             if s.hasPrefix("+84") { digits = "0" + digits.dropFirst(2) }
             pieces.append((m.range, Item(kind: .phone, key: "phone:" + digits, display: s)))

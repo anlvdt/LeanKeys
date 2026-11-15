@@ -108,7 +108,7 @@ final class PhraseLearnerTests: XCTestCase {
 
     func testRejectsCardAndOTP() {
         for text in ["4111 1111 1111 1111", "4111-1111-1111-1111", "Thẻ 4111 1111 1111 1111 nhé", "482913",
-                     "48291357", "Mã của em là 482913"] {
+                     "48291357", "Thẻ 4111 1111 1111 1111 12 28"] {
             observe(text, times: 3)
         }
         XCTAssertTrue(learner.ready.isEmpty)
@@ -123,6 +123,54 @@ final class PhraseLearnerTests: XCTestCase {
         // A phone in space groups is no OTP.
         observe("0912 345 678", times: 3)
         XCTAssertEqual(learner.ready.first { $0.text == "0912 345 678" }?.kind, .phone)
+    }
+
+    /// R10: only a phrase that is nothing but 4–8 digits is an OTP; digit groups inside text are fine.
+    func testOTPOnlyWhenWholePhrase() {
+        observe("482913", times: 3)
+        observe("48291357", times: 3)
+        observe(" 482913 ", times: 3)
+        XCTAssertEqual(learner.trackedCount, 0)
+
+        observe("Mã của em là 482913", times: 3)
+        XCTAssertTrue(readyTexts().contains("Mã của em là 482913"))
+        observe("Số 1234 đường Lê Lợi, quận 1", times: 3)
+        XCTAssertEqual(learner.ready.first { $0.text == "Số 1234 đường Lê Lợi, quận 1" }?.kind, .address)
+    }
+
+    /// R11: turning learning off wipes every stored text but keeps the hashed counts.
+    func testDisablingWipesPlaintext() {
+        let text = "Cảm ơn anh nhiều nhé"
+        observe(text, times: 3)
+        XCTAssertEqual(readyTexts(), [text])
+        learner.enabled = false
+        XCTAssertTrue(learner.ready.isEmpty)
+        XCTAssertFalse(store.savedString.contains(text))
+        XCTAssertEqual(learner.trackedCount, 1, "the digest and its day counts stay")
+        observe(text, times: 1)
+        XCTAssertTrue(learner.ready.isEmpty, "nothing is observed while off")
+
+        learner.enabled = true
+        observe(text, times: 1)
+        XCTAssertEqual(readyTexts(), [text])
+        XCTAssertEqual(learner.ready.first?.count, 4)
+        XCTAssertTrue(store.savedString.contains(text))
+    }
+
+    /// R13: a bare 0xxxxxxxxx is a tax code next to "MST", "mã số thuế" or "thuế", else a phone.
+    func testBareTenDigitsNearTaxWordIsTaxCode() {
+        for text in ["MST 0312345678", "Mã số thuế: 0312345678", "ma so thue cong ty 0312345678",
+                     "Thuế 0312345678 nhé"] {
+            learner.eraseAll()
+            observe(text, times: 3)
+            XCTAssertEqual(learner.ready.first { $0.text == "0312345678" }?.kind, .taxCode, text)
+            XCTAssertFalse(learner.ready.contains { $0.kind == .phone }, text)
+        }
+        for text in ["Gọi 0312345678 nhé", "0312345678", "Mã số 0312345678 nhé"] {
+            learner.eraseAll()
+            observe(text, times: 3)
+            XCTAssertEqual(learner.ready.first { $0.text == "0312345678" }?.kind, .phone, text)
+        }
     }
 
     func testDetectsKinds() {

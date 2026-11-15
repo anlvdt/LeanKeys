@@ -14,30 +14,36 @@ public enum Exclusions {
     /// "0912.345.678", "482913").
     private static let numberToken = try! NSRegularExpression(pattern: #"\d+(?:[ .\-]\d+)*"#)
 
-    /// `text` holds a card number (13–19 digits passing Luhn, separators allowed) or an OTP (4–8 digits typed as
-    /// one group, with no letter or digit run touching it). Such a phrase is dropped whole, with every piece in it.
+    /// `text` holds a card number, or is an OTP. Such a phrase is dropped whole, with every piece in it.
+    /// - Card: any run of consecutive digit groups in a number, 13–19 digits in all, passing Luhn
+    ///   ("Thẻ 4111 1111 1111 1111 12 28" holds one).
+    /// - OTP: the whole phrase is one group of 4–8 digits ("482913"). Digit groups inside text are fine
+    ///   ("Số 1234 đường Lê Lợi").
     public static func containsSensitiveNumber(_ text: String) -> Bool {
+        if text.range(of: #"^\d{4,8}$"#, options: .regularExpression) != nil { return true }
         let ns = text as NSString
         for match in numberToken.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             let token = ns.substring(with: match.range)
-            let digits = token.filter(\.isASCIIDigit)
-            // A tax code with its branch suffix ("0312345678-001") has 13 digits too; one in ten passes Luhn.
-            if (13...19).contains(digits.count), luhn(digits), !isTaxCode(token) { return true }
-            if digits.count == token.count, (4...8).contains(digits.count), !touchesLetter(ns, match.range) {
-                return true
+            let tokenNS = token as NSString
+            let groups = digitGroup.matches(in: token, range: NSRange(location: 0, length: tokenNS.length)).map(\.range)
+            for i in groups.indices {
+                var count = 0
+                for j in i..<groups.count {
+                    count += groups[j].length
+                    if count > 19 { break }
+                    guard count >= 13 else { continue }
+                    let start = groups[i].location
+                    let run = tokenNS.substring(with: NSRange(location: start,
+                                                              length: groups[j].location + groups[j].length - start))
+                    // A tax code with its branch suffix ("0312345678-001") has 13 digits too; one in ten passes Luhn.
+                    if luhn(run.filter(\.isASCIIDigit)), !isTaxCode(run) { return true }
+                }
             }
         }
         return false
     }
 
-    /// A letter right before or after the run ("A1234B", "v2024x"): part of a code word, not an OTP standing alone.
-    private static func touchesLetter(_ ns: NSString, _ range: NSRange) -> Bool {
-        func isLetter(_ i: Int) -> Bool {
-            guard i >= 0, i < ns.length, let scalar = UnicodeScalar(ns.character(at: i)) else { return false }
-            return CharacterSet.letters.contains(scalar)
-        }
-        return isLetter(range.location - 1) || isLetter(range.location + range.length)
-    }
+    private static let digitGroup = try! NSRegularExpression(pattern: #"\d+"#)
 
     private static func isTaxCode(_ token: String) -> Bool {
         token.range(of: #"^\d{10}-\d{3}$"#, options: .regularExpression) != nil
