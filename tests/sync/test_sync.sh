@@ -65,7 +65,7 @@ setup() {
   printf 'repo\tpath\n' > "$fork/sync/ported.txt"
   touch "$fork/sync/reports/.gitkeep"
   print -r -- '{"leankeys":"1.0","gonhanh":"v1.0.165","vikey":"v1.0.33"}' > "$fork/leankeys/LeanKeysKit/Resources/Versions.json"
-  printf 'sync/reports/*.md\nsync/reports/*.log\nsync/.lock\n/dist/\n' > "$fork/.gitignore"
+  printf 'sync/reports/*.md\nsync/reports/*.log\nsync/.lock\n/dist/\n/.sync-worktree/\n' > "$fork/.gitignore"
   git -C "$fork" submodule add -q "$vk" vendor/vikey 2>/dev/null
   git -C "$fork/vendor/vikey" checkout -q v1.0.33
   git -C "$fork" add -A && git -C "$fork" commit -q -m 'LeanKeys fork'
@@ -259,11 +259,97 @@ test_default_repo_is_scripts_own() {
   check $0 "main contains v1.0.166" git -C "$fork" merge-base --is-ancestor v1.0.166 main
 }
 
+test_user_checkout_never_switched() {
+  setup userwork
+  printf 'line 1\nhook here // LEANKEYS-HOOK: myhook\nline 3\nmy local edit\n' > "$fork/H"
+  print -r -- scratch > "$fork/untracked.txt"
+  upstream_release A 'alpha 2' v1.0.166
+  run_sync --skip-build
+  check $0 "exit 0" is_rc 0 &&
+  check $0 "still on main" on_main &&
+  check $0 "main advanced" git -C "$fork" merge-base --is-ancestor v1.0.166 main &&
+  check $0 "work tree has the merge" [ "$(cat "$fork/A")" = 'alpha 2' ] &&
+  check $0 "tracked edit kept" grep -qx 'my local edit' "$fork/H" &&
+  check $0 "untracked file kept" [ "$(cat "$fork/untracked.txt")" = scratch ] &&
+  check $0 "no worktree left" [ ! -e "$fork/.sync-worktree" ]
+}
+
+test_ff_refused_keeps_edits() {
+  setup ffrefused
+  local before; before="$(git -C "$fork" rev-parse main)"
+  print -r -- 'my edit of A' > "$fork/A"
+  upstream_release A 'alpha 2' v1.0.166
+  run_sync --skip-build
+  check $0 "exit 3" is_rc 3 &&
+  check $0 "main unchanged" main_is "$before" &&
+  check $0 "edit kept" [ "$(cat "$fork/A")" = 'my edit of A' ] &&
+  check $0 "still on main" on_main &&
+  check $0 "sync branch kept" has_sync_branch &&
+  check $0 "report says ff refused" report_has 'Không fast-forward được' &&
+  check $0 "no worktree left" [ ! -e "$fork/.sync-worktree" ]
+}
+
+test_user_on_other_branch_main_advanced_by_update_ref() {
+  setup otherbranch
+  git -C "$fork" checkout -q -b feature
+  print -r -- wip > "$fork/wip.txt"
+  local head; head="$(git -C "$fork" rev-parse HEAD)"
+  upstream_release A 'alpha 2' v1.0.166
+  run_sync --skip-build
+  check $0 "exit 0" is_rc 0 &&
+  check $0 "still on feature" [ "$(git -C "$fork" symbolic-ref --short HEAD)" = feature ] &&
+  check $0 "feature unchanged" [ "$(git -C "$fork" rev-parse HEAD)" = "$head" ] &&
+  check $0 "work tree untouched" [ "$(cat "$fork/A")" = alpha ] &&
+  check $0 "untracked kept" [ -f "$fork/wip.txt" ] &&
+  check $0 "main advanced" git -C "$fork" merge-base --is-ancestor v1.0.166 main &&
+  check $0 "main has the state commit" [ "$(git -C "$fork" show main:sync/upstream.json | plutil -extract gonhanh raw -o - -)" = v1.0.166 ] &&
+  check $0 "no sync/* branch" no_sync_branch
+}
+
+test_stale_worktree_removed() {
+  setup staleworktree
+  git -C "$fork" worktree add -q -b sync/killed "$fork/.sync-worktree" main 2>/dev/null
+  print -r -- half > "$fork/.sync-worktree/A"
+  upstream_release A 'alpha 2' v1.0.166
+  run_sync --skip-build
+  check $0 "exit 0" is_rc 0 &&
+  check $0 "report notes the cleanup" report_has 'worktree còn sót' &&
+  check $0 "main advanced" git -C "$fork" merge-base --is-ancestor v1.0.166 main &&
+  check $0 "no worktree left" [ ! -e "$fork/.sync-worktree" ] &&
+  check $0 "worktree list pruned" [ "$(git -C "$fork" worktree list | wc -l | tr -d ' ')" = 1 ]
+}
+
+test_sigterm_cleans_up() {
+  setup sigterm
+  local before; before="$(git -C "$fork" rev-parse main)"
+  upstream_release A 'alpha 2' v1.0.166
+  LEANKEYS_UPSTREAM_URL="$up" LEANKEYS_VIKEY_URL="$vk" LEANKEYS_TEST_CMD='sleep 30' \
+    "$sync_sh" --repo "$fork" --no-notify --skip-build > "$base/sigterm.out" 2>&1 &
+  local pid=$! i=0
+  while (( i < 100 )) && [[ "$(report)" != *'- Test:'* ]]; do sleep 0.1; i=$((i + 1)); done
+  rc=0
+  [[ -e "$fork/.sync-worktree" ]] || { out="worktree never appeared"; rc=99; }
+  kill -TERM "$pid"
+  local t0=$SECONDS
+  wait "$pid" || rc=$?
+  out="$(cat "$base/sigterm.out")"
+  check $0 "stopped promptly" [ $(( SECONDS - t0 )) -lt 10 ] &&
+  check $0 "exit 143" is_rc 143 &&
+  check $0 "still on main" on_main &&
+  check $0 "main unchanged" main_is "$before" &&
+  check $0 "no worktree" [ ! -e "$fork/.sync-worktree" ] &&
+  check $0 "no lock" [ ! -e "$fork/sync/.lock" ] &&
+  check $0 "clean tree" clean
+}
+
 for t in test_no_new_tags_exits_0_without_branch test_new_tag_merges_to_main \
   test_conflict_aborts test_failing_tests_keep_main test_lock_prevents_overlap \
   test_stale_lock_is_taken_over test_ported_file_change_reported \
   test_unrelated_higher_tag_ignored test_build_writes_ready \
-  test_missing_default_test_cmd_exits_3 test_default_repo_is_scripts_own; do
+  test_missing_default_test_cmd_exits_3 test_default_repo_is_scripts_own \
+  test_user_checkout_never_switched test_ff_refused_keeps_edits \
+  test_user_on_other_branch_main_advanced_by_update_ref test_stale_worktree_removed \
+  test_sigterm_cleans_up; do
   if $t; then
     passed=$((passed + 1)); print -r -- "ok   $t"
   else

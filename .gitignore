@@ -67,4 +67,5 @@ refs/
 sync/reports/*.md
 sync/reports/*.log
 sync/.lock
+/.sync-worktree/
 # LEANKEYS-HOOK-END
