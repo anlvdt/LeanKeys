@@ -10,6 +10,9 @@ static int code(char c, bool& shift) {
     static const char* L = "asdfhgzxcv bqweryt123465=97-80]ou[ip lj'k;\\,/nm.";
     shift = false;
     if (c >= 'A' && c <= 'Z') { shift = true; c = c - 'A' + 'a'; }
+    static const char* S = "?!@#$%^&*()_+:\"<>{}|~";   // shifted symbols -> base key + Shift
+    static const char* U = "/1234567890-=;',.[]\\`";
+    if (const char* q = strchr(S, c)) { shift = true; c = U[q - S]; }
     const char* p = strchr(L, c); if (c == ' ') return 49; if (!p) return -1; return (int)(p - L);
 }
 int main() {
