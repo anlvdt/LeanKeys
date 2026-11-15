@@ -31,6 +31,14 @@ void lk_vikey_set_options(int modernOrthography, int autoSwitch, int telexStyle)
 #define LK_VIKEY_NOT_A_WORD (-1000)
 int  lk_vikey_word_score(int vietnamese, const char* letters);
 
+// 1 when typing `letters` (plain ASCII letters, under 31, case ignored) in Vietnamese Telex shows exactly
+// those letters: no aa/dd/w/tone transform ("sdt" -> 1, "dd" -> 0 (đ), "as" -> 0 (á), "w" -> 0 (ư) in Telex).
+// Uses the current Telex style; auto switch is off for the replay. 0 for anything else.
+// Main (key-handling) thread only: it replays through the engine's global state. The engine cannot restore
+// its private per-word state from outside vendor/, so afterwards the typing context is reset, as after a click
+// (lk_vikey_reset_context): the word being typed, Backspace history and look-back are forgotten.
+int  lk_vikey_types_as_is(const char* letters);
+
 #ifdef __cplusplus
 }
 #endif
