@@ -1372,26 +1372,14 @@ struct AboutPageView: View {
                 Text("Phiên bản v\(AppMetadata.version)").font(.system(size: 12)).foregroundColor(Color(NSColor.tertiaryLabelColor))
             }
             HStack(spacing: 12) {
-                AboutLink(icon: "heart.fill", title: "Ủng hộ", url: AppMetadata.sponsorURL, iconColor: .pink)
+                // LEANKEYS-HOOK: about (Gõ Nhanh's sponsor link removed; Gõ Nhanh is credited in AcknowledgementsSection)
                 AboutLink(icon: "ant", title: "Báo lỗi", url: AppMetadata.issuesURL)
                 AboutLink(icon: "chevron.left.forwardslash.chevron.right", title: "GitHub", url: AppMetadata.repository)
             }
-            // Launch platform badges
-            HStack(spacing: 8) {
-                PlatformBadge(title: "Unikorn", icon: "star.fill", url: "https://unikorn.vn/p/gonhanh?ref=gonhanh")
-                PlatformBadge(title: "J2TEAM", icon: "bolt.fill", url: "https://launch.j2team.dev/products/go-nhanh?ref=gonhanh")
-            }
+            // LEANKEYS-HOOK: about (Gõ Nhanh's launch badges removed)
             AcknowledgementsSection() // LEANKEYS-HOOK: about
             Spacer()
-            HStack(spacing: 4) {
-                Text("Phát triển bởi").foregroundColor(Color(NSColor.tertiaryLabelColor))
-                AuthorLink(name: AppMetadata.author, url: AppMetadata.authorLinkedin)
-                Text("và").foregroundColor(Color(NSColor.tertiaryLabelColor))
-                AuthorLink(name: "Cộng đồng", url: "\(AppMetadata.repository)/blob/main/CONTRIBUTORS.md")
-                Text("với tất cả ❤️").foregroundColor(Color(NSColor.tertiaryLabelColor))
-            }
-            .font(.system(size: 12))
-            .padding(.bottom, 12)
+            Spacer().frame(height: 12) // LEANKEYS-HOOK: about (Gõ Nhanh's "Phát triển bởi Kha Phan" line removed)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
