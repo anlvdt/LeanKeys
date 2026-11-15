@@ -549,6 +549,7 @@ class AppState: ObservableObject {
     func syncShortcutsToEngine(_ validShortcuts: [ShortcutItem]? = nil) {
         let toSync = validShortcuts ?? shortcuts.filter { !$0.key.isEmpty && !$0.value.isEmpty }
         RustBridge.syncShortcuts(toSync.map { ($0.key, $0.value, $0.isEnabled) })
+        EngineRouter.shared.setShortcuts(toSync.filter(\.isEnabled).map { ($0.key, $0.value) }) // LEANKEYS-HOOK: shortcut-store
     }
 
     func exportShortcuts() -> String {

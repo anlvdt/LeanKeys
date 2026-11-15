@@ -77,6 +77,11 @@ public final class EngineRouter {
             mirror.discard()
             return .handled(nil)
         }
+        if let result = expandShortcut(keyCode: keyCode, shift: shift) {
+            vikey.resetContext()
+            observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+            return .handled(result)
+        }
         guard let edit = vikey.process(keyCode: keyCode, caps: caps, shift: shift) else {
             observe(keyCode: keyCode, shift: shift, caps: caps, result: nil)
             return .handled(nil)
@@ -92,6 +97,26 @@ public final class EngineRouter {
         let result = (edit.deleteCount, edit.text, !edit.keyPassesThrough)
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
         return .handled(result)
+    }
+
+    /// The user's gõ tắt, for Vikey only: Gõ Nhanh expands its own copy (`RustBridge.syncShortcuts`), so the
+    /// router never expands while Gõ Nhanh is active. Called from the main thread, which also runs the event tap.
+    public func setShortcuts(_ items: [(trigger: String, replacement: String)]) {
+        shortcuts = ShortcutExpander(items)
+    }
+
+    private var shortcuts = ShortcutExpander()
+
+    /// The edit that replaces the word just typed by its shortcut, when `keyCode` ends a word as in Gõ Nhanh
+    /// (Space, Return/Enter, punctuation, Shift+digit; not Tab, Esc or arrows). Space rides in the text, consumed,
+    /// because the key handler never posts Space after an edit; Return and punctuation are posted by the key itself.
+    private func expandShortcut(keyCode: UInt16, shift: Bool) -> (Int, [Character], Bool)? {
+        guard !shortcuts.isEmpty else { return nil }
+        let isSpace = keyCode == Self.spaceKey
+        guard isSpace || Self.triggersShortcut(keyCode, shift: shift) else { return nil }
+        let word = mirror.currentWord
+        guard let replacement = shortcuts.expand(word: word) else { return nil }
+        return (word.count, Array(replacement) + (isSpace ? [" "] : []), isSpace)
     }
 
     /// Gõ Nhanh's result for a key (`RustBridge.processKey`, nil = the key goes through), fed to `mirror` by the
@@ -129,6 +154,15 @@ public final class EngineRouter {
     /// RustBridge's break keys without Space: Tab, Return, Enter, Esc, arrows and punctuation; digits with Shift.
     private static let breakKeys: Set<UInt16> = [48, 36, 76, 53, 123, 124, 125, 126, 47, 43, 44, 41, 39, 33, 30, 42, 27, 24, 50]
     private static let digitKeys: Set<UInt16> = [29, 18, 19, 20, 21, 23, 22, 26, 28, 25]
+
+    private static let spaceKey: UInt16 = 49
+    /// Keys besides Space that end a word for shortcuts in Gõ Nhanh (core/src/engine/mod.rs: Return/Enter and
+    /// `break_key_to_char`): `breakKeys` without Tab, Esc and the arrows; digits with Shift.
+    private static let shortcutBreakKeys = breakKeys.subtracting([48, 53, 123, 124, 125, 126])
+
+    private static func triggersShortcut(_ keyCode: UInt16, shift: Bool) -> Bool {
+        shortcutBreakKeys.contains(keyCode) || (shift && digitKeys.contains(keyCode))
+    }
 
     private static func keyFollowsEdit(_ keyCode: UInt16, shift: Bool) -> Bool {
         breakKeys.contains(keyCode) || (shift && digitKeys.contains(keyCode))
