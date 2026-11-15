@@ -152,9 +152,40 @@ test_pure_deletion_fails() {
   expect_out test_pure_deletion_fails "X:2"
 }
 
+# Deleting an upstream file is a divergence.
+test_deleted_upstream_file_fails() {
+  local repo; repo="$(make_repo deleted)"
+  git -C "$repo" rm -q X
+  commit_all "$repo"
+  run_check "$repo"
+  expect_rc test_deleted_upstream_file_fails 1 &&
+  expect_out test_deleted_upstream_file_fails "X:0: upstream file deleted"
+}
+
+# A rename shows as deletion of the old path.
+test_renamed_upstream_file_fails() {
+  local repo; repo="$(make_repo renamed)"
+  git -C "$repo" mv X Z
+  commit_all "$repo"
+  run_check "$repo"
+  expect_rc test_renamed_upstream_file_fails 1 &&
+  expect_out test_renamed_upstream_file_fails "X:0: upstream file deleted"
+}
+
+# If git diff itself fails (here: a corrupt index), the gate fails closed.
+test_git_failure_fails_closed() {
+  local repo; repo="$(make_repo gitfail)"
+  print -r -- garbage > "$repo/.git/index"
+  run_check "$repo"
+  expect_rc test_git_failure_fails_closed 2 &&
+  expect_out test_git_failure_fails_closed "check-divergence: git diff failed"
+}
+
 for t in test_clean_passes test_hooked_line_passes test_unhooked_line_fails \
          test_unregistered_hook_fails test_file_allowlist test_new_files_ignored \
-         test_hook_block_passes test_unterminated_block_fails test_pure_deletion_fails; do
+         test_hook_block_passes test_unterminated_block_fails test_pure_deletion_fails \
+         test_deleted_upstream_file_fails test_renamed_upstream_file_fails \
+         test_git_failure_fails_closed; do
   if ( $t ); then
     print -r -- "PASS $t"
     (( passed++ )) || true

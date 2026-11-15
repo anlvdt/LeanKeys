@@ -3,7 +3,7 @@
 #
 # Checks that every edit to a file that exists at <gonhanh-tag> is a
 # registered LeanKeys hook. Exits 0 when clean; exits 1 and prints
-# file:line for each violation; exits 2 on bad usage.
+# file:line for each violation; exits 2 on bad usage or when git fails.
 #
 # A changed (+) line is allowed when it carries "LEANKEYS-HOOK: <name>", or
 # when it sits in a contiguous block of added lines that opens with
@@ -13,6 +13,8 @@
 # only removes upstream lines is a violation.
 # Every hook name must be registered for that file in sync/hooks.txt as
 # "<name>\t<path>". "FILE\t<path>" allows replacing the whole file.
+# Deleting, renaming or changing the type of an upstream file is a violation
+# unless that path has a FILE entry.
 
 emulate -L zsh
 setopt no_unset pipe_fail
@@ -39,17 +41,26 @@ excludes=(
   ':!Package.swift' ':!.github/README.md' ':!ACKNOWLEDGEMENTS.md'
   ':!.githooks' ':!.gitmodules'
 )
-diff_opts=(--no-color --no-ext-diff --no-textconv --no-renames --diff-filter=M)
+diff_opts=(--no-color --no-ext-diff --no-textconv --no-renames)
 
-files=("${(@f)$(git -c core.quotePath=false diff --name-only "${diff_opts[@]}" "$tag" -- . "${excludes[@]}")}")
+# Modified, deleted and type-changed upstream files. A rename shows as a
+# deletion of the old path. New files are not checked.
+changed="$(git -c core.quotePath=false diff --name-status --diff-filter=MDT "${diff_opts[@]}" "$tag" -- . "${excludes[@]}")" ||
+  { print -u2 "check-divergence: git diff failed"; exit 2; }
 
 result=0
 tab=$'\t'
-for file in "${files[@]}"; do
-  [[ -n "$file" ]] || continue
+for entry in "${(@f)changed}"; do
+  [[ -n "$entry" ]] || continue
+  kind="${entry%%$tab*}"
+  file="${entry#*$tab}"
   if grep -qxF -- "FILE${tab}${file}" "$hooks"; then
     continue
   fi
+  case "$kind" in
+    D) print -r -- "$file:0: upstream file deleted"; result=1; continue ;;
+    T) print -r -- "$file:0: upstream file type changed"; result=1; continue ;;
+  esac
   git -c core.quotePath=false diff -U0 "${diff_opts[@]}" "$tag" -- "$file" |
     awk -v file="$file" -v hooks="$hooks" '
       BEGIN {
