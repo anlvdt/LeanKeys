@@ -32,6 +32,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
         setupNotifications()
         updateStatusButton()
         FirstRun.performIfNeeded(enableLaunchAtLogin: { try LaunchAtLoginManager.shared.enable() }) // LEANKEYS-HOOK: onboarding
+        ReturningUser.record(isTrusted: AXIsProcessTrusted()) // LEANKEYS-HOOK: onboarding
 
         if UserDefaults.standard.bool(forKey: SettingsKey.hasCompletedOnboarding), AXIsProcessTrusted() {
             startEngine()
@@ -434,6 +435,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
                 },
                 onDone: {
+                    ReturningUser.record(isTrusted: true)
                     UserDefaults.standard.set(true, forKey: SettingsKey.permissionGranted)
                     UserDefaults.standard.set(true, forKey: SettingsKey.hasCompletedOnboarding)
                     let task = Process()
@@ -441,7 +443,8 @@ class MenuBarController: NSObject, NSWindowDelegate {
                     task.arguments = ["-c", "sleep 0.5 && open \"\(Bundle.main.bundlePath)\""]
                     try? task.run()
                     NSApp.terminate(nil)
-                }
+                },
+                wasTrusted: ReturningUser.wasTrusted()
             )
             // LEANKEYS-HOOK-END
             let controller = NSHostingController(rootView: view)
