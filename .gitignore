@@ -60,3 +60,6 @@ plans/
 CLAUDE.md
 
 refs/
+# LEANKEYS-HOOK-BEGIN: gitignore
+.build/
+# LEANKEYS-HOOK-END
