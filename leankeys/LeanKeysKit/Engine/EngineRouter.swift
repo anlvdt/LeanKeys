@@ -39,6 +39,9 @@ public final class EngineRouter {
 
     public private(set) var fallbackReason: String?
 
+    /// Whether Vikey's automatic switch is on (see `setEnabled`).
+    public var autoSwitchOn: Bool { autoSwitch }
+
     /// `makeVikey` runs at most once, the first time Vikey is needed.
     public init(defaults: UserDefaults = .standard, makeVikey: @escaping () -> TypingEngine? = { VikeyEngine() }) {
         settings = LeanSettings(defaults: defaults)

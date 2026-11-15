@@ -346,4 +346,14 @@ final class EngineRouterTests: XCTestCase {
         router.setModernTone(true)
         XCTAssertEqual(fake.setModernToneCalls.last, true)
     }
+
+    func testRouterAutoSwitchFollowsExplicitOff() {
+        let router = makeRouter()
+        router.setEnabled(false, explicit: true)
+        XCTAssertFalse(router.autoSwitchOn)
+        router.setEnabled(true)
+        XCTAssertTrue(router.autoSwitchOn)
+        router.setEnabled(false)
+        XCTAssertTrue(router.autoSwitchOn, "an automatic off must not pause auto switch")
+    }
 }
