@@ -61,8 +61,10 @@ public struct EngineSettingsSection: View {
     static let title = "Engine gõ"
     static let automaticLabel = "Tự động (khuyên dùng)"
     static let goNhanhOnlyLabel = "Chỉ dùng Gõ Nhanh"
-    /// Spec §3.5: Gõ Nhanh settings that do nothing under Vikey (ruling R26).
-    static let vikeyNote = "Khi dùng Vikey, các mục chỉ dành cho Gõ Nhanh không có tác dụng: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]. Gõ tắt sẽ chạy với cả hai engine từ giai đoạn 4."
+    /// Spec §3.5: one line on screen; the list of hidden Gõ Nhanh-only settings is in `vikeyNoteDetail`.
+    static let vikeyNote = "Ở chế độ Tự động, các mục chỉ dành cho Gõ Nhanh được ẩn."
+    /// Tooltip (ⓘ) for `vikeyNote`.
+    static let vikeyNoteDetail = "Các mục chỉ dành cho Gõ Nhanh: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]."
 
     @StateObject private var model: EngineSettingsModel
     @State private var isExpanded = false
@@ -82,11 +84,17 @@ public struct EngineSettingsSection: View {
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
                 if model.showsVikeyNote {
-                    Text(Self.vikeyNote)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(NSColor.secondaryLabelColor))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.leading, 20)
+                    HStack(spacing: 4) {
+                        Text(Self.vikeyNote)
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(NSColor.secondaryLabelColor))
+                            .lineLimit(1)
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(NSColor.secondaryLabelColor))
+                            .help(Self.vikeyNoteDetail)
+                    }
+                    .padding(.leading, 20)
                 }
                 if let reason = model.vikeyDisabledReason {
                     Text(reason)

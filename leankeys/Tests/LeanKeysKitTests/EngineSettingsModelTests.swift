@@ -130,8 +130,14 @@ final class EngineSettingsModelTests: XCTestCase {
         XCTAssertEqual(model.vikeyDisabledReason, "Không khởi động được engine Vikey — đang dùng Gõ Nhanh")
     }
 
-    func testVikeyNoteListsEveryGoNhanhOnlySetting() {
-        XCTAssertEqual(EngineSettingsSection.vikeyNote,
-                       "Khi dùng Vikey, các mục chỉ dành cho Gõ Nhanh không có tác dụng: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]. Gõ tắt sẽ chạy với cả hai engine từ giai đoạn 4.")
+    func testVikeyNoteIsOneLineWithDetailInTooltip() {
+        let note = "Ở chế độ Tự động, các mục chỉ dành cho Gõ Nhanh được ẩn."
+        let detail = "Các mục chỉ dành cho Gõ Nhanh: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]."
+        XCTAssertEqual(EngineSettingsSection.vikeyNote, note)
+        XCTAssertFalse(EngineSettingsSection.vikeyNote.contains("\n"))
+        XCTAssertEqual(EngineSettingsSection.vikeyNoteDetail, detail)
+        for text in [EngineSettingsSection.vikeyNote, EngineSettingsSection.vikeyNoteDetail] {
+            XCTAssertFalse(text.contains("giai đoạn"))
+        }
     }
 }
