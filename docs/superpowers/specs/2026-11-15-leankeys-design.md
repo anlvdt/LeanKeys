@@ -316,7 +316,7 @@ Thêm ngày 2026-11-15. **Mục tiêu:** người dùng chỉ cần mở máy v�
 
 ### 13.1 Những bước không bỏ được
 - **Cấp quyền Accessibility một lần** khi cài. macOS bắt buộc với mọi bộ gõ kiểu này.
-- **Khi còn ký ad-hoc** thì có thêm hai bước: chạy `xattr -cr` khi cài, và cấp lại quyền Accessibility sau mỗi lần cập nhật. Có Developer ID (mục 6.4) là bỏ được cả hai. **Khuyến nghị mua Developer ID** để đạt đúng mục tiêu này.
+- **Khi còn ký ad-hoc** thì có thêm hai bước: chạy `xattr -cr` khi cài, và cấp lại quyền Accessibility sau mỗi lần cập nhật. **Quyết định 2026-11-15: không dùng Apple Developer ID.** LeanKeys luôn ký ad-hoc. Hai bước này được giảm nhẹ bằng hướng dẫn trong app: cài bằng một cú bấm, và màn hướng dẫn cấp lại quyền cho người dùng cũ. Đường ký Developer ID trong `build.sh` vẫn giữ nhưng không dùng.
 
 ### 13.2 Mặc định
 
