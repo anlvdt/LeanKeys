@@ -433,4 +433,5 @@ Thêm ngày 2026-11-15, người dùng đã duyệt. macOS không cho app tự b
 ### 15.4 Test
 - **Đơn vị:** chính sách cài ngầm theo loại chữ ký; logic "đã có quyền" từ hai tín hiệu; bộ đếm gọi khởi động lại đúng một lần; chọn danh tính ký trong `build.sh` (test shell).
 - **Kiểm chứng trên máy thật (bắt buộc trước khi merge):** cấp quyền cho bản A ký bằng chứng chỉ; build bản B; thay bản A bằng B; B phải gõ được ngay, không cần cấp lại. Ghi kết quả vào báo cáo.
+- **Kết quả 2026-11-15 (máy của người dùng):** bản A (1.0, ký `LeanKeys Self-Signed`, yêu cầu chữ ký `certificate leaf = H"c5f280e9…"`) mở lên ở luồng người dùng cũ, tự `tccutil reset` thành công, người dùng chỉ gạt một công tắc, app tự khởi động lại. Bản B (1.0.1, binary khác, cùng chứng chỉ) thay vào cùng đường dẫn và mở lên **không cần cấp lại quyền**. Đạt.
 - **Thử tay:** thêm vào `sync/manual-checklist.md`: cài mới chỉ gạt một công tắc; cửa sổ màn chào bị che vẫn tự khởi động lại; cập nhật không mất quyền.
