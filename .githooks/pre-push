@@ -1,0 +1,61 @@
+#!/bin/zsh
+# LeanKeys test gate (spec §7.1). Enable once per clone:
+#   git config core.hooksPath .githooks
+# git then runs it before every push. sync/sync.sh runs it with --all as the
+# sync job's test command, in its private worktree.
+#
+# Usage: .githooks/pre-push [--all]
+#   1. cd core && cargo test                       (Gõ Nhanh core)
+#   2. swift test                                  (TypingEngine, LeanKeysKit)
+#   3. vendor/vikey/Tools/autoswitch/check.sh      (Vikey engine)
+#   4. sync/check-divergence.sh <gonhanh tag in sync/upstream.json>
+#   5. tests/sync/test_check_divergence.sh, test_sync.sh, test_release.sh
+#   6. --all only: tests/build/test_build_output.sh, which runs
+#      leankeys/build.sh (Release, universal) and checks the bundle
+# Stops at the first failing step (exit non-zero). Works from any directory in
+# the repo or a worktree. Arguments other than --all (git passes the remote
+# name and URL, and the refs on stdin) are ignored.
+
+set -e
+emulate -L zsh
+setopt err_exit no_unset pipe_fail
+
+all=0
+for a in "$@"; do [[ "$a" == --all ]] && all=1; done
+
+# git exports GIT_DIR and friends to hooks; the sync tests run git in their
+# own temp repos and must not inherit them.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+root="$(git -C "${0:A:h}" rev-parse --show-toplevel)"
+cd "$root"
+exec </dev/null
+
+total=$(( all ? 6 : 5 ))
+n=0
+run() { # run <title> <command...>
+  n=$(( n + 1 ))
+  print -r -- "==> [$n/$total] $1"
+  shift
+  if ! "$@"; then
+    print -u2 -r -- "pre-push: step $n failed: ${(j: :)@}"
+    return 1
+  fi
+}
+
+tag="$(jq -r .gonhanh sync/upstream.json)"
+[[ -n "$tag" && "$tag" != null ]] || { print -u2 "pre-push: no gonhanh tag in sync/upstream.json"; exit 1; }
+
+core_tests() { ( cd core && cargo test ) }
+sync_tests() {
+  zsh tests/sync/test_check_divergence.sh && zsh tests/sync/test_sync.sh && zsh tests/sync/test_release.sh
+}
+
+run "cargo test (core)" core_tests
+run "swift test" swift test
+run "Vikey check.sh" vendor/vikey/Tools/autoswitch/check.sh
+run "check-divergence.sh $tag" sync/check-divergence.sh "$tag"
+run "sync tests" sync_tests
+if (( all )); then
+  run "Release build + bundle check" zsh tests/build/test_build_output.sh
+fi
+print -r -- "pre-push: all $total steps passed"

@@ -44,6 +44,18 @@ leankeys/build.sh --version 1.0          # ra dist/LeanKeys.app
 leankeys/build.sh --version 1.0 --dmg    # thêm dist/LeanKeys-1.0.dmg
 ```
 
+## Phát triển
+
+Bật cổng test trước khi push (một lần cho mỗi bản clone):
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Từ đó mỗi `git push` chạy `.githooks/pre-push`: `cargo test` trong `core/`, `swift test`, test engine Vikey, `sync/check-divergence.sh` và test của `sync/`. Chạy tay `.githooks/pre-push --all` để thêm bản build Release.
+
+Đăng bản: `sync/release.sh --dry-run` để xem trước, rồi `sync/release.sh` (cần `gh` đã đăng nhập). Danh sách thử tay trước khi đăng nằm trong `sync/manual-checklist.md`.
+
 ## Ghi công
 
 - [Gõ Nhanh](https://github.com/khaphanspace/gonhanh.org): khaphanspace và cộng đồng Gõ Nhanh, BSD-3-Clause.
