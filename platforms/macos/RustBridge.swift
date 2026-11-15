@@ -654,6 +654,16 @@ class RustBridge {
            case .handled(let r) = EngineRouter.shared.intercept(keyCode: keyCode, caps: caps, ctrl: ctrl, shift: shift) {
             return r
         }
+        // Gõ Nhanh decides from here: its result (nil on every early return) feeds the mirror. Ctrl chords (and
+        // Option+key, sent with ctrl) and other input sources type nothing the US keycode map can tell: reset.
+        var observed: (Int, [Character], Bool)?
+        defer {
+            if ctrl || !InputSourceObserver.shared.isAllowedInputSource {
+                EngineRouter.shared.mirror.reset()
+            } else {
+                EngineRouter.shared.observeGoNhanh(keyCode: keyCode, shift: shift, caps: caps, result: observed)
+            }
+        }
         // LEANKEYS-HOOK-END
 
         let ptr: UnsafeMutablePointer<ImeResult>?
@@ -676,7 +686,10 @@ class RustBridge {
             }
         }
         let keyConsumed = (r.flags & FLAG_KEY_CONSUMED) != 0
-        return (Int(r.backspace), chars, keyConsumed)
+        // LEANKEYS-HOOK-BEGIN: engine-dispatch
+        observed = (Int(r.backspace), chars, keyConsumed)
+        return observed
+        // LEANKEYS-HOOK-END
     }
 
     static func setMethod(_ method: Int) {

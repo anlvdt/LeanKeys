@@ -100,6 +100,12 @@ public final class VikeyEngine: TypingEngine {
         c == "\n" || !(c == " " || c.isLetter || c.isNumber)
     }
 
+    /// What the key types when the app gets it untouched: `caps` (Shift or Caps Lock) cases letters, Shift picks
+    /// the symbol. nil for keys without a character (arrows, Esc, Backspace, function keys).
+    static func typedCharacter(keyCode: UInt16, shift: Bool, caps: Bool) -> Character? {
+        ownCharacter(keyCode: keyCode, shift: letterKeys.contains(keyCode) ? caps : shift)
+    }
+
     /// What the key types by itself.
     private static func ownCharacter(keyCode: UInt16, shift: Bool) -> Character? {
         if let c = letters[keyCode] { return shift ? Character(c.uppercased()) : c }

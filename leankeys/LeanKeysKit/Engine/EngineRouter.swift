@@ -39,6 +39,9 @@ public final class EngineRouter {
 
     public private(set) var fallbackReason: String?
 
+    /// What was just typed, from either engine (see `observeGoNhanh`). Memory only.
+    public let mirror = TextMirror()
+
     /// Whether Vikey's automatic switch is on (see `setEnabled`).
     public var autoSwitchOn: Bool { autoSwitch }
 
@@ -71,9 +74,13 @@ public final class EngineRouter {
         // A Ctrl chord is a shortcut, not typing: the word ends and the key goes through untouched.
         if ctrl {
             vikey.resetContext()
+            mirror.reset()
             return .handled(nil)
         }
-        guard let edit = vikey.process(keyCode: keyCode, caps: caps, shift: shift) else { return .handled(nil) }
+        guard let edit = vikey.process(keyCode: keyCode, caps: caps, shift: shift) else {
+            observe(keyCode: keyCode, shift: shift, caps: caps, result: nil)
+            return .handled(nil)
+        }
         if edit.languageChanged {
             let on = vikey.isVietnamese
             if languageBeforeAutoSwitch == nil { languageBeforeAutoSwitch = vietnamese }
@@ -82,7 +89,47 @@ public final class EngineRouter {
                 NotificationCenter.default.post(name: .leanKeysLanguageChanged, object: nil, userInfo: ["vietnamese": on])
             }
         }
-        return .handled((edit.deleteCount, edit.text, !edit.keyPassesThrough))
+        let result = (edit.deleteCount, edit.text, !edit.keyPassesThrough)
+        observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+        return .handled(result)
+    }
+
+    /// Gõ Nhanh's result for a key (`RustBridge.processKey`, nil = the key goes through), fed to `mirror` by the
+    /// same rules as Vikey's. Ctrl chords are not passed here: the caller resets `mirror` for those.
+    public func observeGoNhanh(keyCode: UInt16, shift: Bool, caps: Bool, result: (Int, [Character], Bool)?) {
+        observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+    }
+
+    /// Applies an engine result, then the key itself when it reaches the app. The macOS key handler lets the key
+    /// through when the result is nil, or when it is not consumed and the key is a break key other than Space
+    /// (`isBreakKey` in RustBridge.swift); otherwise the result's text is all that is typed.
+    private func observe(keyCode: UInt16, shift: Bool, caps: Bool, result: (Int, [Character], Bool)?) {
+        if let (deleteCount, text, consumed) = result {
+            mirror.apply(deleteCount: deleteCount, insert: text)
+            guard !consumed, Self.keyFollowsEdit(keyCode, shift: shift) else { return }
+        }
+        switch keyCode {
+        case Self.backspaceKey: mirror.apply(deleteCount: 1, insert: [])
+        case Self.tabKey: mirror.typed("\t")
+        default:
+            // Arrows, Home/End, Page Up/Down, Esc, forward delete and anything else without a known character move
+            // the cursor or change text out of sight.
+            if let c = VikeyEngine.typedCharacter(keyCode: keyCode, shift: shift, caps: caps) {
+                mirror.typed(c)
+            } else {
+                mirror.reset()
+            }
+        }
+    }
+
+    private static let backspaceKey: UInt16 = 51
+    private static let tabKey: UInt16 = 48
+    /// RustBridge's break keys without Space: Tab, Return, Enter, Esc, arrows and punctuation; digits with Shift.
+    private static let breakKeys: Set<UInt16> = [48, 36, 76, 53, 123, 124, 125, 126, 47, 43, 44, 41, 39, 33, 30, 42, 27, 24, 50]
+    private static let digitKeys: Set<UInt16> = [29, 18, 19, 20, 21, 23, 22, 26, 28, 25]
+
+    private static func keyFollowsEdit(_ keyCode: UInt16, shift: Bool) -> Bool {
+        breakKeys.contains(keyCode) || (shift && digitKeys.contains(keyCode))
     }
 
     /// Gõ Nhanh's input method: 0 = Telex, 1 = VNI.
@@ -120,8 +167,11 @@ public final class EngineRouter {
         vikey?.setModernTone(modern)
     }
 
+    /// Every place the macOS app drops the word (click, app switch, Secure Input, Cmd/Ctrl, modified arrows)
+    /// goes through `RustBridge.clearBuffer*` to here, so the mirror resets with it.
     public func clear() {
         vikey?.resetContext()
+        mirror.reset()
     }
 
     /// Recomputes `fallbackReason`, building Vikey the first time it is needed.
