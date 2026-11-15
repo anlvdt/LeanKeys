@@ -23,6 +23,11 @@ class MenuBarController: NSObject, NSWindowDelegate {
     private var cancellables = Set<AnyCancellable>()
     private var pendingRestart: DispatchWorkItem?
     private lazy var secureInputIcon = createSecureInputIcon()
+    // LEANKEYS-HOOK-BEGIN: menubar-popover
+    private var legacyMenu: NSMenu?
+    private var popoverModel: StatusPopoverModel?
+    private var statusPopover: StatusPopoverController?
+    // LEANKEYS-HOOK-END
 
     override init() {
         super.init()
@@ -144,7 +149,12 @@ class MenuBarController: NSObject, NSWindowDelegate {
         let quit = NSMenuItem(title: "Thoát \(AppMetadata.name)", action: #selector(NSApp.terminate), keyEquivalent: "q")
         menu.addItem(quit)
 
-        statusItem.menu = menu
+        // LEANKEYS-HOOK-BEGIN: menubar-popover
+        legacyMenu = menu
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(handleStatusClick(_:))
+        _ = statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        // LEANKEYS-HOOK-END
         updateMenu()
     }
 
@@ -204,7 +214,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
     }
 
     private func updateMenu() {
-        guard let menu = statusItem.menu else { return }
+        guard let menu = statusItem.menu ?? legacyMenu else { return } // LEANKEYS-HOOK: menubar-popover
 
         // Update subtitle in-place (preserves toggle animation)
         if let headerView = menu.item(withTag: 1)?.view,
@@ -302,6 +312,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
 
             let isSecureInputBlocked = appState.shouldShowSecureInputWarning
             if isSecureInputBlocked {
+                MenuBarIconAnimator.prepare(button) // LEANKEYS-HOOK: menubar-popover
                 button.image = secureInputIcon
             } else {
                 let observer = InputSourceObserver.shared
@@ -312,8 +323,13 @@ class MenuBarController: NSObject, NSWindowDelegate {
                     // Non-ABC keyboard: show input source character
                     observer.currentDisplayChar
                 }
+                MenuBarIconAnimator.prepare(button) // LEANKEYS-HOOK: menubar-popover
                 button.image = createStatusIcon(text: text)
             }
+            // LEANKEYS-HOOK-BEGIN: menubar-popover
+            // Vikey can switch language while the popover is open; re-read so its segmented control follows.
+            if let statusPopover, statusPopover.isShown { popoverModel?.reload() }
+            // LEANKEYS-HOOK-END
             button.toolTip = isSecureInputBlocked
                 ? SecureInputPresentation.tooltip(holderName: appState.secureInputHolderName)
                 : nil
@@ -393,6 +409,48 @@ class MenuBarController: NSObject, NSWindowDelegate {
     }
 
     // MARK: - Event Handlers
+    // LEANKEYS-HOOK-BEGIN: menubar-popover
+    /// Built on the first click, not at launch. The model is kept here because StatusPopoverController does not expose it.
+    private func statusPopoverController() -> StatusPopoverController {
+        if let statusPopover { return statusPopover }
+        // Closures read AppState and UpdateManager directly. Only the ones that need this controller capture self, weakly.
+        let model = StatusPopoverModel(actions: StatusPopoverActions(
+            snapshot: { AppState.shared.leanStatusSnapshot },
+            method: { AppState.shared.currentMethod.rawValue },
+            updateReady: { UpdateManager.shared.isReadyToInstall },
+            setVietnamese: { [weak self] vietnamese in
+                guard AppState.shared.isEnabled != vietnamese else { return }
+                self?.handleToggleVietnamese()
+            },
+            setMethod: { raw in
+                guard let mode = InputMode(rawValue: raw) else { return }
+                AppState.shared.setMethod(mode)
+            },
+            installUpdate: { UpdateManager.shared.restartToUpdate() },
+            openSettings: { [weak self] in self?.showSettings() },
+            quit: { NSApp.terminate(nil) }
+        ))
+        let controller = StatusPopoverController(model: model)
+        popoverModel = model
+        statusPopover = controller
+        return controller
+    }
+
+    /// Left click opens the popover. Right click and Option or Control click open the legacy menu.
+    @objc private func handleStatusClick(_ sender: Any?) {
+        guard let button = statusItem.button else { return }
+        let route = NSApp.currentEvent.map { StatusClickRoute.route(type: $0.type, modifiers: $0.modifierFlags) } ?? .popover
+        switch route {
+        case .popover:
+            statusPopoverController().toggle(relativeTo: button)
+        case .legacyMenu:
+            // performClick runs the menu modally, so it can be removed again right after.
+            statusItem.menu = legacyMenu
+            button.performClick(nil)
+            statusItem.menu = nil
+        }
+    }
+    // LEANKEYS-HOOK-END
 
     @objc private func handleToggleVietnamese() {
         appState.toggle()

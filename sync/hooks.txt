@@ -13,3 +13,4 @@ branding	platforms/macos/UpdateManager.swift
 about	platforms/macos/MainSettingsView.swift
 settings-engine	platforms/macos/MainSettingsView.swift
 settings-engine	platforms/macos/MenuBar.swift
+menubar-popover	platforms/macos/MenuBar.swift

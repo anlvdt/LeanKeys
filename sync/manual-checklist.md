@@ -24,5 +24,11 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | 16 | Tự chuyển không bị nhớ | Vikey: gõ trộn tới khi tự chuyển sang Anh, chuyển app khác rồi quay lại → vẫn tự chuyển về Việt khi gõ từ tiếng Việt (`vieejt `). Thoát và mở lại LeanKeys: vẫn như vậy. | — | [ ] |
 | 17 | Gõ nhanh | Gõ thật nhanh (từ 8 phím/giây trở lên) câu `Nguwowfi Vieejt Nam vieets tieesng Vieejt` → "Người Việt Nam viết tiếng Việt" ở: thanh địa chỉ Chrome và một ô nhập trên trang web, VS Code, Terminal, Notes, Slack (chưa gửi). Không mất chữ, không đảo thứ tự chữ, không sót dấu. | [ ] | [ ] |
 | 18 | Nếu mục 17 lỗi | Ghi lại app bị lỗi. Tăng thời gian chờ sau mỗi lần sửa chữ (micro giây, 0–30000; mặc định fast 1000, slow 8000): `defaults write io.github.anlvdt.leankeys LeanKeys.settleMicros.fast -int 5000` (Chrome, Notes, Slack…) hoặc `defaults write io.github.anlvdt.leankeys LeanKeys.settleMicros.slow -int 20000` (Terminal, VS Code), thoát và mở lại LeanKeys, thử lại mục 17. Đạt khi mục 17 không lỗi, hoặc đã đạt sau khi tăng (ghi giá trị vào ghi chú bản phát hành). Bỏ chỉnh: `defaults delete io.github.anlvdt.leankeys LeanKeys.settleMicros.fast` (và `.slow`). | [ ] | [ ] |
+| P1 | Menu bar | Bấm trái vào icon: ô nổi mở ra, nút Tiếng Việt/English đổi ngay. | — | [ ] |
+| P2 | Menu bar | Bấm phải, hoặc Option + bấm: mở menu cũ, không mở ô nổi. | — | [ ] |
+| P3 | Menu bar | Ở chế độ English (icon hiện E), gõ `treen `: Vikey tự chuyển sang Tiếng Việt, icon mờ dần từ E sang V, ô nổi đang mở đổi theo ngay. | — | [ ] |
+| P4 | Menu bar | Chế độ tối: ô nổi và cửa sổ Cài đặt đều đọc rõ. | — | [ ] |
+| P5 | Menu bar | Bật "Giảm chuyển động" của macOS: icon đổi ngay, không mờ dần. Ở Cài đặt → Nâng cao, đổi "Engine gõ" rồi về Chung: các mục chỉ dành cho Gõ Nhanh hiện hoặc ẩn ngay. | — | [ ] |
+| P6 | Menu bar | bấm icon lần nữa thì ô nổi đóng, không mở lại | — | [ ] |
 
-Chỉ gõ `yes` khi cả 28 ô đều đạt.
+Chỉ gõ `yes` khi cả 34 ô đều đạt.
