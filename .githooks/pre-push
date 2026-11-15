@@ -49,7 +49,7 @@ tag="$(jq -r .gonhanh sync/upstream.json)"
 core_tests() { ( cd core && cargo test ) }
 sync_tests() {
   zsh tests/sync/test_check_divergence.sh && zsh tests/sync/test_sync.sh && zsh tests/sync/test_release.sh &&
-    zsh tests/update/test_swap_script.sh
+    zsh tests/update/test_swap_script.sh && zsh tests/build/test_signing_identity.sh
 }
 
 run "cargo test (core)" core_tests

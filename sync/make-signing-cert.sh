@@ -8,6 +8,7 @@
 
 emulate -L zsh
 setopt errexit no_unset pipe_fail
+umask 077   # the .p12 backup and temp files are readable by this user only
 
 CN="LeanKeys Self-Signed"
 KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
@@ -21,6 +22,8 @@ if [[ "$existing" == *"\"$CN\""* ]]; then
   print -r -- "The identity \"$CN\" already exists. To replace it, remove it first:"
   print -r -- "  security delete-identity -c \"$CN\" \"$KEYCHAIN\""
   print -r -- "then run this script again."
+  print -r -- "To retry only the key partition step (type your login keychain password in place of the placeholder):"
+  print -r -- "  security set-key-partition-list -S apple-tool:,apple: -s -k '<login keychain password>' \"$KEYCHAIN\""
   exit 1
 fi
 
@@ -29,6 +32,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+trap 'exit 129' HUP
 print -r -- "==> Generating key and certificate (20 years)"
 $openssl_bin req -x509 -newkey rsa:2048 -days 7300 -nodes \
   -subj "/CN=$CN" \
@@ -61,6 +65,7 @@ if ! LK_P12_PASS="$pw" $openssl_bin pkcs12 -export -legacy \
     -inkey "$tmp/key.pem" -in "$tmp/cert.pem" -name "$CN" \
     -out "$backup" -passout env:LK_P12_PASS
 fi
+chmod 600 "$backup"
 
 # 5. Import into the login keychain. security(1) has no stdin option, so -P takes the password from a variable.
 print -r -- "==> Importing into the login keychain"
@@ -69,8 +74,15 @@ security import "$backup" -k "$KEYCHAIN" -P "$pw" -T /usr/bin/codesign
 # 6. Let codesign and Apple tools use the key without a prompt (needed by the 03:00 sync job).
 print -n -- "Login keychain password (to allow codesign without prompts): "
 read -rs login_pw; print
-security set-key-partition-list -S apple-tool:,apple: -s -k "$login_pw" "$KEYCHAIN" >/dev/null
+rc=0
+security set-key-partition-list -S apple-tool:,apple: -s -k "$login_pw" "$KEYCHAIN" >/dev/null || rc=$?
 unset login_pw pw
+if (( rc )); then
+  print -u2 -r -- "The identity is imported, but the key partition list was not set (exit $rc): codesign may prompt, and the 03:00 sync job would fail."
+  print -u2 -r -- "Retry only this step, with your login keychain password in place of the placeholder:"
+  print -u2 -r -- "  security set-key-partition-list -S apple-tool:,apple: -s -k '<login keychain password>' \"$KEYCHAIN\""
+  exit 1
+fi
 
 # 7. Show the result.
 print -r -- "==> Done. Identity:"

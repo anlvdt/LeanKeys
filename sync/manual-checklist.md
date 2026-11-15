@@ -16,9 +16,9 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | 8 | Return/Enter sau từ Vikey khôi phục | Gõ `more` (Vikey giữ nguyên tiếng Anh) rồi Return ngay: tin nhắn được gửi trong một ô chat (Slack, kênh thử riêng) và một form trên trang web được gửi. Chữ trước đó không đổi. | — | [ ] |
 | 9 | Dấu câu sau từ đã sửa | Gõ một từ Vikey sửa (`more`, `vieejt`) rồi `,`; làm lại với `.`. Dấu phẩy, dấu chấm hiện đúng một lần. | — | [ ] |
 | 10 | Caps Lock | Bật Caps Lock, gõ câu thử: ra "TIẾNG VIỆT TRƯỜNG HỌC". Tắt Caps Lock, gõ tiếp bình thường. | [ ] | [ ] |
-| 11 | Cập nhật | Bản Developer ID: có bản mới, để máy rảnh hơn 30 giây; app tự cập nhật, tự mở lại, gõ được ngay. Bản ad-hoc: menu hiện "⟳ Khởi động lại để cập nhật", bấm một lần là cập nhật; màn "LeanKeys vừa được cập nhật" hiện ra, làm theo (chọn LeanKeys trong Trợ năng, bấm − rồi + thêm lại) thì gõ lại được. | — | [ ] |
+| 11 | Cập nhật | Bản Developer ID: có bản mới, để máy rảnh hơn 30 giây; app tự cập nhật, tự mở lại, gõ được ngay. Bản self-signed: cập nhật ngầm như Developer ID, không cần cấp quyền lại. Bản ad-hoc: menu hiện "⟳ Khởi động lại để cập nhật", bấm một lần là cập nhật; màn "LeanKeys vừa được cập nhật" hiện dòng "Bấm nút bên dưới rồi bật lại LeanKeys trong danh sách Trợ năng.", làm theo (chọn LeanKeys trong Trợ năng, bấm − rồi + thêm lại) thì gõ lại được. | — | [ ] |
 | 12 | Mở cùng máy | Khởi động lại máy (launch at login bật sẵn): LeanKeys tự chạy, gõ được ngay. | — | [ ] |
-| 13 | Cài mới | Trên máy hoặc tài khoản chưa từng cài: mở app, chỉ một màn hình với nút "Mở cài đặt Trợ năng"; cấp quyền xong app tự mở lại và gõ được. | — | [ ] |
+| 13 | Cài mới | Trên máy hoặc tài khoản chưa từng cài: mở app, chỉ một màn hình với nút "Cấp quyền Trợ năng"; cấp quyền xong app tự mở lại và gõ được. | — | [ ] |
 | 14 | Secure Input | Chuyển sang tiếng Anh, vào một ô mật khẩu (Terminal: `sudo -v`): cảnh báo Secure Input vẫn hiện trên menu bar. | — | [ ] |
 | 15 | Tắt hẳn ở Terminal | Tắt tiếng Việt ở Terminal (menu bar), gõ `vieejt ` và `treen `: giữ nguyên tiếng Anh, biểu tượng vẫn ở trạng thái tắt. | — | [ ] |
 | 16 | Tự chuyển không bị nhớ | Vikey: gõ trộn tới khi tự chuyển sang Anh, chuyển app khác rồi quay lại → vẫn tự chuyển về Việt khi gõ từ tiếng Việt (`vieejt `). Thoát và mở lại LeanKeys: vẫn như vậy. | — | [ ] |
@@ -30,8 +30,9 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | P4 | Menu bar | Chế độ tối: ô nổi và cửa sổ Cài đặt đều đọc rõ. | — | [ ] |
 | P5 | Menu bar | Bật "Giảm chuyển động" của macOS: icon đổi ngay, không mờ dần. Ở Cài đặt → Nâng cao, đổi "Engine gõ" rồi về Chung: các mục chỉ dành cho Gõ Nhanh hiện hoặc ẩn ngay. | — | [ ] |
 | P6 | Menu bar | bấm icon lần nữa thì ô nổi đóng, không mở lại | — | [ ] |
-| A1 | Cài mới (Trợ năng) | Trên máy mới: LeanKeys đã có sẵn trong danh sách Trợ năng, chỉ cần bật một công tắc là gõ được. | — | [ ] |
-| A2 | Cửa sổ chào bị che | Đưa cửa sổ chào của LeanKeys ra sau một cửa sổ khác, cấp quyền Trợ năng: LeanKeys tự mở lại đúng một lần và gõ được. | — | [ ] |
+| A1 | Cài mới (Trợ năng) | Trên máy mới: bấm "Cấp quyền Trợ năng", LeanKeys hiện trong danh sách Trợ năng; bật một công tắc là gõ được. | — | [ ] |
+| A2 | Cửa sổ chào bị che hoặc đã đóng | Đưa cửa sổ chào của LeanKeys ra sau một cửa sổ khác, hoặc đóng hẳn cửa sổ đó, rồi cấp quyền Trợ năng: LeanKeys tự mở lại đúng một lần và gõ được. | — | [ ] |
 | A3 | Cập nhật self-signed | Cập nhật từ bản self-signed sang bản self-signed khác: gõ vẫn được, không phải cấp quyền lại. | — | [ ] |
+| A4 | Từ ad-hoc lên self-signed | Máy đang chạy bản ad-hoc đã cấp quyền. Cập nhật lên bản self-signed đầu tiên: LeanKeys tự reset mục của chính nó trong Trợ năng, chỉ cần gạt một công tắc là gõ được. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 37 ô đều đạt.
+Chỉ gõ `yes` khi cả 38 ô đều đạt.
