@@ -51,6 +51,42 @@ final class UISnapshotTests: XCTestCase {
                 to: outDir.appendingPathComponent("popover-blocked-\(label).png")
             )
 
+            // 4B: the popover with suggestions waiting, the list (fake data only), and the settings.
+            let withSuggestions = StatusPopoverView(model: StatusPopoverModel(actions: Self.popoverActions(vietnameseOn, suggestions: 2)))
+                .background(Color(NSColor.windowBackgroundColor))
+            try Self.render(
+                withSuggestions, width: 280, height: nil, appearance: appearance,
+                to: outDir.appendingPathComponent("popover-suggestions-\(label).png")
+            )
+
+            let list = ShortcutSuggestionsView(model: .preview(candidates: ShortcutSuggestionsModel.sampleCandidates))
+                .background(Color(NSColor.windowBackgroundColor))
+            try Self.render(
+                list, width: 440, height: nil, appearance: appearance,
+                to: outDir.appendingPathComponent("shortcut-suggestions-\(label).png")
+            )
+
+            let learnModel = ShortcutSuggestionsModel.preview()
+            let learnSettings = VStack(alignment: .leading, spacing: 20) {
+                LearnSettingsSection(model: learnModel, part: .general)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 0.5))
+                LearnSettingsSection(model: learnModel, part: .advanced)
+            }
+            .padding(20)
+            .background(Color(NSColor.windowBackgroundColor))
+            try Self.render(
+                learnSettings, width: 520, height: nil, appearance: appearance,
+                to: outDir.appendingPathComponent("settings-learn-\(label).png")
+            )
+
+            let consent = LearnConsentView(confirm: {}, cancel: {})
+                .background(Color(NSColor.windowBackgroundColor))
+            try Self.render(
+                consent, width: 380, height: nil, appearance: appearance,
+                to: outDir.appendingPathComponent("settings-learn-consent-\(label).png")
+            )
+
             let settings = SettingsRootView(
                 logo: Self.logo(),
                 name: "LeanKeys",
@@ -69,7 +105,7 @@ final class UISnapshotTests: XCTestCase {
         }
     }
 
-    private static func popoverActions(_ snapshot: StatusSnapshot) -> StatusPopoverActions {
+    private static func popoverActions(_ snapshot: StatusSnapshot, suggestions: Int = 0) -> StatusPopoverActions {
         StatusPopoverActions(
             snapshot: { snapshot },
             method: { 0 },
@@ -78,7 +114,8 @@ final class UISnapshotTests: XCTestCase {
             setMethod: { _ in },
             installUpdate: {},
             openSettings: {},
-            quit: {}
+            quit: {},
+            suggestionCount: { suggestions }
         )
     }
 

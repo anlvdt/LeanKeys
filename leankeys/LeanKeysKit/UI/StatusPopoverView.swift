@@ -13,6 +13,9 @@ public struct StatusPopoverActions {
     public var installUpdate: () -> Void
     public var openSettings: () -> Void
     public var quit: () -> Void
+    /// Shortcut suggestions waiting (4B); the line shows only when above 0.
+    public var suggestionCount: () -> Int
+    public var openSuggestions: () -> Void
 
     public init(
         snapshot: @escaping () -> StatusSnapshot,
@@ -22,7 +25,9 @@ public struct StatusPopoverActions {
         setMethod: @escaping (Int) -> Void,
         installUpdate: @escaping () -> Void,
         openSettings: @escaping () -> Void,
-        quit: @escaping () -> Void
+        quit: @escaping () -> Void,
+        suggestionCount: @escaping () -> Int = { 0 },
+        openSuggestions: @escaping () -> Void = {}
     ) {
         self.snapshot = snapshot
         self.method = method
@@ -32,6 +37,8 @@ public struct StatusPopoverActions {
         self.installUpdate = installUpdate
         self.openSettings = openSettings
         self.quit = quit
+        self.suggestionCount = suggestionCount
+        self.openSuggestions = openSuggestions
     }
 }
 
@@ -40,6 +47,7 @@ public final class StatusPopoverModel: ObservableObject {
     @Published public private(set) var snapshot: StatusSnapshot
     @Published public private(set) var method: Int
     @Published public private(set) var updateReady: Bool
+    @Published public private(set) var suggestionCount: Int
 
     private let actions: StatusPopoverActions
     /// Set by the controller so the popover closes before Settings opens.
@@ -50,13 +58,22 @@ public final class StatusPopoverModel: ObservableObject {
         self.snapshot = actions.snapshot()
         self.method = actions.method()
         self.updateReady = actions.updateReady()
+        self.suggestionCount = actions.suggestionCount()
     }
 
     public func reload() {
         snapshot = actions.snapshot()
         method = actions.method()
         updateReady = actions.updateReady()
+        suggestionCount = actions.suggestionCount()
     }
+
+    /// "Có N gợi ý gõ tắt", or nil when there are none.
+    public static func suggestionLine(count: Int) -> String? {
+        count > 0 ? "Có \(count) gợi ý gõ tắt" : nil
+    }
+
+    var suggestionLine: String? { Self.suggestionLine(count: suggestionCount) }
 
     public func choose(vietnamese: Bool) {
         if vietnamese != actions.snapshot().vietnamese {
@@ -79,6 +96,11 @@ public final class StatusPopoverModel: ObservableObject {
     func openSettings() {
         closePopover()
         actions.openSettings()
+    }
+
+    func openSuggestions() {
+        closePopover()
+        actions.openSuggestions()
     }
 
     func quit() {
@@ -135,6 +157,23 @@ public struct StatusPopoverView: View {
             if model.updateReady {
                 Button("Cài bản mới") { model.installUpdate() }
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if let suggestionLine = model.suggestionLine {
+                Button { model.openSuggestions() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "text.badge.plus")
+                            .foregroundColor(.accentColor)
+                        Text(suggestionLine)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(NSColor.secondaryLabelColor))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(suggestionLine))
             }
 
             Divider()

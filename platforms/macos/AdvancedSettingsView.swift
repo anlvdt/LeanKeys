@@ -15,6 +15,7 @@ struct AdvancedSettingsView: View {
                 performanceSection
                 compatibilitySection
                 EngineSettingsSection(onEngineChanged: { RustBridge.clearBuffer() }) // LEANKEYS-HOOK: settings-engine
+                LearnSettingsSection(model: .shared, part: .advanced) // LEANKEYS-HOOK: settings-engine
                 logSection
                 perAppSection
                 Spacer()

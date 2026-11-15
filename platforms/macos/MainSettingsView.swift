@@ -551,6 +551,17 @@ class AppState: ObservableObject {
         RustBridge.syncShortcuts(toSync.map { ($0.key, $0.value, $0.isEnabled) })
         EngineRouter.shared.setShortcuts(toSync.filter(\.isEnabled).map { ($0.key, $0.value) }) // LEANKEYS-HOOK: shortcut-store
     }
+    // LEANKEYS-HOOK-BEGIN: shortcut-store
+    /// Adds a gõ tắt the user accepted from a LeanKeys suggestion; the $shortcuts sink saves it and syncs both
+    /// engines. False when the trigger is empty or already used, whatever its case.
+    func addLearnedShortcut(trigger: String, text: String) -> Bool {
+        let key = trigger.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty, !text.isEmpty,
+              !shortcuts.contains(where: { $0.key.lowercased() == key.lowercased() }) else { return false }
+        shortcuts.append(ShortcutItem(key: key, value: text, isEnabled: true))
+        return true
+    }
+    // LEANKEYS-HOOK-END
 
     func exportShortcuts() -> String {
         var lines = [";Gõ Nhanh - Bảng gõ tắt"]
@@ -1077,6 +1088,8 @@ struct SettingsPageView: View {
             // Mở rộng
             VStack(spacing: 0) {
                 shortcutsRow
+                Divider().padding(.leading, 12) // LEANKEYS-HOOK: settings-engine
+                LearnSettingsSection(model: .shared, part: .general) // LEANKEYS-HOOK: settings-engine
                 Divider().padding(.leading, 12)
                 SettingsToggleRow("Nhớ trạng thái theo app", subtitle: "Tự bật/tắt khi chuyển ứng dụng", isOn: $appState.perAppModeEnabled)
                 Divider().padding(.leading, 12)

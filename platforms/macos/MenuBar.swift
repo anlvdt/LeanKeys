@@ -156,6 +156,12 @@ class MenuBarController: NSObject, NSWindowDelegate {
         statusItem.button?.target = self
         statusItem.button?.action = #selector(handleStatusClick(_:))
         _ = statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        // 4B: the mirror's phrases go to the learner (on its own queue); accepted suggestions go to AppState's gõ tắt.
+        ShortcutSuggestionsModel.shared.start(
+            router: .shared,
+            existingTriggers: { AppState.shared.shortcuts.map(\.key) },
+            addShortcut: { AppState.shared.addLearnedShortcut(trigger: $0, text: $1) }
+        )
         // LEANKEYS-HOOK-END
         updateMenu()
     }
@@ -430,8 +436,16 @@ class MenuBarController: NSObject, NSWindowDelegate {
             },
             installUpdate: { UpdateManager.shared.restartToUpdate() },
             openSettings: { [weak self] in self?.showSettings() },
-            quit: { NSApp.terminate(nil) }
+            quit: { NSApp.terminate(nil) },
+            suggestionCount: { ShortcutSuggestionsModel.shared.suggestionCount },
+            openSuggestions: { ShortcutSuggestionsWindow.show(.shared) }
         ))
+        // A suggestion can appear while the popover is open.
+        ShortcutSuggestionsModel.shared.$candidates
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak model] _ in model?.reload() }
+            .store(in: &cancellables)
         let controller = StatusPopoverController(model: model)
         popoverModel = model
         statusPopover = controller
