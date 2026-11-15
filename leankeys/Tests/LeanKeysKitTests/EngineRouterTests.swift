@@ -60,8 +60,10 @@ final class EngineRouterTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeRouter(failingVikey: Bool = false) -> EngineRouter {
-        EngineRouter(defaults: defaults, makeVikey: { [unowned self] in
+    /// `stored` writes "LeanKeys.engine" first, as if the user had picked that engine earlier.
+    private func makeRouter(failingVikey: Bool = false, stored: EngineKind? = nil) -> EngineRouter {
+        if let stored { defaults.set(stored.rawValue, forKey: "LeanKeys.engine") }
+        return EngineRouter(defaults: defaults, makeVikey: { [unowned self] in
             self.factoryCalls += 1
             return failingVikey ? nil : self.fake
         })
@@ -71,8 +73,22 @@ final class EngineRouterTests: XCTestCase {
         router.intercept(keyCode: 0, caps: false, ctrl: ctrl, shift: false)
     }
 
-    func testDefaultIsGoNhanh() {
+    func testDefaultIsVikey() {
         let router = makeRouter()
+        XCTAssertEqual(router.selected, .vikey)
+        XCTAssertEqual(router.active, .vikey)
+        XCTAssertNil(router.fallbackReason)
+        XCTAssertEqual(factoryCalls, 1, "the default engine is built at start")
+        XCTAssertNil(defaults.string(forKey: "LeanKeys.engine"), "the default is not written back")
+
+        router.setMethod(1)
+        XCTAssertEqual(router.active, .gonhanh, "VNI still falls back to Gõ Nhanh")
+        XCTAssertEqual(router.fallbackReason, "vni")
+        XCTAssertTrue(isPass(press(router)))
+    }
+
+    func testStoredGoNhanhIsKept() {
+        let router = makeRouter(stored: .gonhanh)
         XCTAssertEqual(router.selected, .gonhanh)
         XCTAssertEqual(router.active, .gonhanh)
         XCTAssertNil(router.fallbackReason)
@@ -81,8 +97,17 @@ final class EngineRouterTests: XCTestCase {
         XCTAssertEqual(factoryCalls, 0, "Vikey is built only when first needed")
     }
 
+    func testUnknownStoredValueReadsAsVikey() {
+        XCTAssertEqual(makeRouter(stored: nil).selected, .vikey)
+        defaults.set("bogus", forKey: "LeanKeys.engine")
+        XCTAssertEqual(makeRouter().selected, .vikey)
+    }
+
     func testSelectedPersistsUnderLeanKeysEngineKey() {
         let router = makeRouter()
+        router.selected = .gonhanh
+        XCTAssertEqual(defaults.string(forKey: "LeanKeys.engine"), "gonhanh")
+        XCTAssertEqual(makeRouter().selected, .gonhanh)
         router.selected = .vikey
         XCTAssertEqual(defaults.string(forKey: "LeanKeys.engine"), "vikey")
         XCTAssertEqual(makeRouter().selected, .vikey)
@@ -118,7 +143,7 @@ final class EngineRouterTests: XCTestCase {
     }
 
     func testVNIBeforeSelectingVikeyNeverBuildsIt() {
-        let router = makeRouter()
+        let router = makeRouter(stored: .gonhanh)
         router.setMethod(1)
         router.selected = .vikey
         XCTAssertEqual(router.fallbackReason, "vni")
@@ -141,7 +166,7 @@ final class EngineRouterTests: XCTestCase {
     }
 
     func testVikeyBuiltOnceAcrossSwitches() {
-        let router = makeRouter()
+        let router = makeRouter(stored: .gonhanh)
         for _ in 0..<3 {
             router.selected = .vikey
             _ = press(router)
@@ -211,7 +236,7 @@ final class EngineRouterTests: XCTestCase {
     }
 
     func testSetEnabledBeforeVikeyExistsAppliesOnCreation() {
-        let router = makeRouter()
+        let router = makeRouter(stored: .gonhanh)
         router.setEnabled(false)
         XCTAssertEqual(factoryCalls, 0)
         router.selected = .vikey

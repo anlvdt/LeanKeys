@@ -15,9 +15,9 @@ public struct LeanSettings {
         self.defaults = defaults
     }
 
-    /// Gõ Nhanh unless Vikey was picked; an unknown stored value reads as Gõ Nhanh.
+    /// Vikey unless Gõ Nhanh was picked; nothing stored, or an unknown stored value, reads as Vikey (spec §13).
     public var engine: EngineKind {
-        get { defaults.string(forKey: Self.engineKey).flatMap(EngineKind.init(rawValue:)) ?? .gonhanh }
+        get { defaults.string(forKey: Self.engineKey).flatMap(EngineKind.init(rawValue:)) ?? .vikey }
         nonmutating set { defaults.set(newValue.rawValue, forKey: Self.engineKey) }
     }
 }

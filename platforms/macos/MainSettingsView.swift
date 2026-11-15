@@ -83,7 +83,7 @@ class AppState: ObservableObject {
 
     var shouldShowSecureInputWarning: Bool {
         SecureInputPresentation.shouldShow(
-            engineEnabled: isEnabled,
+            engineEnabled: isEnabled || EngineRouter.shared.active == .vikey, // LEANKEYS-HOOK: language-sync
             inputSourceAllowed: InputSourceObserver.shared.isAllowedInputSource,
             secureInputBlocked: isSecureInputBlocked
         )

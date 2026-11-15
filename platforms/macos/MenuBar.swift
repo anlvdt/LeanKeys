@@ -31,6 +31,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
         setupMenu()
         setupNotifications()
         updateStatusButton()
+        FirstRun.performIfNeeded(enableLaunchAtLogin: { try LaunchAtLoginManager.shared.enable() }) // LEANKEYS-HOOK: onboarding
 
         if UserDefaults.standard.bool(forKey: SettingsKey.hasCompletedOnboarding), AXIsProcessTrusted() {
             startEngine()
@@ -423,7 +424,26 @@ class MenuBarController: NSObject, NSWindowDelegate {
 
     private func showOnboarding() {
         if onboardingWindow == nil {
-            let view = OnboardingView()
+            // LEANKEYS-HOOK-BEGIN: onboarding
+            // One screen (spec §13.3). Once Accessibility is granted, relaunch like Gõ Nhanh's onboarding does:
+            // an event tap made in this process could still fail and raise a modal alert; the new process starts
+            // the engine through the hasCompletedOnboarding branch above.
+            let view = LeanOnboardingView(
+                isTrusted: { AXIsProcessTrusted() },
+                openSettings: {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                },
+                onDone: {
+                    UserDefaults.standard.set(true, forKey: SettingsKey.permissionGranted)
+                    UserDefaults.standard.set(true, forKey: SettingsKey.hasCompletedOnboarding)
+                    let task = Process()
+                    task.launchPath = "/bin/sh"
+                    task.arguments = ["-c", "sleep 0.5 && open \"\(Bundle.main.bundlePath)\""]
+                    try? task.run()
+                    NSApp.terminate(nil)
+                }
+            )
+            // LEANKEYS-HOOK-END
             let controller = NSHostingController(rootView: view)
             onboardingWindow = NSWindow(contentViewController: controller)
             onboardingWindow?.title = AppMetadata.name

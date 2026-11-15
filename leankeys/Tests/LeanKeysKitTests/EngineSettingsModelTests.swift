@@ -24,27 +24,28 @@ final class EngineSettingsModelTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeRouter(failingVikey: Bool = false) -> EngineRouter {
-        EngineRouter(defaults: defaults, makeVikey: { failingVikey ? nil : StubEngine() })
+    /// `stored` writes "LeanKeys.engine" first, as if the user had picked that engine earlier.
+    private func makeRouter(failingVikey: Bool = false, stored: EngineKind? = nil) -> EngineRouter {
+        if let stored { defaults.set(stored.rawValue, forKey: "LeanKeys.engine") }
+        return EngineRouter(defaults: defaults, makeVikey: { failingVikey ? nil : StubEngine() })
     }
 
     func testModelReflectsRouter() {
         let router = makeRouter()
         let model = EngineSettingsModel(router: router)
-        XCTAssertEqual(model.selected, .gonhanh)
+        XCTAssertEqual(model.selected, .vikey, "Vikey is the default")
+
+        model.selected = .gonhanh
+        XCTAssertEqual(router.selected, .gonhanh)
+        XCTAssertEqual(router.active, .gonhanh)
 
         model.selected = .vikey
         XCTAssertEqual(router.selected, .vikey)
         XCTAssertEqual(router.active, .vikey)
-
-        model.selected = .gonhanh
-        XCTAssertEqual(router.selected, .gonhanh)
     }
 
     func testModelStartsFromStoredEngine() {
-        let router = makeRouter()
-        router.selected = .vikey
-        XCTAssertEqual(EngineSettingsModel(router: router).selected, .vikey)
+        XCTAssertEqual(EngineSettingsModel(router: makeRouter(stored: .gonhanh)).selected, .gonhanh)
     }
 
     func testVNIReasonShown() {
@@ -61,7 +62,7 @@ final class EngineSettingsModelTests: XCTestCase {
     }
 
     func testVNIReasonHiddenWhileGoNhanhSelected() {
-        let router = makeRouter()
+        let router = makeRouter(stored: .gonhanh)
         router.setMethod(1)
         let model = EngineSettingsModel(router: router)
         XCTAssertNil(model.vikeyDisabledReason)
@@ -89,7 +90,7 @@ final class EngineSettingsModelTests: XCTestCase {
     }
 
     func testEngineChangedFiresOncePerChange() {
-        let router = makeRouter()
+        let router = makeRouter(stored: .gonhanh)
         var calls = 0
         let model = EngineSettingsModel(router: router, onEngineChanged: { calls += 1 })
         XCTAssertEqual(calls, 0, "building the model is not a change")

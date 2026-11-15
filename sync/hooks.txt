@@ -7,6 +7,8 @@ engine-method	platforms/macos/RustBridge.swift
 engine-enabled	platforms/macos/RustBridge.swift
 engine-reset	platforms/macos/RustBridge.swift
 language-sync	platforms/macos/MenuBar.swift
+language-sync	platforms/macos/MainSettingsView.swift
+onboarding	platforms/macos/MenuBar.swift
 settings-engine	platforms/macos/MainSettingsView.swift
 branding	platforms/macos/AppMetadata.swift
 branding	platforms/macos/UpdateChecker.swift

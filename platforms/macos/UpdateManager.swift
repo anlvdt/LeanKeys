@@ -31,6 +31,7 @@ class UpdateManager: NSObject, ObservableObject {
     private var downloadTask: URLSessionDownloadTask?
     private var updateWindow: NSWindow?
     private var backgroundTimer: Timer?
+    private var idleInstallTimer: Timer? // LEANKEYS-HOOK: branding
 
     private let checkInterval: TimeInterval = 60 * 60 // 1 hour
     private let dmgKey = "gonhanh.update.dmgPath"
@@ -87,6 +88,7 @@ class UpdateManager: NSObject, ObservableObject {
         backgroundTimer = Timer.scheduledTimer(withTimeInterval: checkInterval, repeats: true) { [weak self] _ in
             self?.checkAndDownloadSilently()
         }
+        installWhenIdle() // LEANKEYS-HOOK: branding
     }
 
     /// User manually checks (only shows window if update available)
@@ -251,6 +253,7 @@ class UpdateManager: NSObject, ObservableObject {
         UserDefaults.standard.set(destinationURL.path, forKey: dmgKey)
         UserDefaults.standard.set(pendingVersion, forKey: versionKey)
         state = .readyToInstall(dmgPath: destinationURL)
+        installWhenIdle() // LEANKEYS-HOOK: branding
     }
 }
 
@@ -611,3 +614,42 @@ struct VisualEffectBlur: NSViewRepresentable {
         nsView.blendingMode = blendingMode
     }
 }
+// LEANKEYS-HOOK-BEGIN: branding
+
+extension UpdateManager {
+    /// LeanKeys installs a downloaded update by itself (spec §13.2), with no dialog: only once no key has been
+    /// pressed for 30 s (IdleGate), so never mid-typing; otherwise it looks again every 60 s. A pending update
+    /// restored at launch goes the same way. The install itself is Gõ Nhanh's restartToUpdate (replace + relaunch).
+    private func installWhenIdle() {
+        guard isReadyToInstall else { return }
+        if tryInstallIfIdle() { return }
+        guard idleInstallTimer == nil else { return }
+        idleInstallTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] timer in
+            guard let self else { return timer.invalidate() }
+            guard isReadyToInstall else {
+                timer.invalidate()
+                idleInstallTimer = nil
+                return
+            }
+            if tryInstallIfIdle() {
+                timer.invalidate()
+                idleInstallTimer = nil
+            }
+        }
+    }
+
+    /// Installs now if the update file is still there and the user is idle. A missing file drops the pending state.
+    private func tryInstallIfIdle() -> Bool {
+        guard case let .readyToInstall(dmgPath) = state else { return false }
+        guard FileManager.default.fileExists(atPath: dmgPath.path) else {
+            UserDefaults.standard.removeObject(forKey: dmgKey)
+            UserDefaults.standard.removeObject(forKey: versionKey)
+            state = .idle
+            return false
+        }
+        guard IdleGate().isIdle else { return false }
+        restartToUpdate()
+        return true
+    }
+}
+// LEANKEYS-HOOK-END

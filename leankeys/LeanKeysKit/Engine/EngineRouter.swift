@@ -15,8 +15,8 @@ public extension Notification.Name {
     static let leanKeysLanguageChanged = Notification.Name("LeanKeys.languageChanged")
 }
 
-/// Picks the engine for each key. Gõ Nhanh is the default; Vikey when selected, except under VNI (Vikey here
-/// is Telex only) or when Vikey fails to start, where Gõ Nhanh takes over.
+/// Picks the engine for each key. Vikey is the default (see `LeanSettings.engine`), except under VNI (Vikey here
+/// is Telex only) or when Vikey fails to start, where Gõ Nhanh takes over; Gõ Nhanh when the user picks it.
 /// Driven from the event-tap thread only: no locking.
 public final class EngineRouter {
     public static let shared = EngineRouter()

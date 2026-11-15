@@ -64,8 +64,8 @@ public struct EngineSettingsSection: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Engine gõ").font(.system(size: 13))
             Picker("", selection: $model.selected) {
-                Text("Gõ Nhanh (mặc định)").font(.system(size: 13)).tag(EngineKind.gonhanh)
-                Text("Vikey — tự chuyển Việt/Anh theo ngữ cảnh").font(.system(size: 13)).tag(EngineKind.vikey)
+                Text("Vikey — tự chuyển Việt/Anh theo ngữ cảnh (mặc định)").font(.system(size: 13)).tag(EngineKind.vikey)
+                Text("Gõ Nhanh").font(.system(size: 13)).tag(EngineKind.gonhanh)
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
