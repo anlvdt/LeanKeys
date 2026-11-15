@@ -53,14 +53,47 @@ public struct StatusCard: View {
             if let autoSwitchLine = snapshot.autoSwitchLine {
                 Text(autoSwitchLine)
                     .font(.system(size: 11))
-                    .foregroundColor(Color(NSColor.secondaryLabelColor))
+                    .foregroundStyle(Color(NSColor.secondaryLabelColor))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(autoSwitchLine)
             }
             if let warningLine = snapshot.warningLine {
-                Text(warningLine)
-                    .font(.system(size: 11))
-                    .foregroundColor(.orange)
+                WarningLine(warningLine)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// One-line warning: an orange triangle, then the text in label color (contrast 4.5:1 or better on window backgrounds).
+/// The `⚠︎ ` glyph in the string is dropped at render time, because the symbol replaces it; the copy itself is unchanged.
+struct WarningLine: View {
+    static let glyphPrefix = "⚠︎ "
+
+    private let line: String
+
+    init(_ line: String) {
+        self.line = line
+    }
+
+    /// The text drawn next to the triangle symbol.
+    static func displayText(for line: String) -> String {
+        line.hasPrefix(glyphPrefix) ? String(line.dropFirst(glyphPrefix.count)) : line
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            Text(Self.displayText(for: line))
+                .font(.system(size: 11))
+                .foregroundStyle(Color(NSColor.labelColor))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .help(line)
     }
 }

@@ -114,12 +114,7 @@ public struct StatusPopoverView: View {
                     .help(autoSwitchLine)
             }
             if let warningLine = model.snapshot.warningLine {
-                Text(warningLine)
-                    .font(.system(size: 11))
-                    .foregroundColor(.orange)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .help(warningLine)
+                WarningLine(warningLine)
             }
 
             HStack {

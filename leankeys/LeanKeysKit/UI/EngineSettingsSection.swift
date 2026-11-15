@@ -93,14 +93,13 @@ public struct EngineSettingsSection: View {
                             .font(.system(size: 11))
                             .foregroundColor(Color(NSColor.secondaryLabelColor))
                             .help(Self.vikeyNoteDetail)
+                            .accessibilityElement()
+                            .accessibilityLabel(Text(Self.vikeyNoteDetail))
                     }
                     .padding(.leading, 20)
                 }
                 if let reason = model.vikeyDisabledReason {
-                    Text(reason)
-                        .font(.system(size: 11))
-                        .foregroundColor(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
+                    WarningLine(reason)
                         .padding(.leading, 20)
                 }
             }
