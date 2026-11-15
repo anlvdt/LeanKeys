@@ -11,12 +11,15 @@ public struct LeanOnboardingView: View {
         static let message = "Chỉ cần cấp quyền Trợ năng một lần, sau đó cứ thế gõ — LeanKeys tự chuyển Việt/Anh cho bạn."
         static let returningTitle = "LeanKeys vừa được cập nhật"
         static let returningMessage = "macOS cần bạn cấp lại quyền Trợ năng: mở Cài đặt Trợ năng, chọn LeanKeys, bấm nút \u{2212} để xoá, rồi bấm + và thêm lại LeanKeys."
+        static let returningResetMessage = "Bấm nút bên dưới rồi bật lại LeanKeys trong danh sách Trợ năng."
         static let openSettings = "Cấp quyền Trợ năng"
         static let done = "Xong! Bạn có thể bắt đầu gõ."
 
-        /// Title and body: the re-grant steps once Accessibility had been granted before, else the welcome.
-        static func copy(wasTrusted: Bool) -> (title: String, message: String) {
-            wasTrusted ? (returningTitle, returningMessage) : (title, message)
+        /// Title and body. A returning user gets the reset steps when `resetDone` (the stale entry was reset with
+        /// tccutil), else the −/+ steps; a first run gets the welcome.
+        static func copy(wasTrusted: Bool, resetDone: Bool = false) -> (title: String, message: String) {
+            if wasTrusted && resetDone { return (returningTitle, returningResetMessage) }
+            return wasTrusted ? (returningTitle, returningMessage) : (title, message)
         }
     }
 
@@ -24,20 +27,23 @@ public struct LeanOnboardingView: View {
     private let openSettings: () -> Void
     private let onDone: () -> Void
     private let wasTrusted: Bool
+    private let resetDone: Bool
 
     @State private var trusted = false
     @State private var finished = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
-    /// `wasTrusted`: `ReturningUser.wasTrusted()`, read once when the window opens.
+    /// `wasTrusted`: `ReturningUser.wasTrusted()`, read once when the window opens. `resetDone`: the stale
+    /// Accessibility entry was reset with tccutil, so the copy asks the user only to switch LeanKeys back on.
     public init(isTrusted: @escaping () -> Bool, openSettings: @escaping () -> Void, onDone: @escaping () -> Void,
-                wasTrusted: Bool = false)
+                wasTrusted: Bool = false, resetDone: Bool = false)
     {
         self.isTrusted = isTrusted
         self.openSettings = openSettings
         self.onDone = onDone
         self.wasTrusted = wasTrusted
+        self.resetDone = resetDone
     }
 
     public var body: some View {
@@ -45,9 +51,9 @@ public struct LeanOnboardingView: View {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .frame(width: 72, height: 72)
-            Text(Strings.copy(wasTrusted: wasTrusted).title)
+            Text(Strings.copy(wasTrusted: wasTrusted, resetDone: resetDone).title)
                 .font(.system(size: 18, weight: .semibold))
-            Text(Strings.copy(wasTrusted: wasTrusted).message)
+            Text(Strings.copy(wasTrusted: wasTrusted, resetDone: resetDone).message)
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

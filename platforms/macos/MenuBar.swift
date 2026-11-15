@@ -511,6 +511,12 @@ class MenuBarController: NSObject, NSWindowDelegate {
                 grantWatcher = GrantWatcher(isGranted: isGranted, onGranted: relaunch)
                 grantWatcher?.start()
             }
+            // A returning user whose grant was lost: reset LeanKeys' own stale entry once per launch (this block
+            // runs once per window). tccutil returns fast, so the synchronous wait here is acceptable.
+            var resetDone = false
+            if ReturningUser.wasTrusted(), !isGranted() {
+                resetDone = TCCReset.run(bundleID: Bundle.main.bundleIdentifier ?? "io.github.anlvdt.leankeys")
+            }
             let view = LeanOnboardingView(
                 isTrusted: isGranted,
                 openSettings: {
@@ -518,7 +524,8 @@ class MenuBarController: NSObject, NSWindowDelegate {
                     NSWorkspace.shared.open(AccessibilityGrant.settingsURL)
                 },
                 onDone: { [weak self] in self?.grantWatcher?.fireIfGranted() },
-                wasTrusted: ReturningUser.wasTrusted()
+                wasTrusted: ReturningUser.wasTrusted(),
+                resetDone: resetDone
             )
             // LEANKEYS-HOOK-END
             let controller = NSHostingController(rootView: view)
