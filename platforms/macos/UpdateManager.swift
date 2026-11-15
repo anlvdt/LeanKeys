@@ -133,47 +133,16 @@ class UpdateManager: NSObject, ObservableObject {
     /// Mount DMG, copy .app to /Applications, relaunch
     func restartToUpdate() {
         guard case let .readyToInstall(dmgPath) = state else { return }
-
-        let appName = LeanBranding.name // LEANKEYS-HOOK: branding
-        let appBundlePath = Bundle.main.bundlePath
-        let pid = ProcessInfo.processInfo.processIdentifier
-
-        // Shell script: mount DMG silently → copy app → unmount → relaunch
-        let script = """
-        #!/bin/bash
-        DMG="\(dmgPath.path)"
-        MOUNT=$(hdiutil attach "$DMG" -nobrowse -noverify -noautoopen 2>/dev/null | grep '/Volumes/' | awk -F'\t' '{print $NF}')
-        if [ -z "$MOUNT" ]; then exit 1; fi
-        APP="$MOUNT/\(appName).app"
-        if [ ! -d "$APP" ]; then hdiutil detach "$MOUNT" -quiet; exit 1; fi
-        # Wait for app to quit
-        while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done
-        # Copy new app
-        DEST="\(appBundlePath)"
-        rm -rf "$DEST"
-        cp -R "$APP" "$DEST"
-        # Unmount & cleanup
-        hdiutil detach "$MOUNT" -quiet
-        rm -f "$DMG"
-        # Relaunch
-        open "$DEST"
-        """
-
-        let tmpScript = FileManager.default.temporaryDirectory.appendingPathComponent("gonhanh-update.sh")
-        try? script.write(to: tmpScript, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tmpScript.path)
-
-        // Clear pending update state
-        UserDefaults.standard.removeObject(forKey: dmgKey)
-        UserDefaults.standard.removeObject(forKey: versionKey)
-
-        // Launch script in background and quit
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [tmpScript.path]
-        try? process.run()
-
-        NSApp.terminate(nil)
+        // LEANKEYS-HOOK-BEGIN: branding
+        // Gõ Nhanh's script here mounted with -noverify, checked nothing and deleted the app before copying.
+        // The click goes through the same verified install as the unattended one (installSafely, below).
+        #if DEBUG
+            _ = dmgPath
+            return // Ruling R23: a Debug build never updates itself.
+        #else
+            installSafely(dmgPath)
+        #endif
+        // LEANKEYS-HOOK-END
     }
 
     func dismiss() {
@@ -628,12 +597,15 @@ struct VisualEffectBlur: NSViewRepresentable {
 extension UpdateManager {
     /// LeanKeys installs a downloaded update by itself (spec §13.2), with no dialog: only once no key has been
     /// pressed for 30 s (IdleGate), so never mid-typing; otherwise it looks again every 60 s. A pending update
-    /// restored at launch goes the same way. The install is installSafely below, not restartToUpdate.
+    /// restored at launch goes the same way. The install is installSafely below.
+    /// Ruling R24: only a build signed with a team (Developer ID) does this. An ad-hoc build would lose its
+    /// Accessibility grant on every update, so it stops at "ready": Gõ Nhanh's "⟳ Khởi động lại để cập nhật" menu
+    /// item, whose click (restartToUpdate) runs the same installSafely.
     private func installWhenIdle() {
         #if DEBUG
             return // Ruling R23: a Debug build never updates itself.
         #else
-        guard isReadyToInstall else { return }
+        guard isReadyToInstall, UpdateInstallPolicy.installsSilently() else { return }
         if tryInstallIfIdle() { return }
         guard idleInstallTimer == nil else { return }
         idleInstallTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] timer in
