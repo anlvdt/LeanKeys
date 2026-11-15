@@ -55,6 +55,24 @@ public final class VikeyEngine: TypingEngine {
 
     public var isVietnamese: Bool { lk_vikey_language() == 1 }
 
+    public func setAutoSwitch(_ on: Bool) {
+        Self.options.autoSwitch = on
+        Self.applyOptions()
+    }
+
+    public func setModernTone(_ on: Bool) {
+        Self.options.modernTone = on
+        Self.applyOptions()
+    }
+
+    /// lk_vikey_set_options sets all three at once, so the current values live here (process-wide, like the
+    /// engine). Defaults match the shim's: modern orthography, auto switch on, plain Telex.
+    private static var options = (modernTone: true, autoSwitch: true, telexStyle: Int32(0))
+
+    private static func applyOptions() {
+        lk_vikey_set_options(options.modernTone ? 1 : 0, options.autoSwitch ? 1 : 0, options.telexStyle)
+    }
+
     // MARK: - Mac virtual key codes (vendor/vikey/Engine/platforms/mac.h)
 
     private static let returnKeys: Set<UInt16> = [36, 76]

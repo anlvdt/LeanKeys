@@ -21,4 +21,8 @@ public protocol TypingEngine: AnyObject {
     func resetContext()
     func setVietnamese(_ on: Bool)
     var isVietnamese: Bool { get }
+    /// Switching between Vietnamese and English by itself while typing (on by default).
+    func setAutoSwitch(_ on: Bool)
+    /// Modern tone placement ("hoà") rather than classic ("hòa"); on by default.
+    func setModernTone(_ on: Bool)
 }

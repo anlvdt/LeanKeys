@@ -7,6 +7,8 @@ private final class StubEngine: TypingEngine {
     func process(keyCode: UInt16, caps: Bool, shift: Bool) -> EngineEdit? { nil }
     func resetContext() {}
     func setVietnamese(_ on: Bool) { isVietnamese = on }
+    func setAutoSwitch(_ on: Bool) {}
+    func setModernTone(_ on: Bool) {}
 }
 
 final class EngineSettingsModelTests: XCTestCase {

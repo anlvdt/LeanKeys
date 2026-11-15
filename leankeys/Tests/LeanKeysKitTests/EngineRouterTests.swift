@@ -7,6 +7,8 @@ private final class FakeEngine: TypingEngine {
     var processCalls = 0
     var resetCalls = 0
     var setVietnameseCalls: [Bool] = []
+    var setAutoSwitchCalls: [Bool] = []
+    var setModernToneCalls: [Bool] = []
     var isVietnamese = true
     var buffered = 0
     /// When set, returned as is instead of the buffer model.
@@ -28,6 +30,14 @@ private final class FakeEngine: TypingEngine {
     func setVietnamese(_ on: Bool) {
         setVietnameseCalls.append(on)
         isVietnamese = on
+    }
+
+    func setAutoSwitch(_ on: Bool) {
+        setAutoSwitchCalls.append(on)
+    }
+
+    func setModernTone(_ on: Bool) {
+        setModernToneCalls.append(on)
     }
 }
 
@@ -265,5 +275,67 @@ final class EngineRouterTests: XCTestCase {
 
         fake.scripted = .some(EngineEdit(deleteCount: 1, text: ["x"], languageChanged: false))
         XCTAssertEqual(handled(press(router))??.2, true, "an ordinary edit stays consumed")
+    }
+
+    // MARK: - Ruling R25: an explicit off stays off; the echo of Vikey's own switch does not
+
+    /// Vikey switches to English by itself; the router announces it.
+    private func selfSwitchToEnglish(_ router: EngineRouter) {
+        fake.isVietnamese = false
+        fake.scripted = .some(EngineEdit(deleteCount: 0, text: [], languageChanged: true))
+        _ = press(router)
+        fake.scripted = nil
+    }
+
+    func testExplicitOffDisablesAutoSwitch() {
+        let router = makeRouter()
+        router.setEnabled(false)
+        XCTAssertEqual(fake.setAutoSwitchCalls.last, false)
+        XCTAssertEqual(fake.setVietnameseCalls.last, false)
+    }
+
+    func testEchoOfVikeysOwnSwitchKeepsAutoSwitch() {
+        let router = makeRouter()
+        router.setEnabled(true)
+        selfSwitchToEnglish(router)
+        let calls = fake.setAutoSwitchCalls
+        router.setEnabled(false) // the app mirroring the announcement
+        XCTAssertEqual(fake.setAutoSwitchCalls, calls, "an echo must not touch auto switch")
+        XCTAssertEqual(fake.setAutoSwitchCalls.last, true)
+    }
+
+    func testOnlyTheFirstMatchingCallIsAnEcho() {
+        let router = makeRouter()
+        selfSwitchToEnglish(router)
+        router.setEnabled(false) // echo
+        router.setEnabled(true) // the user
+        router.setEnabled(false) // the user again: explicit, not a stale echo
+        XCTAssertEqual(fake.setAutoSwitchCalls.suffix(2), [true, false])
+    }
+
+    func testExplicitOnRestoresAutoSwitch() {
+        let router = makeRouter()
+        router.setEnabled(false)
+        router.setEnabled(true)
+        XCTAssertEqual(fake.setAutoSwitchCalls.last, true)
+        XCTAssertEqual(fake.setVietnameseCalls.last, true)
+    }
+
+    func testOffAndModernToneApplyWhenVikeyIsBuiltLater() {
+        let router = makeRouter(stored: .gonhanh)
+        router.setEnabled(false)
+        router.setModernTone(false)
+        XCTAssertEqual(factoryCalls, 0)
+        router.selected = .vikey
+        XCTAssertEqual(fake.setAutoSwitchCalls.last, false)
+        XCTAssertEqual(fake.setModernToneCalls.last, false)
+    }
+
+    func testModernToneForwardsToVikey() {
+        let router = makeRouter()
+        router.setModernTone(false)
+        XCTAssertEqual(fake.setModernToneCalls.last, false)
+        router.setModernTone(true)
+        XCTAssertEqual(fake.setModernToneCalls.last, true)
     }
 }

@@ -68,6 +68,36 @@ final class VikeyEngineTests: XCTestCase {
         engine.resetContext()
     }
 
+    override func tearDown() {
+        // Options are process-wide: put back the defaults for the next test.
+        engine?.setAutoSwitch(true)
+        engine?.setModernTone(true)
+        engine?.setVietnamese(true)
+        engine?.resetContext()
+        super.tearDown()
+    }
+
+    /// Control for the test below: English with auto switch on turns a Vietnamese word back on.
+    func testEnglishWithAutoSwitchFlipsBackOnAVietnameseWord() {
+        engine.setVietnamese(false)
+        engine.resetContext()
+        XCTAssertEqual(Field(engine).type("vieejt "), "việt ")
+        XCTAssertTrue(engine.isVietnamese)
+    }
+
+    /// Ruling R25: the user's explicit off (through the router) stays off.
+    func testExplicitOffThroughRouterStaysEnglish() {
+        let suite = "VikeyEngineTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let engine = self.engine!
+        let router = EngineRouter(defaults: defaults, makeVikey: { engine })
+        router.setEnabled(false)
+        engine.resetContext()
+        XCTAssertEqual(Field(engine).type("vieejt "), "vieejt ")
+        XCTAssertFalse(engine.isVietnamese)
+    }
+
     func testTelexBasic() {
         XCTAssertEqual(Field(engine).type("vieejt "), "việt ")
         engine.resetContext()

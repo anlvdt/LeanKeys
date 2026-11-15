@@ -29,6 +29,12 @@ public final class EngineRouter {
     private var vikeyAttempted = false
     private var method = 0
     private var vietnamese = true
+    private var autoSwitch = true
+    private var modernTone = true
+    /// The language this router last announced (`leanKeysLanguageChanged`), until the next `setEnabled`. The
+    /// app mirrors that announcement into its on/off state, which comes back here as `setEnabled`: an echo, not
+    /// the user's choice (ruling R25).
+    private var announcedLanguage: Bool?
 
     public private(set) var fallbackReason: String?
 
@@ -66,6 +72,8 @@ public final class EngineRouter {
         guard let edit = vikey.process(keyCode: keyCode, caps: caps, shift: shift) else { return .handled(nil) }
         if edit.languageChanged {
             let on = vikey.isVietnamese
+            vietnamese = on
+            announcedLanguage = on
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .leanKeysLanguageChanged, object: nil, userInfo: ["vietnamese": on])
             }
@@ -81,9 +89,22 @@ public final class EngineRouter {
         refresh()
     }
 
+    /// The app's on/off state. An explicit change (not the echo of the router's own announcement) also sets
+    /// Vikey's auto switch: off means English stays English until the user turns it on again (ruling R25).
     public func setEnabled(_ vietnamese: Bool) {
+        let echo = announcedLanguage == vietnamese
+        announcedLanguage = nil
         self.vietnamese = vietnamese
         vikey?.setVietnamese(vietnamese)
+        guard !echo else { return }
+        autoSwitch = vietnamese
+        vikey?.setAutoSwitch(vietnamese)
+    }
+
+    /// Gõ Nhanh's modern-tone setting, forwarded to Vikey (spec §3.5).
+    public func setModernTone(_ modern: Bool) {
+        modernTone = modern
+        vikey?.setModernTone(modern)
     }
 
     public func clear() {
@@ -98,6 +119,8 @@ public final class EngineRouter {
             vikeyAttempted = true
             vikey = makeVikey()
             vikey?.setVietnamese(vietnamese)
+            vikey?.setAutoSwitch(autoSwitch)
+            vikey?.setModernTone(modernTone)
         }
         fallbackReason = vikey == nil ? "vikey-init-failed" : nil
     }
