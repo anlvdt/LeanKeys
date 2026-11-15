@@ -18,7 +18,8 @@ final class BrandingTests: XCTestCase {
         XCTAssertEqual(loaded.leankeys, file["leankeys"])
         XCTAssertEqual(loaded.gonhanh, file["gonhanh"])
         XCTAssertEqual(loaded.vikey, file["vikey"])
-        XCTAssertEqual(loaded.leankeys, "1.0")
+        // Releases are X.Y (sync/release.sh refuses anything else); the number itself changes every release.
+        XCTAssertNotNil(loaded.leankeys.range(of: #"^[0-9]+\.[0-9]+$"#, options: .regularExpression))
     }
 
     /// The About screen's engine versions must name the upstream tags the fork is built from.
