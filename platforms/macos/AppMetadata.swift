@@ -1,19 +1,20 @@
 import AppKit
 import Foundation
+import LeanKeysKit // LEANKEYS-HOOK: branding
 
 // MARK: - App Metadata (Centralized)
 
 // All project metadata in one place for consistency
 
 enum AppMetadata {
-    static let name = "Gõ Nhanh"
+    static let name = LeanBranding.name // LEANKEYS-HOOK: branding
 
     /// App Logo - dùng chung cho mọi nơi
     static var logo: NSImage {
-        NSImage(named: "AppLogo") ?? NSApp.applicationIconImage ?? NSImage()
+        NSApp.applicationIconImage ?? NSImage() // LEANKEYS-HOOK: branding
     }
 
-    static let displayName = "Gõ Nhanh"
+    static let displayName = LeanBranding.name // LEANKEYS-HOOK: branding
     static let tagline = "Bộ gõ tiếng Việt hiệu suất cao"
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     static let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
@@ -23,9 +24,9 @@ enum AppMetadata {
     static let authorEmail = "nhatkha1407@gmail.com"
 
     // Links
-    static let website = "https://gonhanh.org"
-    static let repository = "https://github.com/khaphanspace/gonhanh.org"
-    static let issuesURL = "https://github.com/khaphanspace/gonhanh.org/issues"
+    static let website = LeanBranding.repository // LEANKEYS-HOOK: branding
+    static let repository = LeanBranding.repository // LEANKEYS-HOOK: branding
+    static let issuesURL = LeanBranding.issuesURL // LEANKEYS-HOOK: branding
     static let sponsorURL = "https://github.com/sponsors/khaphanspace"
     static let authorLinkedin = "https://www.linkedin.com/in/khaphanspace"
     static let voteURL = "https://unikorn.vn/p/gonhanh?ref=gonhanh"

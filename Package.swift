@@ -31,7 +31,8 @@ let package = Package(
         .target(
             name: "LeanKeysKit",
             dependencies: ["VikeyShim"],
-            path: "leankeys/LeanKeysKit"
+            path: "leankeys/LeanKeysKit",
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "LeanKeysKitTests",

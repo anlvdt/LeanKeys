@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import LeanKeysKit // LEANKEYS-HOOK: branding
 import SwiftUI
 
 extension Notification.Name {
@@ -131,7 +132,7 @@ class UpdateManager: NSObject, ObservableObject {
     func restartToUpdate() {
         guard case let .readyToInstall(dmgPath) = state else { return }
 
-        let appName = "GoNhanh"
+        let appName = LeanBranding.name // LEANKEYS-HOOK: branding
         let appBundlePath = Bundle.main.bundlePath
         let pid = ProcessInfo.processInfo.processIdentifier
 

@@ -1381,6 +1381,7 @@ struct AboutPageView: View {
                 PlatformBadge(title: "Unikorn", icon: "star.fill", url: "https://unikorn.vn/p/gonhanh?ref=gonhanh")
                 PlatformBadge(title: "J2TEAM", icon: "bolt.fill", url: "https://launch.j2team.dev/products/go-nhanh?ref=gonhanh")
             }
+            AcknowledgementsSection() // LEANKEYS-HOOK: about
             Spacer()
             HStack(spacing: 4) {
                 Text("Phát triển bởi").foregroundColor(Color(NSColor.tertiaryLabelColor))

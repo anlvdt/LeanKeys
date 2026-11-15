@@ -62,4 +62,6 @@ CLAUDE.md
 refs/
 # LEANKEYS-HOOK-BEGIN: gitignore
 .build/
+/build/
+/dist/
 # LEANKEYS-HOOK-END
