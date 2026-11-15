@@ -12,7 +12,9 @@ public enum TCCReset {
     public static func run(bundleID: String,
                            runner: (URL, [String]) -> Int32 = defaultRunner) -> Bool
     {
-        runner(tccutilURL, arguments(bundleID: bundleID)) == 0
+        // An empty ID would make tccutil reset without a bundle filter: refuse, never run it.
+        guard !bundleID.isEmpty else { return false }
+        return runner(tccutilURL, arguments(bundleID: bundleID)) == 0
     }
 
     /// Runs the tool and waits for it. `tccutil` returns fast, so the wait is short and acceptable on the main

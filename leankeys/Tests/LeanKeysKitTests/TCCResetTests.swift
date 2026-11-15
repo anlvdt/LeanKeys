@@ -25,3 +25,12 @@ final class TCCResetTests: XCTestCase {
         XCTAssertFalse(failure)
     }
 }
+
+extension TCCResetTests {
+    /// I5: an empty bundle ID would reset every app's entry (`tccutil reset Accessibility` with no ID), so it is refused.
+    func testEmptyBundleIDNeverRunsTCCUtil() {
+        var calls = 0
+        XCTAssertFalse(TCCReset.run(bundleID: "") { _, _ in calls += 1; return 0 })
+        XCTAssertEqual(calls, 0)
+    }
+}

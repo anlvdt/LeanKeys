@@ -80,3 +80,22 @@ final class AccessibilityGrantTests: XCTestCase {
         XCTAssertTrue(schedule.cancelled)
     }
 }
+
+/// I1: the relaunch after a grant may happen at most once per 60 s, so a bad state cannot loop the app.
+final class GrantRelaunchGuardTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func testFirstRelaunchIsAllowed() {
+        XCTAssertTrue(GrantWatcher.shouldRelaunch(last: nil, now: now))
+    }
+
+    func testRelaunchWithinSixtySecondsIsRefused() {
+        XCTAssertFalse(GrantWatcher.shouldRelaunch(last: now.addingTimeInterval(-1), now: now))
+        XCTAssertFalse(GrantWatcher.shouldRelaunch(last: now.addingTimeInterval(-59.9), now: now))
+    }
+
+    func testRelaunchAtOrAfterSixtySecondsIsAllowed() {
+        XCTAssertTrue(GrantWatcher.shouldRelaunch(last: now.addingTimeInterval(-60), now: now))
+        XCTAssertTrue(GrantWatcher.shouldRelaunch(last: now.addingTimeInterval(-600), now: now))
+    }
+}

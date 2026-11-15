@@ -70,6 +70,16 @@ public final class GrantWatcher {
         return AnyCancellable { timer.invalidate() }
     }
 
+    /// UserDefaults key holding the Date of the last grant-triggered relaunch.
+    public static let lastRelaunchKey = "LeanKeys.lastGrantRelaunch"
+
+    /// The relaunch after a grant happens at most once per 60 s: a relaunch within 60 s of `last` is refused, so a
+    /// bad state cannot loop the app. `last` is nil when no relaunch has been recorded.
+    public static func shouldRelaunch(last: Date?, now: Date) -> Bool {
+        guard let last else { return true }
+        return now.timeIntervalSince(last) >= 60
+    }
+
     public func start() {
         guard cancellable == nil, !fired else { return }
         cancellable = schedule(interval) { [weak self] in self?.tick() }

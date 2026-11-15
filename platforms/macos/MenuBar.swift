@@ -498,6 +498,14 @@ class MenuBarController: NSObject, NSWindowDelegate {
                 AccessibilityGrant.isGranted(axTrusted: AXIsProcessTrusted, tapProbe: AccessibilityGrant.probeEventTap)
             }
             let relaunch: () -> Void = {
+                // At most one relaunch per 60 s (LeanKeys.lastGrantRelaunch): a refused relaunch only logs.
+                let now = Date()
+                let last = UserDefaults.standard.object(forKey: GrantWatcher.lastRelaunchKey) as? Date
+                guard GrantWatcher.shouldRelaunch(last: last, now: now) else {
+                    NSLog("[LeanKeys] grant relaunch skipped: the previous relaunch was under 60 s ago")
+                    return
+                }
+                UserDefaults.standard.set(now, forKey: GrantWatcher.lastRelaunchKey)
                 ReturningUser.record(isTrusted: true)
                 UserDefaults.standard.set(true, forKey: SettingsKey.permissionGranted)
                 UserDefaults.standard.set(true, forKey: SettingsKey.hasCompletedOnboarding)
