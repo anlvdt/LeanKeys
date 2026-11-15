@@ -1,4 +1,5 @@
 import AppKit
+import LeanKeysKit // LEANKEYS-HOOK: settings-engine
 import SwiftUI
 
 // MARK: - Advanced Settings View
@@ -13,6 +14,7 @@ struct AdvancedSettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 performanceSection
                 compatibilitySection
+                EngineSettingsSection(onEngineChanged: { RustBridge.clearBuffer() }) // LEANKEYS-HOOK: settings-engine
                 logSection
                 perAppSection
                 Spacer()

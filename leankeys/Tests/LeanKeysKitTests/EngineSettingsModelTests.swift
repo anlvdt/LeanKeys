@@ -105,6 +105,31 @@ final class EngineSettingsModelTests: XCTestCase {
         XCTAssertEqual(calls, 2)
     }
 
+    func testPickerCopy() {
+        XCTAssertEqual(EngineSettingsSection.title, "Engine gõ")
+        XCTAssertEqual(EngineSettingsSection.automaticLabel, "Tự động (khuyên dùng)")
+        XCTAssertEqual(EngineSettingsSection.goNhanhOnlyLabel, "Chỉ dùng Gõ Nhanh")
+    }
+
+    func testVikeyNoteOnlyUnderAutomatic() {
+        let model = EngineSettingsModel(router: makeRouter())
+        XCTAssertTrue(model.showsVikeyNote, "Tự động (Vikey) is the default and shows the note")
+        model.selected = .gonhanh
+        XCTAssertFalse(model.showsVikeyNote)
+        model.selected = .vikey
+        XCTAssertTrue(model.showsVikeyNote)
+    }
+
+    func testAutomaticKeepsFallbackReasons() {
+        // "Tự động" is .vikey: with VNI or a failed Vikey it still types with Gõ Nhanh and says why.
+        let router = makeRouter(failingVikey: true)
+        let model = EngineSettingsModel(router: router)
+        XCTAssertEqual(model.selected, .vikey)
+        XCTAssertEqual(router.active, .gonhanh)
+        XCTAssertTrue(model.showsVikeyNote)
+        XCTAssertEqual(model.vikeyDisabledReason, "Không khởi động được engine Vikey — đang dùng Gõ Nhanh")
+    }
+
     func testVikeyNoteListsEveryGoNhanhOnlySetting() {
         XCTAssertEqual(EngineSettingsSection.vikeyNote,
                        "Khi dùng Vikey, các mục chỉ dành cho Gõ Nhanh không có tác dụng: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]. Gõ tắt sẽ chạy với cả hai engine từ giai đoạn 4.")

@@ -20,6 +20,9 @@ public final class EngineSettingsModel: ObservableObject {
         }
     }
 
+    /// The Vikey-only note shows under "Tự động" only: with "Chỉ dùng Gõ Nhanh" every Gõ Nhanh setting works.
+    public var showsVikeyNote: Bool { selected == .vikey }
+
     /// Shown under the picker while Vikey is selected but Gõ Nhanh types; nil otherwise. Read live from the router.
     public var vikeyDisabledReason: String? {
         switch router.fallbackReason {
@@ -51,12 +54,18 @@ public final class EngineSettingsModel: ObservableObject {
     }
 }
 
-/// The "Engine gõ" card. Mirrors Gõ Nhanh's SettingsRow + CardBackground, which live in the app target.
+/// The "Engine gõ" card on the Advanced page, collapsed by default: LeanKeys picks the engine itself ("Tự động" is
+/// Vikey, falling back to Gõ Nhanh for VNI or when Vikey cannot start), so most users never open it.
+/// Mirrors Gõ Nhanh's CardBackground, which lives in the app target.
 public struct EngineSettingsSection: View {
+    static let title = "Engine gõ"
+    static let automaticLabel = "Tự động (khuyên dùng)"
+    static let goNhanhOnlyLabel = "Chỉ dùng Gõ Nhanh"
     /// Spec §3.5: Gõ Nhanh settings that do nothing under Vikey (ruling R26).
     static let vikeyNote = "Khi dùng Vikey, các mục chỉ dành cho Gõ Nhanh không có tác dụng: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]. Gõ tắt sẽ chạy với cả hai engine từ giai đoạn 4."
 
     @StateObject private var model: EngineSettingsModel
+    @State private var isExpanded = false
 
     /// `onEngineChanged` runs after each switch; the app passes a closure that clears Gõ Nhanh's word buffer.
     public init(onEngineChanged: @escaping () -> Void = {}) {
@@ -64,26 +73,33 @@ public struct EngineSettingsSection: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Engine gõ").font(.system(size: 13))
-            Picker("", selection: $model.selected) {
-                Text("Vikey — tự chuyển Việt/Anh theo ngữ cảnh (mặc định)").font(.system(size: 13)).tag(EngineKind.vikey)
-                Text("Gõ Nhanh").font(.system(size: 13)).tag(EngineKind.gonhanh)
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("", selection: $model.selected) {
+                    Text(Self.automaticLabel).font(.system(size: 13)).tag(EngineKind.vikey)
+                    Text(Self.goNhanhOnlyLabel).font(.system(size: 13)).tag(EngineKind.gonhanh)
+                }
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+                if model.showsVikeyNote {
+                    Text(Self.vikeyNote)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 20)
+                }
+                if let reason = model.vikeyDisabledReason {
+                    Text(reason)
+                        .font(.system(size: 11))
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 20)
+                }
             }
-            .pickerStyle(.radioGroup)
-            .labelsHidden()
-            Text(Self.vikeyNote)
-                .font(.system(size: 11))
-                .foregroundColor(Color(NSColor.secondaryLabelColor))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 20)
-            if let reason = model.vikeyDisabledReason {
-                Text(reason)
-                    .font(.system(size: 11))
-                    .foregroundColor(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 20)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
+        } label: {
+            Text(Self.title).font(.system(size: 13, weight: .medium))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)

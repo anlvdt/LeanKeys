@@ -6,7 +6,7 @@ engine-dispatch	platforms/macos/RustBridge.swift
 language-sync	platforms/macos/MenuBar.swift
 language-sync	platforms/macos/MainSettingsView.swift
 onboarding	platforms/macos/MenuBar.swift
-settings-engine	platforms/macos/MainSettingsView.swift
+settings-engine	platforms/macos/AdvancedSettingsView.swift
 branding	platforms/macos/AppMetadata.swift
 branding	platforms/macos/UpdateChecker.swift
 branding	platforms/macos/UpdateManager.swift

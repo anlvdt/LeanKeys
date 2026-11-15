@@ -1,6 +1,6 @@
 # Thử tay trước khi đăng bản
 
-Cài bản trong DMG (kéo `LeanKeys.app` vào Applications, cấp quyền Accessibility nếu được hỏi). Mục có hai ô làm hai lần: một lần với engine **Gõ Nhanh**, một lần với **Vikey** (menu bar → Cài đặt → Engine gõ). Mục chỉ có ô Vikey (— ở cột Gõ Nhanh) làm một lần với Vikey. Kiểu gõ Telex.
+Cài bản trong DMG (kéo `LeanKeys.app` vào Applications, cấp quyền Accessibility nếu được hỏi). Mục có hai ô làm hai lần: một lần với engine **Gõ Nhanh**, một lần với **Vikey** (menu bar → Cài đặt → Nâng cao → mở "Engine gõ": **Chỉ dùng Gõ Nhanh** là Gõ Nhanh, **Tự động (khuyên dùng)** là Vikey, mặc định). Mục chỉ có ô Vikey (— ở cột Gõ Nhanh) làm một lần với Vikey. Kiểu gõ Telex.
 
 Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường học". Gõ thêm một từ tiếng Anh rồi Space, từ đó phải giữ nguyên: `push` với Gõ Nhanh, `more` với Vikey.
 
@@ -11,7 +11,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | 3 | VS Code | Gõ câu thử trong một file và trong ô tìm kiếm (⌘F). | [ ] | [ ] |
 | 4 | Terminal | Gõ câu thử sau dấu nhắc lệnh, xoá bằng Backspace giữa chừng rồi gõ tiếp. | [ ] | [ ] |
 | 5 | Slack | Gõ câu thử trong ô soạn tin nhắn (chưa gửi). | [ ] | [ ] |
-| 6 | Đổi engine khi đang gõ | Gõ dở một từ (`vieej`), đổi engine trong Cài đặt, quay lại gõ tiếp. Ô nhập không hỏng, từ sau gõ đúng với engine mới. | [ ] | [ ] |
+| 6 | Đổi engine khi đang gõ | Gõ dở một từ (`vieej`), đổi engine trong Cài đặt → Nâng cao → Engine gõ, quay lại gõ tiếp. Ô nhập không hỏng, từ sau gõ đúng với engine mới. | [ ] | [ ] |
 | 7 | Đổi app có nhớ ngôn ngữ | Bật nhớ ngôn ngữ theo app. Tắt tiếng Việt ở Terminal, bật ở Slack; chuyển qua lại vài lần, mỗi app giữ đúng trạng thái của nó. | [ ] | [ ] |
 | 8 | Return/Enter sau từ Vikey khôi phục | Gõ `more` (Vikey giữ nguyên tiếng Anh) rồi Return ngay: tin nhắn được gửi trong một ô chat (Slack, kênh thử riêng) và một form trên trang web được gửi. Chữ trước đó không đổi. | — | [ ] |
 | 9 | Dấu câu sau từ đã sửa | Gõ một từ Vikey sửa (`more`, `vieejt`) rồi `,`; làm lại với `.`. Dấu phẩy, dấu chấm hiện đúng một lần. | — | [ ] |
