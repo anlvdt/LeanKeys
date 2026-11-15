@@ -68,4 +68,11 @@ sync/reports/*.md
 sync/reports/*.log
 sync/.lock
 /.sync-worktree/
+# mixbench outputs
+tools/mixbench/vk
+tools/mixbench/*.tsv
+*.gn
+*.gn0
+*.vk
+tools/mixbench/gn/target/
 # LEANKEYS-HOOK-END
