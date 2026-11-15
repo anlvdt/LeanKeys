@@ -17,6 +17,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
     private var stateObserver: NSObjectProtocol?
 
     private var onboardingWindow: NSWindow?
+    private var grantWatcher: GrantWatcher? // LEANKEYS-HOOK: onboarding
     private var settingsWindow: NSWindow?
 
     private let appState = AppState.shared
@@ -491,22 +492,32 @@ class MenuBarController: NSObject, NSWindowDelegate {
             // LEANKEYS-HOOK-BEGIN: onboarding
             // One screen (spec §13.3). Once Accessibility is granted, relaunch like Gõ Nhanh's onboarding does:
             // an event tap made in this process could still fail and raise a modal alert; the new process starts
-            // the engine through the hasCompletedOnboarding branch above.
+            // the engine through the hasCompletedOnboarding branch above. The watcher owns the relaunch, not the
+            // window, so it still happens when the window is hidden or closed, and only once (ruling R3).
+            let isGranted: () -> Bool = {
+                AccessibilityGrant.isGranted(axTrusted: AXIsProcessTrusted, tapProbe: AccessibilityGrant.probeEventTap)
+            }
+            let relaunch: () -> Void = {
+                ReturningUser.record(isTrusted: true)
+                UserDefaults.standard.set(true, forKey: SettingsKey.permissionGranted)
+                UserDefaults.standard.set(true, forKey: SettingsKey.hasCompletedOnboarding)
+                let task = Process()
+                task.launchPath = "/bin/sh"
+                task.arguments = ["-c", "sleep 0.5 && open \"\(Bundle.main.bundlePath)\""]
+                try? task.run()
+                NSApp.terminate(nil)
+            }
+            if grantWatcher == nil {
+                grantWatcher = GrantWatcher(isGranted: isGranted, onGranted: relaunch)
+                grantWatcher?.start()
+            }
             let view = LeanOnboardingView(
-                isTrusted: { AXIsProcessTrusted() },
+                isTrusted: isGranted,
                 openSettings: {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                    AccessibilityGrant.requestPrompt()
+                    NSWorkspace.shared.open(AccessibilityGrant.settingsURL)
                 },
-                onDone: {
-                    ReturningUser.record(isTrusted: true)
-                    UserDefaults.standard.set(true, forKey: SettingsKey.permissionGranted)
-                    UserDefaults.standard.set(true, forKey: SettingsKey.hasCompletedOnboarding)
-                    let task = Process()
-                    task.launchPath = "/bin/sh"
-                    task.arguments = ["-c", "sleep 0.5 && open \"\(Bundle.main.bundlePath)\""]
-                    try? task.run()
-                    NSApp.terminate(nil)
-                },
+                onDone: { [weak self] in self?.grantWatcher?.fireIfGranted() },
                 wasTrusted: ReturningUser.wasTrusted()
             )
             // LEANKEYS-HOOK-END

@@ -29,7 +29,7 @@ final class OnboardingCopyTests: XCTestCase {
         XCTAssertEqual(copy.message,
                        "macOS cần bạn cấp lại quyền Trợ năng: mở Cài đặt Trợ năng, chọn LeanKeys, bấm nút − để xoá, rồi bấm + và thêm lại LeanKeys.")
         XCTAssertTrue(copy.message.unicodeScalars.contains("\u{2212}"))
-        XCTAssertEqual(LeanOnboardingView.Strings.openSettings, "Mở cài đặt Trợ năng")
+        XCTAssertEqual(LeanOnboardingView.Strings.openSettings, "Cấp quyền Trợ năng")
     }
 
     func testWasTrustedIsRecordedOnlyWhenTrustedAndNeverCleared() {

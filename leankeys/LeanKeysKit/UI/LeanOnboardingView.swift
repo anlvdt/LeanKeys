@@ -11,7 +11,7 @@ public struct LeanOnboardingView: View {
         static let message = "Chỉ cần cấp quyền Trợ năng một lần, sau đó cứ thế gõ — LeanKeys tự chuyển Việt/Anh cho bạn."
         static let returningTitle = "LeanKeys vừa được cập nhật"
         static let returningMessage = "macOS cần bạn cấp lại quyền Trợ năng: mở Cài đặt Trợ năng, chọn LeanKeys, bấm nút \u{2212} để xoá, rồi bấm + và thêm lại LeanKeys."
-        static let openSettings = "Mở cài đặt Trợ năng"
+        static let openSettings = "Cấp quyền Trợ năng"
         static let done = "Xong! Bạn có thể bắt đầu gõ."
 
         /// Title and body: the re-grant steps once Accessibility had been granted before, else the welcome.
