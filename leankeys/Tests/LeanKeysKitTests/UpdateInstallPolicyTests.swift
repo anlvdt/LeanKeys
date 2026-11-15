@@ -13,9 +13,28 @@ final class UpdateInstallPolicyTests: XCTestCase {
         XCTAssertFalse(UpdateInstallPolicy.installsSilently(readTeamIdentifier: { nil }))
     }
 
+    func testSilentForDeveloperID() {
+        XCTAssertTrue(UpdateInstallPolicy.installsSilently(signature: .developerID(team: "ABC")))
+    }
+
+    func testSilentForStableCertificate() {
+        XCTAssertTrue(UpdateInstallPolicy.installsSilently(signature: .certificate))
+    }
+
+    func testNotSilentForAdhocOrUnsigned() {
+        XCTAssertFalse(UpdateInstallPolicy.installsSilently(signature: .adhoc))
+        XCTAssertFalse(UpdateInstallPolicy.installsSilently(signature: .unsigned))
+    }
+
+    func testEmptyTeamIsNotDeveloperID() {
+        XCTAssertFalse(UpdateInstallPolicy.installsSilently(signature: .developerID(team: "")))
+    }
+
     /// The live read must not crash; its value depends on how the test runner is signed.
     func testLiveReadIsConsistentWithPolicy() {
-        let team = UpdateInstallPolicy.currentTeamIdentifier()
-        XCTAssertEqual(UpdateInstallPolicy.installsSilently(), !(team ?? "").isEmpty)
+        XCTAssertEqual(
+            UpdateInstallPolicy.installsSilently(),
+            UpdateInstallPolicy.installsSilently(signature: UpdateInstallPolicy.currentSignature())
+        )
     }
 }
