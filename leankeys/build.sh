@@ -86,7 +86,6 @@ $PB -c "Set :CFBundleIconFile AppIcon" "$PLIST" 2>/dev/null || $PB -c "Add :CFBu
 cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
 
 # 5. Sign.
-ENTITLEMENTS_DEV="$ROOT/platforms/macos/GoNhanh.entitlements"
 ENTITLEMENTS_PROD="$ROOT/platforms/macos/GoNhanh.entitlements.production"
 if [[ -n "${LEANKEYS_SIGN_IDENTITY:-}" && -n "${LEANKEYS_NOTARY_PROFILE:-}" ]]; then
     echo "==> Signing with Developer ID: $LEANKEYS_SIGN_IDENTITY"
@@ -101,8 +100,9 @@ if [[ -n "${LEANKEYS_SIGN_IDENTITY:-}" && -n "${LEANKEYS_NOTARY_PROFILE:-}" ]]; 
     xcrun stapler staple "$APP"
     rm -f "$ZIP"
 else
+    # Ruling R28: the production entitlements, never the Debug ones (get-task-allow). No hardened runtime yet.
     echo "==> Signing ad-hoc"
-    codesign --force --deep --entitlements "$ENTITLEMENTS_DEV" -s - "$APP"
+    codesign --force --deep --entitlements "$ENTITLEMENTS_PROD" -s - "$APP"
     codesign --verify --deep --strict "$APP"
 fi
 

@@ -47,6 +47,10 @@ archs="$(lipo -archs "$app/Contents/MacOS/$exe" 2>/dev/null)"
 check "universal binary" yes "$([[ "$archs" == *arm64* && "$archs" == *x86_64* ]] && print yes || print no)"
 codesign --verify --deep --strict "$app" 2>/dev/null
 check "codesign --verify --deep" 0 "$?"
+# Ruling R28: a shipped build must not carry the Debug entitlement get-task-allow.
+ents="$(codesign -d --entitlements - "$app" 2>&1)"
+check "entitlements readable" yes "$([[ "$ents" == *com.apple.security.automation.apple-events* ]] && print yes || print no)"
+check "no get-task-allow" no "$([[ "$ents" == *get-task-allow* ]] && print yes || print no)"
 
 print -r -- "$passed passed, $failed failed"
 (( failed == 0 ))
