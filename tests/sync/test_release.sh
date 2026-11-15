@@ -213,6 +213,7 @@ test_first_release_creates_repo() {
   check $0 "DMG detached" log_has "hdiutil detach" &&
   check $0 "repo created after the DMG check and the yes" [ "$(grep -n -m1 '^hdiutil detach' "$FAKE_LOG" | cut -d: -f1)" -lt "$(grep -n -m1 '^gh repo create' "$FAKE_LOG" | cut -d: -f1)" ] &&
   check $0 "release created with the DMG" log_has "gh release create v1.1 dist/LeanKeys-1.1.dmg --title LeanKeys 1.1" &&
+  check $0 "release names the repo (two remotes)" log_has "-R anlvdt/LeanKeys" &&
   check $0 "notes name the engines" log_has "v1.0.166" &&
   check $0 "notes have the changelog" log_has "Sync Gõ Nhanh v1.0.166" &&
   check $0 "main pushed" [ "$(git -C "$bare" rev-parse main)" = "$(git -C "$repo" rev-parse main)" ] &&

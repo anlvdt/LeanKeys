@@ -16,7 +16,8 @@
 #      before anything is pushed.
 #   5. git tag vX.Y on main; git push origin main vX.Y (only those two refs,
 #      never --force, never --tags)
-#   6. gh release create vX.Y dist/LeanKeys-X.Y.dmg, notes generated from
+#   6. gh release create vX.Y dist/LeanKeys-X.Y.dmg -R anlvdt/LeanKeys (the repo has
+#      two remotes, upstream and origin, so gh needs the repo named), notes generated from
 #      Versions.json on main and git log since the previous LeanKeys tag
 #   7. removes dist/READY
 # Refuses (exit 1) before doing anything when dist/READY or the DMG is
@@ -68,7 +69,7 @@ undo() {
   trap - INT TERM HUP
   print -u2 -r -- "release.sh: $*. Dọn dẹp:"
   print -u2 -r -- "  gh release delete $tag --yes"
-  gh release delete "$tag" --yes || true
+  gh release delete "$tag" --yes -R "$gh_repo" || true
   print -u2 -r -- "  git push --delete origin $tag"
   git push --delete origin "$tag" || true
   print -u2 -r -- "  git tag -d $tag"
@@ -228,7 +229,7 @@ ${log:-- (không có commit mới)}"
   git push origin "refs/heads/${main_branch}:refs/heads/$main_branch" "refs/tags/${tag}:refs/tags/$tag" ||
     undo "git push lỗi"
   step "gh release create $tag $dmg --title \"LeanKeys $ver\""
-  gh release create "$tag" "$dmg" --title "LeanKeys $ver" --notes "$notes" || undo "gh release create lỗi"
+  gh release create "$tag" "$dmg" --title "LeanKeys $ver" --notes "$notes" -R "$gh_repo" || undo "gh release create lỗi"
   tagged=0
   trap - INT TERM HUP
 
