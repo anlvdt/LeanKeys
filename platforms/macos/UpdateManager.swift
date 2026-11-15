@@ -260,7 +260,16 @@ class UpdateManager: NSObject, ObservableObject {
 // MARK: - URLSession Download Delegate
 
 extension UpdateManager: URLSessionDownloadDelegate {
-    func urlSession(_: URLSession, downloadTask _: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+    func urlSession(_: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) { // LEANKEYS-HOOK: branding
+        // LEANKEYS-HOOK-BEGIN: branding
+        // An HTTP error page must not be kept as the update.
+        guard SafeInstaller.isSuccessfulDownload(downloadTask.response) else {
+            if case .downloading = state {
+                state = .error("Tải về thất bại")
+            }
+            return
+        }
+        // LEANKEYS-HOOK-END
         let cachesURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         let destinationURL = cachesURL.appendingPathComponent("GoNhanh-update.dmg")
 
@@ -619,8 +628,11 @@ struct VisualEffectBlur: NSViewRepresentable {
 extension UpdateManager {
     /// LeanKeys installs a downloaded update by itself (spec §13.2), with no dialog: only once no key has been
     /// pressed for 30 s (IdleGate), so never mid-typing; otherwise it looks again every 60 s. A pending update
-    /// restored at launch goes the same way. The install itself is Gõ Nhanh's restartToUpdate (replace + relaunch).
+    /// restored at launch goes the same way. The install is installSafely below, not restartToUpdate.
     private func installWhenIdle() {
+        #if DEBUG
+            return // Ruling R23: a Debug build never updates itself.
+        #else
         guard isReadyToInstall else { return }
         if tryInstallIfIdle() { return }
         guard idleInstallTimer == nil else { return }
@@ -636,9 +648,11 @@ extension UpdateManager {
                 idleInstallTimer = nil
             }
         }
+        #endif
     }
 
-    /// Installs now if the update file is still there and the user is idle. A missing file drops the pending state.
+    /// Starts the install if the update file is still there and the user is idle; true once started (the outcome
+    /// arrives later). A missing file drops the pending state.
     private func tryInstallIfIdle() -> Bool {
         guard case let .readyToInstall(dmgPath) = state else { return false }
         guard FileManager.default.fileExists(atPath: dmgPath.path) else {
@@ -648,8 +662,33 @@ extension UpdateManager {
             return false
         }
         guard IdleGate().isIdle else { return false }
-        restartToUpdate()
+        installSafely(dmgPath)
         return true
+    }
+
+    /// Not Gõ Nhanh's restartToUpdate: SafeInstaller mounts and checks the update off the main thread, and the app
+    /// quits only once the swap script (which always relaunches an app) has started. Any failure drops the update,
+    /// logs it, and leaves this app running.
+    private func installSafely(_ dmgPath: URL) {
+        let installedApp = URL(fileURLWithPath: Bundle.main.bundlePath)
+        let bundleID = Bundle.main.bundleIdentifier
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let prepared = SafeInstaller.prepare(dmg: dmgPath, appName: LeanBranding.name, expectedBundleID: bundleID)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let prepared, SafeInstaller.launchSwap(prepared, dmg: dmgPath, installedApp: installedApp) {
+                    UserDefaults.standard.removeObject(forKey: self.dmgKey)
+                    UserDefaults.standard.removeObject(forKey: self.versionKey)
+                    NSApp.terminate(nil)
+                    return
+                }
+                try? FileManager.default.removeItem(at: dmgPath)
+                UserDefaults.standard.removeObject(forKey: self.dmgKey)
+                UserDefaults.standard.removeObject(forKey: self.versionKey)
+                self.pendingVersion = ""
+                self.state = .idle
+            }
+        }
     }
 }
 // LEANKEYS-HOOK-END
