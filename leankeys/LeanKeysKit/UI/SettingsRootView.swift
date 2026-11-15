@@ -73,7 +73,7 @@ public struct SettingsRootView: View {
                 .frame(maxHeight: .infinity)
                 .background(SettingsVisualEffect(material: .sidebar))
 
-            ScrollView {
+            ScrollView(showsIndicators: false) {
                 pageViews[selected, default: AnyView(EmptyView())]
                     .padding(28)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,19 +88,23 @@ public struct SettingsRootView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Image(nsImage: logo)
-                    .resizable()
-                    .frame(width: 48, height: 48)
-                Text(name)
-                    .font(.system(size: 15, weight: .bold))
-                Text("v\(version)")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(NSColor.secondaryLabelColor))
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(nsImage: logo)
+                        .resizable()
+                        .frame(width: 48, height: 48)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name)
+                            .font(.system(size: 15, weight: .bold))
+                        Text("v\(version)")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(NSColor.secondaryLabelColor))
+                    }
+                }
                 badge
             }
             .padding(.horizontal, 16)
-            .padding(.top, 28)
+            .padding(.top, 40)
 
             List(SettingsPage.allCases, id: \.self, selection: Binding(
                 get: { selected },
