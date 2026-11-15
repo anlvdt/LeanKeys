@@ -117,6 +117,12 @@ gh_not_called() { ! grep -q '^gh ' "$FAKE_LOG"; }
 nothing_called() { [[ ! -s "$FAKE_LOG" ]]; }
 local_tag() { git -C "$repo" rev-parse -q --verify "refs/tags/$1" >/dev/null; }
 remote_tag() { [[ -n "$(git -C "$bare" tag -l "$1")" ]]; }
+has_origin() { git -C "$repo" remote get-url origin >/dev/null 2>&1; }
+# out_before <a> <b>: both appear in $out, the first <a> before the first <b>.
+out_before() {
+  local a b; a="$(print -r -- "$out" | grep -n -m1 -F -- "$1" | cut -d: -f1)" b="$(print -r -- "$out" | grep -n -m1 -F -- "$2" | cut -d: -f1)"
+  [[ -n "$a" && -n "$b" ]] && (( a < b ))
+}
 
 test_no_ready_exits_1() {
   setup noready
@@ -136,7 +142,8 @@ test_dry_run_prints_plan() {
   check $0 "fake gh not called" gh_not_called &&
   check $0 "hdiutil not called" nothing_called &&
   check $0 "no local tag" not local_tag v1.1 &&
-  check $0 "READY kept" [ -f "$repo/dist/READY" ]
+  check $0 "READY kept" [ -f "$repo/dist/READY" ] &&
+  check $0 "plan confirms before touching GitHub" out_before "chờ gõ yes" "actions/permissions"
 }
 
 test_missing_dmg_exits_1() {
@@ -197,6 +204,7 @@ test_first_release_creates_repo() {
   check $0 "Actions disabled" log_has "gh api -X PUT repos/anlvdt/LeanKeys/actions/permissions -F enabled=false" &&
   check $0 "DMG mounted" log_has "hdiutil attach" &&
   check $0 "DMG detached" log_has "hdiutil detach" &&
+  check $0 "repo created after the DMG check and the yes" [ "$(grep -n -m1 '^hdiutil detach' "$FAKE_LOG" | cut -d: -f1)" -lt "$(grep -n -m1 '^gh repo create' "$FAKE_LOG" | cut -d: -f1)" ] &&
   check $0 "release created with the DMG" log_has "gh release create v1.1 dist/LeanKeys-1.1.dmg --title LeanKeys 1.1" &&
   check $0 "notes name the engines" log_has "v1.0.166" &&
   check $0 "notes have the changelog" log_has "Sync Gõ Nhanh v1.0.166" &&
@@ -206,13 +214,17 @@ test_first_release_creates_repo() {
   check $0 "READY removed" [ ! -e "$repo/dist/READY" ]
 }
 
+# First release (no origin) without a "yes": no public repo, Actions untouched (ruling R27).
 test_not_confirmed_aborts() {
-  setup noconfirm
+  setup noconfirm no-origin
   ready 1.1
   : > "$base/noconfirm/tty"   # a terminal that gives EOF (^D)
   LEANKEYS_TTY="$base/noconfirm/tty" run_release
   check $0 "exit 1" is_rc 1 &&
   check $0 "says cancelled" out_has "Đã huỷ" &&
+  check $0 "no repo created" not log_has "gh repo create" &&
+  check $0 "no Actions call" not log_has "actions/permissions" &&
+  check $0 "no origin added" not has_origin &&
   check $0 "no tag" not local_tag v1.1 &&
   check $0 "no release" not log_has "gh release create" &&
   check $0 "READY kept" [ -f "$repo/dist/READY" ]

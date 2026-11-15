@@ -5,13 +5,14 @@
 # dist/ as a GitHub release of anlvdt/LeanKeys (spec §5.3). You run it; no job
 # does. The version comes from dist/READY. Steps:
 #   1. gh auth status
-#   2. no remote "origin": gh repo create anlvdt/LeanKeys --public --source .
-#      --remote origin (if the GitHub repo already exists, origin is just
-#      added). Then, on every run, disables GitHub Actions on it (the Gõ Nhanh
-#      workflows came along): gh api -X PUT .../actions/permissions
-#      -F enabled=false, which is idempotent and runs before anything is pushed.
-#   3. mounts the DMG read-only and checks it holds LeanKeys.app, then detaches
-#   4. prints sync/manual-checklist.md and waits for you to type "yes"
+#   2. mounts the DMG read-only and checks it holds LeanKeys.app, then detaches
+#   3. prints sync/manual-checklist.md and waits for you to type "yes"
+#   4. only after that "yes" (ruling R27): no remote "origin": gh repo create
+#      anlvdt/LeanKeys --public --source . --remote origin (if the GitHub repo
+#      already exists, origin is just added). Then, on every run, disables
+#      GitHub Actions on it (the Gõ Nhanh workflows came along): gh api -X PUT
+#      .../actions/permissions -F enabled=false, which is idempotent and runs
+#      before anything is pushed.
 #   5. git tag vX.Y on main; git push origin main vX.Y (only those two refs,
 #      never --force, never --tags)
 #   6. gh release create vX.Y dist/LeanKeys-X.Y.dmg, notes generated from
@@ -140,10 +141,10 @@ ${log:-- (không có commit mới)}"
   local push_cmd="git push origin refs/heads/${main_branch}:refs/heads/$main_branch refs/tags/${tag}:refs/tags/$tag"
   print -r -- "Phát hành LeanKeys $ver ($dmg, nhánh $main_branch):"
   print -r -- "  gh auth status"
-  (( has_origin )) || print -r -- "  gh repo create $gh_repo --public --source . --remote origin"
-  print -r -- "  gh api -X PUT repos/$gh_repo/actions/permissions -F enabled=false"
   print -r -- "  hdiutil attach $dmg (kiểm tra LeanKeys.app), hdiutil detach"
   print -r -- "  in sync/manual-checklist.md, chờ gõ yes"
+  (( has_origin )) || print -r -- "  gh repo create $gh_repo --public --source . --remote origin"
+  print -r -- "  gh api -X PUT repos/$gh_repo/actions/permissions -F enabled=false"
   print -r -- "  git tag $tag refs/heads/$main_branch"
   print -r -- "  $push_cmd"
   print -r -- "  gh release create $tag $dmg --title \"LeanKeys $ver\" --notes <ghi chú>"
@@ -161,24 +162,7 @@ ${log:-- (không có commit mới)}"
   step "gh auth status"
   gh auth status || die "gh chưa đăng nhập; chạy gh auth login."
 
-  # 2. origin
-  if (( ! has_origin )); then
-    if gh repo view "$gh_repo" >/dev/null 2>&1; then
-      step "git remote add origin https://github.com/$gh_repo.git"
-      git remote add origin "https://github.com/$gh_repo.git" || die "không thêm được remote origin."
-    else
-      step "gh repo create $gh_repo --public --source . --remote origin"
-      gh repo create "$gh_repo" --public --source . --remote origin || die "không tạo được repo $gh_repo."
-    fi
-    check_remote_tag
-  fi
-  # Every run, before any push: a half-failed first run may have left origin
-  # set with the upstream workflows still enabled.
-  step "gh api -X PUT repos/$gh_repo/actions/permissions -F enabled=false"
-  gh api -X PUT "repos/$gh_repo/actions/permissions" -F enabled=false >/dev/null ||
-    die "không tắt được GitHub Actions trên $gh_repo; tắt trong Settings → Actions rồi chạy lại. Chưa đẩy gì."
-
-  # 3. DMG
+  # 2. DMG
   step "hdiutil attach $dmg"
   mnt="$(mktemp -d -t leankeys-release)" || die "mktemp lỗi."
   hdiutil attach -nobrowse -readonly -noverify -mountpoint "$mnt" "$dmg" >/dev/null || die "không mở được $dmg."
@@ -187,7 +171,7 @@ ${log:-- (không có commit mới)}"
   detach_dmg
   print -r -- "$dmg có LeanKeys.app."
 
-  # 4. Manual checklist
+  # 3. Manual checklist
   print -r -- ""
   cat sync/manual-checklist.md || die "thiếu sync/manual-checklist.md."
   print -r -- ""
@@ -203,6 +187,23 @@ ${log:-- (không có commit mới)}"
     { read -r ans <"$tty" } 2>/dev/null || true
   fi
   [[ "$ans" == yes ]] || die "Đã huỷ (không có xác nhận yes). Chưa tạo tag, chưa đẩy gì."
+
+  # 4. origin, only once confirmed (ruling R27): nothing public exists before the "yes".
+  if (( ! has_origin )); then
+    if gh repo view "$gh_repo" >/dev/null 2>&1; then
+      step "git remote add origin https://github.com/$gh_repo.git"
+      git remote add origin "https://github.com/$gh_repo.git" || die "không thêm được remote origin."
+    else
+      step "gh repo create $gh_repo --public --source . --remote origin"
+      gh repo create "$gh_repo" --public --source . --remote origin || die "không tạo được repo $gh_repo."
+    fi
+    check_remote_tag
+  fi
+  # Every run, before any push: a half-failed first run may have left origin
+  # set with the upstream workflows still enabled.
+  step "gh api -X PUT repos/$gh_repo/actions/permissions -F enabled=false"
+  gh api -X PUT "repos/$gh_repo/actions/permissions" -F enabled=false >/dev/null ||
+    die "không tắt được GitHub Actions trên $gh_repo; tắt trong Settings → Actions rồi chạy lại. Chưa đẩy gì."
 
   # 5-6. Tag, push, release; undo on failure.
   trap 'on_signal INT 2' INT
