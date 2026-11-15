@@ -159,7 +159,7 @@ final class PhraseLearnerTests: XCTestCase {
 
     /// R13: a bare 0xxxxxxxxx is a tax code next to "MST", "mã số thuế" or "thuế", else a phone.
     func testBareTenDigitsNearTaxWordIsTaxCode() {
-        for text in ["MST 0312345678", "Mã số thuế: 0312345678", "ma so thue cong ty 0312345678",
+        for text in ["MST 0312345678", "Mã số thuế: 0312345678", "ma so thue cong ty 0312345678", "ma so thue 0312345678",
                      "Thuế 0312345678 nhé"] {
             learner.eraseAll()
             observe(text, times: 3)
@@ -171,6 +171,11 @@ final class PhraseLearnerTests: XCTestCase {
             observe(text, times: 3)
             XCTAssertEqual(learner.ready.first { $0.text == "0312345678" }?.kind, .phone, text)
         }
+        // R13b: "thuê" (to rent) is no tax word; diacritics are matched exactly.
+        learner.eraseAll()
+        observe("Cho thuê nhà 0912345678", times: 3)
+        XCTAssertEqual(learner.ready.first { $0.text == "0912345678" }?.kind, .phone)
+        XCTAssertFalse(learner.ready.contains { $0.kind == .taxCode })
     }
 
     func testDetectsKinds() {

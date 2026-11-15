@@ -251,10 +251,11 @@ enum PhraseDetector {
         pattern: #"(?<![\p{L}\p{N}])(?:số|đường|phố|phường|thị xã|xã|quận|huyện|tp|tỉnh)(?![\p{L}\p{N}])"#,
         options: [.caseInsensitive])
 
-    /// "mst" or "thuế" (which covers "mã số thuế") as a word, ignoring case and diacritics.
+    /// "mst", "thuế" (which covers "mã số thuế") or plain "thue" as a word, ignoring case but not diacritics, so
+    /// "thuê" (to rent) never matches. `text` is already NFC.
     static func mentionsTax(_ text: String) -> Bool {
-        let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
-        return folded.range(of: #"(?<![\p{L}\p{N}])(?:mst|thue)(?![\p{L}\p{N}])"#, options: .regularExpression) != nil
+        text.lowercased().range(of: #"(?<![\p{L}\p{N}])(?:mst|thuế|thue)(?![\p{L}\p{N}])"#,
+                                options: .regularExpression) != nil
     }
 
     /// `text` must be `normalizedDisplay` output. The whole phrase comes first, as `.phrase` unless one piece
