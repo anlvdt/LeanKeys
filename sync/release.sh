@@ -6,9 +6,10 @@
 # does. The version comes from dist/READY. Steps:
 #   1. gh auth status
 #   2. no remote "origin": gh repo create anlvdt/LeanKeys --public --source .
-#      --remote origin, then disable GitHub Actions on it (the Gõ Nhanh
-#      workflows came along). If the GitHub repo already exists, origin is
-#      just added.
+#      --remote origin (if the GitHub repo already exists, origin is just
+#      added). Then, on every run, disables GitHub Actions on it (the Gõ Nhanh
+#      workflows came along): gh api -X PUT .../actions/permissions
+#      -F enabled=false, which is idempotent and runs before anything is pushed.
 #   3. mounts the DMG read-only and checks it holds LeanKeys.app, then detaches
 #   4. prints sync/manual-checklist.md and waits for you to type "yes"
 #   5. git tag vX.Y on main; git push origin main vX.Y (only those two refs,
@@ -26,12 +27,13 @@
 #   --dry-run   check dist/ and the tag, print the plan and the release notes;
 #               calls no gh, mounts nothing, creates and pushes nothing
 #
-# Confirmation is read from /dev/tty (stdin when there is no terminal).
+# Always tags and pushes branch main. Confirmation is read only from
+# /dev/tty, never from stdin: without a terminal it refuses (exit 1).
 #
-# Environment:
-#   LEANKEYS_MAIN_BRANCH          branch to tag and push (default: main)
-#   LEANKEYS_RELEASE_ASSUME_YES   1 skips the "yes" prompt; for tests with a
-#                                 fake gh only, never for a real release
+# Environment (tests only, never for a real release):
+#   LEANKEYS_RELEASE_ASSUME_YES   1 skips the "yes" prompt (with a fake gh)
+#   LEANKEYS_TTY                  file to read the confirmation from instead
+#                                 of /dev/tty (to simulate "no terminal")
 #
 # Exit: 0 published (or --dry-run plan printed), 1 refused, cancelled or failed.
 
@@ -40,7 +42,7 @@ setopt no_unset pipe_fail
 
 typeset -g self="${0:A}"
 typeset -g repo="${self:h:h}" gh_repo="anlvdt/LeanKeys"
-typeset -g main_branch="${LEANKEYS_MAIN_BRANCH:-main}"
+typeset -g main_branch=main
 typeset -g tag="" tagged=0 mnt="" attached=0
 
 die() { print -u2 -r -- "release.sh: $*"; exit 1; }
@@ -138,10 +140,8 @@ ${log:-- (không có commit mới)}"
   local push_cmd="git push origin refs/heads/${main_branch}:refs/heads/$main_branch refs/tags/${tag}:refs/tags/$tag"
   print -r -- "Phát hành LeanKeys $ver ($dmg, nhánh $main_branch):"
   print -r -- "  gh auth status"
-  if (( ! has_origin )); then
-    print -r -- "  gh repo create $gh_repo --public --source . --remote origin"
-    print -r -- "  gh api -X PUT repos/$gh_repo/actions/permissions -F enabled=false"
-  fi
+  (( has_origin )) || print -r -- "  gh repo create $gh_repo --public --source . --remote origin"
+  print -r -- "  gh api -X PUT repos/$gh_repo/actions/permissions -F enabled=false"
   print -r -- "  hdiutil attach $dmg (kiểm tra LeanKeys.app), hdiutil detach"
   print -r -- "  in sync/manual-checklist.md, chờ gõ yes"
   print -r -- "  git tag $tag refs/heads/$main_branch"
@@ -169,12 +169,14 @@ ${log:-- (không có commit mới)}"
     else
       step "gh repo create $gh_repo --public --source . --remote origin"
       gh repo create "$gh_repo" --public --source . --remote origin || die "không tạo được repo $gh_repo."
-      step "gh api -X PUT repos/$gh_repo/actions/permissions -F enabled=false"
-      gh api -X PUT "repos/$gh_repo/actions/permissions" -F enabled=false >/dev/null ||
-        die "đã tạo $gh_repo nhưng không tắt được GitHub Actions; tắt trong Settings → Actions rồi chạy lại."
     fi
     check_remote_tag
   fi
+  # Every run, before any push: a half-failed first run may have left origin
+  # set with the upstream workflows still enabled.
+  step "gh api -X PUT repos/$gh_repo/actions/permissions -F enabled=false"
+  gh api -X PUT "repos/$gh_repo/actions/permissions" -F enabled=false >/dev/null ||
+    die "không tắt được GitHub Actions trên $gh_repo; tắt trong Settings → Actions rồi chạy lại. Chưa đẩy gì."
 
   # 3. DMG
   step "hdiutil attach $dmg"
@@ -194,8 +196,11 @@ ${log:-- (không có commit mới)}"
     print -r -- "LEANKEYS_RELEASE_ASSUME_YES=1: bỏ qua xác nhận."
     ans=yes
   else
+    local tty="${LEANKEYS_TTY:-/dev/tty}"
+    { : <"$tty" } 2>/dev/null ||
+      die "Cần terminal để xác nhận ($tty không đọc được); không nhận yes từ stdin. Chưa tạo tag, chưa đẩy gì."
     print -n -r -- "Đã thử tay xong? Gõ yes để đăng ${tag}: "
-    { read -r ans </dev/tty } 2>/dev/null || read -r ans || true
+    { read -r ans <"$tty" } 2>/dev/null || true
   fi
   [[ "$ans" == yes ]] || die "Đã huỷ (không có xác nhận yes). Chưa tạo tag, chưa đẩy gì."
 

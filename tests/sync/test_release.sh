@@ -16,7 +16,7 @@ src="${0:A:h:h:h}"
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
-unset LEANKEYS_RELEASE_ASSUME_YES LEANKEYS_MAIN_BRANCH
+unset LEANKEYS_RELEASE_ASSUME_YES LEANKEYS_TTY
 
 base="$(mktemp -d)"
 trap '[[ -n ${KEEP:-} ]] || rm -rf "$base"' EXIT
@@ -209,12 +209,50 @@ test_first_release_creates_repo() {
 test_not_confirmed_aborts() {
   setup noconfirm
   ready 1.1
-  run_release   # no tty, empty stdin, no LEANKEYS_RELEASE_ASSUME_YES
+  : > "$base/noconfirm/tty"   # a terminal that gives EOF (^D)
+  LEANKEYS_TTY="$base/noconfirm/tty" run_release
   check $0 "exit 1" is_rc 1 &&
   check $0 "says cancelled" out_has "Đã huỷ" &&
   check $0 "no tag" not local_tag v1.1 &&
   check $0 "no release" not log_has "gh release create" &&
   check $0 "READY kept" [ -f "$repo/dist/READY" ]
+}
+
+# No terminal (LEANKEYS_TTY points at a missing file) and "yes" piped on
+# stdin: release.sh must refuse rather than read the confirmation from stdin.
+test_piped_yes_without_tty_refuses() {
+  setup pipedyes
+  ready 1.1
+  rc=0
+  out="$(cd "$repo" && print yes | LEANKEYS_TTY="$base/pipedyes/no-tty" sync/release.sh 2>&1)" || rc=$?
+  check $0 "exit 1" is_rc 1 &&
+  check $0 "says a terminal is needed" out_has "Cần terminal" &&
+  check $0 "no tag" not local_tag v1.1 &&
+  check $0 "nothing pushed" not remote_tag v1.1 &&
+  check $0 "no release" not log_has "gh release create" &&
+  check $0 "READY kept" [ -f "$repo/dist/READY" ]
+}
+
+# With origin already set (e.g. a first run that failed after repo create),
+# Actions are still disabled, and before the push (a pre-push hook in the
+# clone logs "git push" into the same call log).
+test_existing_origin_disables_actions_before_push() {
+  setup actions
+  ready 1.1
+  mkdir -p "$base/actions/hooks"
+  printf '#!/bin/sh\necho "git push $1" >> "$FAKE_LOG"\n' > "$base/actions/hooks/pre-push"
+  chmod +x "$base/actions/hooks/pre-push"
+  git -C "$repo" config core.hooksPath "$base/actions/hooks"
+  LEANKEYS_RELEASE_ASSUME_YES=1 run_release
+  local put push
+  put="$(grep -n -m1 -F 'gh api -X PUT repos/anlvdt/LeanKeys/actions/permissions -F enabled=false' "$FAKE_LOG" | cut -d: -f1)"
+  push="$(grep -n -m1 '^git push' "$FAKE_LOG" | cut -d: -f1)"
+  check $0 "exit 0" is_rc 0 &&
+  check $0 "no repo create" not log_has "gh repo create" &&
+  check $0 "Actions PUT called" [ -n "$put" ] &&
+  check $0 "push happened" [ -n "$push" ] &&
+  check $0 "PUT before push" [ "${put:-99}" -lt "${push:-0}" ] &&
+  check $0 "tag pushed" remote_tag v1.1
 }
 
 # pre-push in a throwaway repo whose steps are stubs that log "$PWD <step>",
@@ -287,6 +325,7 @@ test_prepush_stops_on_failure() {
 for t in test_no_ready_exits_1 test_dry_run_prints_plan test_missing_dmg_exits_1 \
   test_existing_local_tag_refused test_existing_remote_tag_refused \
   test_failure_cleans_up test_first_release_creates_repo test_not_confirmed_aborts \
+  test_piped_yes_without_tty_refuses test_existing_origin_disables_actions_before_push \
   test_prepush_ignores_git_hook_args test_prepush_stops_on_failure; do
   if $t; then
     passed=$((passed + 1)); print -r -- "ok   $t"
