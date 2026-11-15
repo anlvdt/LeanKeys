@@ -27,6 +27,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
     private var legacyMenu: NSMenu?
     private var popoverModel: StatusPopoverModel?
     private var statusPopover: StatusPopoverController?
+    private var isShowingLegacyMenu = false
     // LEANKEYS-HOOK-END
 
     override init() {
@@ -438,13 +439,16 @@ class MenuBarController: NSObject, NSWindowDelegate {
 
     /// Left click opens the popover. Right click and Option or Control click open the legacy menu.
     @objc private func handleStatusClick(_ sender: Any?) {
-        guard let button = statusItem.button else { return }
+        guard !isShowingLegacyMenu, let button = statusItem.button else { return }
         let route = NSApp.currentEvent.map { StatusClickRoute.route(type: $0.type, modifiers: $0.modifierFlags) } ?? .popover
         switch route {
         case .popover:
             statusPopoverController().toggle(relativeTo: button)
         case .legacyMenu:
             // performClick runs the menu modally, so it can be removed again right after.
+            // The flag stops a re-sent button action from recursing into this branch.
+            isShowingLegacyMenu = true
+            defer { isShowingLegacyMenu = false }
             statusItem.menu = legacyMenu
             button.performClick(nil)
             statusItem.menu = nil
