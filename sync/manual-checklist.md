@@ -22,5 +22,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | 14 | Secure Input | Chuyển sang tiếng Anh, vào một ô mật khẩu (Terminal: `sudo -v`): cảnh báo Secure Input vẫn hiện trên menu bar. | — | [ ] |
 | 15 | Tắt hẳn ở Terminal | Tắt tiếng Việt ở Terminal (menu bar), gõ `vieejt ` và `treen `: giữ nguyên tiếng Anh, biểu tượng vẫn ở trạng thái tắt. | — | [ ] |
 | 16 | Tự chuyển không bị nhớ | Vikey: gõ trộn tới khi tự chuyển sang Anh, chuyển app khác rồi quay lại → vẫn tự chuyển về Việt khi gõ từ tiếng Việt (`vieejt `). Thoát và mở lại LeanKeys: vẫn như vậy. | — | [ ] |
+| 17 | Gõ nhanh | Gõ thật nhanh (từ 8 phím/giây trở lên) câu `Nguwowfi Vieejt Nam vieets tieesng Vieejt` → "Người Việt Nam viết tiếng Việt" ở: thanh địa chỉ Chrome và một ô nhập trên trang web, VS Code, Terminal, Notes, Slack (chưa gửi). Không mất chữ, không đảo thứ tự chữ, không sót dấu. | [ ] | [ ] |
+| 18 | Nếu mục 17 lỗi | Ghi lại app bị lỗi. Tăng thời gian chờ sau mỗi lần sửa chữ (micro giây, 0–30000; mặc định fast 1000, slow 8000): `defaults write io.github.anlvdt.leankeys LeanKeys.settleMicros.fast -int 5000` (Chrome, Notes, Slack…) hoặc `defaults write io.github.anlvdt.leankeys LeanKeys.settleMicros.slow -int 20000` (Terminal, VS Code), thoát và mở lại LeanKeys, thử lại mục 17. Đạt khi mục 17 không lỗi, hoặc đã đạt sau khi tăng (ghi giá trị vào ghi chú bản phát hành). Bỏ chỉnh: `defaults delete io.github.anlvdt.leankeys LeanKeys.settleMicros.fast` (và `.slow`). | [ ] | [ ] |
 
-Chỉ gõ `yes` khi cả 24 ô đều đạt.
+Chỉ gõ `yes` khi cả 28 ô đều đạt.

@@ -234,8 +234,10 @@ private class TextInjector {
             break
         }
 
-        // Settle time: 20ms for slow apps, 5ms for others
-        usleep(method == .slow ? 20000 : 5000)
+        // LEANKEYS-HOOK-BEGIN: engine-dispatch
+        // Settle time from LeanKeysKit: 1 ms fast, 8 ms slow, 5 ms others; UserDefaults LeanKeys.settleMicros.* overrides.
+        usleep(InjectionTuning.settleMicros(method == .fast ? .fast : method == .slow ? .slow : .other))
+        // LEANKEYS-HOOK-END
     }
 
     // MARK: - Injection Methods
