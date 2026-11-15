@@ -5,7 +5,8 @@
 # dist/ as a GitHub release of anlvdt/LeanKeys (spec §5.3). You run it; no job
 # does. The version comes from dist/READY. Steps:
 #   1. gh auth status
-#   2. mounts the DMG read-only and checks it holds LeanKeys.app, then detaches
+#   2. mounts the DMG read-only, checks it holds LeanKeys.app signed with a
+#      stable identity (not ad-hoc), then detaches
 #   3. prints sync/manual-checklist.md and waits for you to type "yes"
 #   4. only after that "yes" (ruling R27): no remote "origin": gh repo create
 #      anlvdt/LeanKeys --public --source . --remote origin (if the GitHub repo
@@ -27,6 +28,9 @@
 #
 #   --dry-run   check dist/ and the tag, print the plan and the release notes;
 #               calls no gh, mounts nothing, creates and pushes nothing
+#
+# Environment:
+#   LEANKEYS_ALLOW_ADHOC_RELEASE  1 publishes an ad-hoc signed DMG on purpose (the grant is lost for every user)
 #
 # Always tags and pushes branch main. Confirmation is read only from
 # /dev/tty, never from stdin: without a terminal it refuses (exit 1).
@@ -168,6 +172,14 @@ ${log:-- (không có commit mới)}"
   hdiutil attach -nobrowse -readonly -noverify -mountpoint "$mnt" "$dmg" >/dev/null || die "không mở được $dmg."
   attached=1
   [[ -x "$mnt/LeanKeys.app/Contents/MacOS/LeanKeys" ]] || die "$dmg không chứa LeanKeys.app chạy được."
+  # Refuse an ad-hoc build: its requirement is a cdhash, so every user would lose the Accessibility grant.
+  # A stable one names a certificate leaf (self-signed or Developer ID) or the Apple anchor.
+  local req; req="$(codesign -dr - "$mnt/LeanKeys.app" 2>&1 || true)"
+  if [[ "$req" != *"certificate leaf"* && "$req" != *"anchor apple generic"* ]]; then
+    [[ "${LEANKEYS_ALLOW_ADHOC_RELEASE:-}" == 1 ]] ||
+      die "$dmg được ký ad-hoc (không có chữ ký ổn định); người dùng sẽ mất quyền Trợ năng. Build lại với LeanKeys Self-Signed hoặc Developer ID, hoặc đặt LEANKEYS_ALLOW_ADHOC_RELEASE=1 nếu cố ý."
+    print -r -- "LEANKEYS_ALLOW_ADHOC_RELEASE=1: phát hành bản ad-hoc có chủ ý."
+  fi
   detach_dmg
   print -r -- "$dmg có LeanKeys.app."
 

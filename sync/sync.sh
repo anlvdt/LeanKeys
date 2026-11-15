@@ -373,7 +373,7 @@ main() {
   # Build in the worktree.
   if (( ! skip_build )); then
     local brc=0
-    run_bg "$tmpout" "$wt" "leankeys/build.sh --version '$ver' --dmg" || brc=$?
+    run_bg "$tmpout" "$wt" "LEANKEYS_REQUIRE_STABLE_SIGNING=1 leankeys/build.sh --version '$ver' --dmg" || brc=$?
     if (( brc )) || [[ ! -f "$wt/dist/LeanKeys-$ver.dmg" ]]; then
       say ""
       say "## Build lỗi (mã $brc)"

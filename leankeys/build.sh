@@ -40,6 +40,16 @@ pick_signing_kind() {
         echo adhoc
     fi
 }
+# Fails (non-zero, message on stderr) when LEANKEYS_REQUIRE_STABLE_SIGNING=1 and the kind is ad-hoc. sync/sync.sh sets it:
+# an ad-hoc build would cost every user their Accessibility grant, so the job must fail instead of shipping it.
+# $1 is the kind from pick_signing_kind.
+require_stable_signing() {
+    local kind="$1"
+    if [[ "${LEANKEYS_REQUIRE_STABLE_SIGNING:-0}" == 1 && "$kind" != developer-id && "$kind" != self-signed ]]; then
+        echo 'Stable signing required (LEANKEYS_REQUIRE_STABLE_SIGNING=1) but "LeanKeys Self-Signed" was not found — unlock the login keychain or run sync/make-signing-cert.sh' >&2
+        return 1
+    fi
+}
 [[ "${LEANKEYS_SOURCE_ONLY:-}" == 1 ]] && return 0
 
 if [[ -z "$VERSION" ]]; then
@@ -53,6 +63,14 @@ APP="$DIST/$NAME.app"
 DERIVED="$ROOT/build/dd"
 ICON="$ROOT/leankeys/Branding/AppIcon.icns"
 [[ -f "$ICON" ]] || { echo "build.sh: missing $ICON (run: swift leankeys/Branding/make-icon.swift)" >&2; exit 1; }
+
+# Signing kind is picked before the expensive build so a required-but-missing stable identity fails fast.
+ENTITLEMENTS_PROD="$ROOT/platforms/macos/GoNhanh.entitlements.production"
+SIGN_KIND="$(pick_signing_kind "$(security find-identity -p codesigning 2>/dev/null || true)")"
+require_stable_signing "$SIGN_KIND" || exit 1
+if [[ -n "${LEANKEYS_SIGN_IDENTITY:-}" && -z "${LEANKEYS_NOTARY_PROFILE:-}" ]]; then
+    echo "build.sh: warning: LEANKEYS_SIGN_IDENTITY is set without LEANKEYS_NOTARY_PROFILE; not notarizing, and the Developer ID path needs both" >&2
+fi
 
 # 1. Rust core, universal. Reuses upstream's core.sh, which needs both rustup targets.
 [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
@@ -101,8 +119,6 @@ $PB -c "Set :CFBundleIconFile AppIcon" "$PLIST" 2>/dev/null || $PB -c "Add :CFBu
 cp "$ICON" "$APP/Contents/Resources/AppIcon.icns"
 
 # 5. Sign.
-ENTITLEMENTS_PROD="$ROOT/platforms/macos/GoNhanh.entitlements.production"
-SIGN_KIND="$(pick_signing_kind "$(security find-identity -p codesigning 2>/dev/null || true)")"
 if [[ "$SIGN_KIND" == developer-id ]]; then
     echo "==> Signing with Developer ID: $LEANKEYS_SIGN_IDENTITY"
     codesign --force --deep --options runtime --timestamp \

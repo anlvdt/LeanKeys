@@ -37,5 +37,21 @@ check "both env vars give developer-id" developer-id \
 check "sign identity without notary profile gives self-signed" self-signed \
   "$(pick "$self_signed_line" LEANKEYS_SIGN_IDENTITY="Developer ID Application: Test")"
 
+# require <kind> [VAR=value ...]: prints require_stable_signing's stderr and exit status, run in a fresh shell.
+require() {
+  local kind="$1"; shift
+  env -u LEANKEYS_REQUIRE_STABLE_SIGNING "$@" LEANKEYS_SOURCE_ONLY=1 BUILD_SH="$build" KIND="$kind" \
+    zsh -c 'set --; source "$BUILD_SH"; require_stable_signing "$KIND"' 2>&1
+  print -r -- "status=$?"
+}
+missing_msg='Stable signing required (LEANKEYS_REQUIRE_STABLE_SIGNING=1) but "LeanKeys Self-Signed" was not found — unlock the login keychain or run sync/make-signing-cert.sh'
+
+check "required and adhoc fails with the message" "$missing_msg
+status=1" "$(require adhoc LEANKEYS_REQUIRE_STABLE_SIGNING=1)"
+check "required and self-signed passes" "status=0" "$(require self-signed LEANKEYS_REQUIRE_STABLE_SIGNING=1)"
+check "required and developer-id passes" "status=0" "$(require developer-id LEANKEYS_REQUIRE_STABLE_SIGNING=1)"
+check "not required and adhoc passes" "status=0" "$(require adhoc)"
+check "required=0 and adhoc passes" "status=0" "$(require adhoc LEANKEYS_REQUIRE_STABLE_SIGNING=0)"
+
 print -r -- "$passed passed, $failed failed"
 (( failed == 0 ))

@@ -50,7 +50,14 @@ if [[ "$1" == attach ]]; then
 fi
 exit 0
 EOF
-chmod +x "$bin/gh" "$bin/hdiutil"
+# Fake codesign: `-dr - APP` prints FAKE_CODESIGN_REQ (default: a self-signed leaf requirement).
+cat > "$bin/codesign" <<'FAKECS'
+#!/bin/zsh
+print -r -- "codesign $*" >> "$FAKE_LOG"
+print -r -- "${FAKE_CODESIGN_REQ:-designated => identifier \"io.github.anlvdt.leankeys\" and certificate leaf[subject.CN] = \"LeanKeys Self-Signed\"}"
+exit 0
+FAKECS
+chmod +x "$bin/gh" "$bin/hdiutil" "$bin/codesign"
 export PATH="$bin:$PATH"
 
 # Fail closed: never let a case reach the real gh or hdiutil.
@@ -334,10 +341,44 @@ test_prepush_stops_on_failure() {
   check $0 "later steps skipped" not log_has "test_sync.sh"
 }
 
+# An ad-hoc DMG (cdhash requirement) is refused before any GitHub call; the DMG is still detached.
+test_adhoc_release_refused() {
+  setup adhoc
+  ready 1.1
+  FAKE_CODESIGN_REQ='designated => cdhash H"abcdef"' LEANKEYS_RELEASE_ASSUME_YES=1 run_release
+  check $0 "exit 1" is_rc 1 &&
+  check $0 "says ad-hoc" out_has "ad-hoc" &&
+  check $0 "names the override" out_has "LEANKEYS_ALLOW_ADHOC_RELEASE=1" &&
+  check $0 "no repo, release or push" not log_has "gh release create" &&
+  check $0 "no repo created" not log_has "gh repo create" &&
+  check $0 "no tag" not local_tag v1.1 &&
+  check $0 "DMG detached" log_has "hdiutil detach" &&
+  check $0 "READY kept" [ -f "$repo/dist/READY" ]
+}
+
+# The override publishes an ad-hoc DMG on purpose.
+test_adhoc_release_override() {
+  setup adhocok
+  ready 1.1
+  FAKE_CODESIGN_REQ='designated => cdhash H"abcdef"' LEANKEYS_ALLOW_ADHOC_RELEASE=1 LEANKEYS_RELEASE_ASSUME_YES=1 run_release
+  check $0 "exit 0" is_rc 0 &&
+  check $0 "release created" log_has "gh release create v1.1"
+}
+
+# A Developer ID requirement (Apple anchor plus leaf) is accepted.
+test_developer_id_release_passes() {
+  setup devid
+  ready 1.1
+  FAKE_CODESIGN_REQ='designated => anchor apple generic and certificate leaf[subject.OU] = "TEAM123456"' LEANKEYS_RELEASE_ASSUME_YES=1 run_release
+  check $0 "exit 0" is_rc 0 &&
+  check $0 "release created" log_has "gh release create v1.1"
+}
+
 for t in test_no_ready_exits_1 test_dry_run_prints_plan test_missing_dmg_exits_1 \
   test_existing_local_tag_refused test_existing_remote_tag_refused \
   test_failure_cleans_up test_first_release_creates_repo test_not_confirmed_aborts \
   test_piped_yes_without_tty_refuses test_existing_origin_disables_actions_before_push \
+  test_adhoc_release_refused test_adhoc_release_override test_developer_id_release_passes \
   test_prepush_ignores_git_hook_args test_prepush_stops_on_failure; do
   if $t; then
     passed=$((passed + 1)); print -r -- "ok   $t"
