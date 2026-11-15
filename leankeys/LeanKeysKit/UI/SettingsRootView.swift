@@ -15,6 +15,11 @@ public enum SettingsPage: CaseIterable {
         }
     }
 
+    /// Advanced scrolls itself, as in upstream, so the root must not add a second ScrollView around it.
+    public var scrollsContent: Bool {
+        self != .advanced
+    }
+
     public var symbol: String {
         switch self {
         case .general: return "gearshape"
@@ -73,10 +78,18 @@ public struct SettingsRootView: View {
                 .frame(maxHeight: .infinity)
                 .background(SettingsVisualEffect(material: .sidebar))
 
-            ScrollView(showsIndicators: false) {
-                pageViews[selected, default: AnyView(EmptyView())]
-                    .padding(28)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                if selected.scrollsContent {
+                    ScrollView(showsIndicators: false) {
+                        pageViews[selected, default: AnyView(EmptyView())]
+                            .padding(28)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } else {
+                    pageViews[selected, default: AnyView(EmptyView())]
+                        .padding(28)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(contentBackground)

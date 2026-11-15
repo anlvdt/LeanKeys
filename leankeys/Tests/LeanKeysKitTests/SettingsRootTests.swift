@@ -17,4 +17,8 @@ final class SettingsRootTests: XCTestCase {
         XCTAssertEqual(SettingsPage(legacyRawValue: "Giới thiệu"), .about)
         XCTAssertNil(SettingsPage(legacyRawValue: "x"))
     }
+
+    func testOnlyAdvancedManagesItsOwnScrolling() {
+        XCTAssertEqual(SettingsPage.allCases.filter { !$0.scrollsContent }, [.advanced])
+    }
 }
