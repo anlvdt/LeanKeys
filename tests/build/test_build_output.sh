@@ -10,6 +10,9 @@ root="${0:A:h:h:h}"
 app="$root/dist/LeanKeys.app"
 plist="$app/Contents/Info.plist"
 pb=/usr/libexec/PlistBuddy
+# The current release number, so the build left in dist/ is the one the next release ships (not a stale 1.0).
+version="$(sed -n 's/.*"leankeys" *: *"\([^"]*\)".*/\1/p' "$root/leankeys/LeanKeysKit/Resources/Versions.json")"
+[[ -n "$version" ]] || { print -r -- "FAIL no leankeys version in Versions.json"; exit 1; }
 
 passed=0
 failed=0
@@ -23,7 +26,7 @@ check() { # check <name> <expected> <actual>
 key() { $pb -c "Print :$1" "$plist" 2>/dev/null || print -r -- "<missing>"; }
 
 if [[ -z "${LEANKEYS_SKIP_BUILD:-}" ]]; then
-  if ! "$root/leankeys/build.sh" --version 1.0; then
+  if ! "$root/leankeys/build.sh" --version "$version"; then
     print -r -- "FAIL leankeys/build.sh exited non-zero"
     exit 1
   fi
@@ -37,7 +40,7 @@ fi
 check CFBundleIdentifier io.github.anlvdt.leankeys "$(key CFBundleIdentifier)"
 check CFBundleName LeanKeys "$(key CFBundleName)"
 check CFBundleDisplayName LeanKeys "$(key CFBundleDisplayName)"
-check CFBundleShortVersionString 1.0 "$(key CFBundleShortVersionString)"
+check CFBundleShortVersionString "$version" "$(key CFBundleShortVersionString)"
 check CFBundleIconFile AppIcon "$(key CFBundleIconFile)"
 check "CFBundleIconName absent" "<missing>" "$(key CFBundleIconName)"
 exe="$(key CFBundleExecutable)"
