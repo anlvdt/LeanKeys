@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import LeanKeysKit // LEANKEYS-HOOK: settings-engine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -1045,6 +1046,7 @@ struct SettingsPageView: View {
             }
             .cardBackground()
 
+            EngineSettingsSection(onEngineChanged: { RustBridge.clearBuffer() }) // LEANKEYS-HOOK: settings-engine
             // Phím tắt
             VStack(spacing: 0) {
                 ShortcutRecorderRow(shortcut: $appState.toggleShortcut,
