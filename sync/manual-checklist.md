@@ -30,5 +30,8 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | P4 | Menu bar | Chế độ tối: ô nổi và cửa sổ Cài đặt đều đọc rõ. | — | [ ] |
 | P5 | Menu bar | Bật "Giảm chuyển động" của macOS: icon đổi ngay, không mờ dần. Ở Cài đặt → Nâng cao, đổi "Engine gõ" rồi về Chung: các mục chỉ dành cho Gõ Nhanh hiện hoặc ẩn ngay. | — | [ ] |
 | P6 | Menu bar | bấm icon lần nữa thì ô nổi đóng, không mở lại | — | [ ] |
+| A1 | Cài mới (Trợ năng) | Trên máy mới: LeanKeys đã có sẵn trong danh sách Trợ năng, chỉ cần bật một công tắc là gõ được. | — | [ ] |
+| A2 | Cửa sổ chào bị che | Đưa cửa sổ chào của LeanKeys ra sau một cửa sổ khác, cấp quyền Trợ năng: LeanKeys tự mở lại đúng một lần và gõ được. | — | [ ] |
+| A3 | Cập nhật self-signed | Cập nhật từ bản self-signed sang bản self-signed khác: gõ vẫn được, không phải cấp quyền lại. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 34 ô đều đạt.
+Chỉ gõ `yes` khi cả 37 ô đều đạt.
