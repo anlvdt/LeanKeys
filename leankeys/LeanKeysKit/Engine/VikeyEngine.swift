@@ -11,8 +11,10 @@ public final class VikeyEngine: TypingEngine {
 
     public func process(keyCode: UInt16, caps: Bool, shift: Bool) -> EngineEdit? {
         let letter = Self.letterKeys.contains(keyCode)
-        // Ruling R3: for letters Caps Lock flips Shift; other keys take Shift as it is.
-        let vikeyShift = letter ? (shift != caps) : shift
+        // The macOS key path passes caps = Shift || Caps Lock, and macOS types capitals when either is held
+        // (Shift does not invert Caps Lock). So a letter is upper case exactly when `caps` is set; other keys
+        // take Shift as it is. (Phase-1 ruling R3 used Shift XOR caps, which turned "DD" + Shift into "đ".)
+        let vikeyShift = letter ? caps : shift
 
         if Self.navigationKeys.contains(keyCode) {
             resetContext()

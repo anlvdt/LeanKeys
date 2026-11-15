@@ -169,14 +169,35 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertNil(engine.process(keyCode: kBackspace, caps: false, shift: false), "English mode")
     }
 
-    func testCapsLockXorShiftForLetters() {
-        // Ruling R3: for letters Vikey's shift is shift XOR caps. "dd" with Caps Lock is "Đ"; with Caps Lock and Shift, "đ".
+    func testShiftedCapitalsSurviveTelex() {
+        // The macOS key path passes caps = Shift || Caps Lock (RustBridge.swift "let caps = shift || …").
+        // Holding Shift for "DDaif Loan" must give "Đài Loan", not "đài Loan".
+        func press(_ ch: Character) -> EngineEdit? {
+            let upper = ch.isUppercase
+            return engine.process(keyCode: macKey[Character(ch.lowercased())]!, caps: upper, shift: upper)
+        }
+        var text: [Character] = []
+        for ch in "DDaif Loan " {
+            if let e = press(ch) {
+                text.removeLast(min(e.deleteCount, text.count)); text += e.text
+                if e.keyPassesThrough { text.append(ch) }
+            } else { text.append(ch) }
+        }
+        XCTAssertEqual(String(text), "Đài Loan ")
+    }
+
+    func testCapsLockAloneGivesCapitals() {
+        // Caps Lock without Shift: caps = true, shift = false. Letters are upper case.
         let d = macKey["d"]!
         _ = engine.process(keyCode: d, caps: true, shift: false)
         XCTAssertEqual(engine.process(keyCode: d, caps: true, shift: false)?.text, ["Đ"])
-        engine.resetContext()
+    }
+
+    func testCapsLockWithShiftGivesCapitals() {
+        // macOS does not invert Caps Lock with Shift: both held still types capitals.
+        let d = macKey["d"]!
         _ = engine.process(keyCode: d, caps: true, shift: true)
-        XCTAssertEqual(engine.process(keyCode: d, caps: true, shift: true)?.text, ["đ"])
+        XCTAssertEqual(engine.process(keyCode: d, caps: true, shift: true)?.text, ["Đ"])
     }
 
     // Ruling R12: after Vikey fixes a word, a break key is typed by the key itself, not injected as text.
