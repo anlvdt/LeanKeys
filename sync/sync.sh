@@ -33,6 +33,8 @@
 emulate -L zsh
 setopt no_unset pipe_fail
 
+# Script path, captured before main() (inside a function $0 is its name).
+typeset -g self="${0:A}"
 typeset -g repo="" lock="" report="" notify=1 skip_build=0
 typeset -g orig="" branch="" main_branch=""
 
@@ -119,11 +121,11 @@ main() {
               repo="$2"; shift 2 ;;
       --no-notify) notify=0; shift ;;
       --skip-build) skip_build=1; shift ;;
-      -h|--help) sed -n '2,30p' "${0:A}"; exit 0 ;;
+      -h|--help) sed -n '2,30p' "$self"; exit 0 ;;
       *) print -u2 "sync.sh: unknown argument: $1"; exit 1 ;;
     esac
   done
-  [[ -n "$repo" ]] || repo="${0:A:h:h}"
+  [[ -n "$repo" ]] || repo="${self:h:h}"
   repo="${repo:A}"
   main_branch="${LEANKEYS_MAIN_BRANCH:-main}"
 

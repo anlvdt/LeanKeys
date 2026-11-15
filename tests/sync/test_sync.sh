@@ -245,11 +245,25 @@ test_missing_default_test_cmd_exits_3() {
   check $0 "main unchanged" main_is "$before"
 }
 
+# launchd runs "<repo>/sync/sync.sh" with no --repo and cwd /.
+test_default_repo_is_scripts_own() {
+  setup selfrepo
+  cp "$sync_sh" "$fork/sync/sync.sh" && chmod +x "$fork/sync/sync.sh"
+  git -C "$fork" add -A && git -C "$fork" commit -q -m 'add sync.sh'
+  upstream_release A 'alpha 2' v1.0.166
+  rc=0
+  out="$(cd / && LEANKEYS_UPSTREAM_URL="$up" LEANKEYS_VIKEY_URL="$vk" LEANKEYS_TEST_CMD=true \
+    "$fork/sync/sync.sh" --no-notify --skip-build 2>&1)" || rc=$?
+  check $0 "exit 0" is_rc 0 &&
+  check $0 "report written in the script's repo" [ -f "$fork/sync/reports/$today.md" ] &&
+  check $0 "main contains v1.0.166" git -C "$fork" merge-base --is-ancestor v1.0.166 main
+}
+
 for t in test_no_new_tags_exits_0_without_branch test_new_tag_merges_to_main \
   test_conflict_aborts test_failing_tests_keep_main test_lock_prevents_overlap \
   test_stale_lock_is_taken_over test_ported_file_change_reported \
   test_unrelated_higher_tag_ignored test_build_writes_ready \
-  test_missing_default_test_cmd_exits_3; do
+  test_missing_default_test_cmd_exits_3 test_default_repo_is_scripts_own; do
   if $t; then
     passed=$((passed + 1)); print -r -- "ok   $t"
   else
