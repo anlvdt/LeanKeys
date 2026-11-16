@@ -201,14 +201,19 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(strict).type("tooi owr haf nooij "), "tôi ở Hà Nội ")
         XCTAssertEqual(line(strict).type("ddi hnn "), "đi Hà Nội ")
         XCTAssertEqual(line(strict).type("ddi hnn "), "đi Hà Nội ")
+        // A word LeanKeys capitalised, committed again after ⌫ moved back into it.
+        XCTAssertEqual(line(strict).type("tooi owr haf nooij a⌫⌫ "), "tôi ở Hà Nội ")
+        XCTAssertEqual(line(strict).type("tooi owr haf nooij a⌫⌫ "), "tôi ở Hà Nội ")
+        // Each negative has its own word, typed twice (the threshold), so one slip would show.
         XCTAssertEqual(line(strict).type("Tiki "), "Tiki ")
-        XCTAssertEqual(line(strict).type("xong. Tiki "), "xong. Tiki ")
-        XCTAssertEqual(line(strict).type("xong.Tiki "), "xong.Tiki ", "glued to punctuation")
-        XCTAssertTrue(open.names.isEmpty, "capitalised by LeanKeys, gõ tắt, phrase start: nothing learned")
+        XCTAssertEqual(line(strict).type("xong. Tiki "), "xong. Tiki ", "phrase start after '. '")
+        XCTAssertEqual(line(strict).type("xong.Lazada "), "xong.Lazada ", "glued to punctuation")
+        XCTAssertEqual(line(strict).type("xong.Lazada "), "xong.Lazada ")
+        XCTAssertTrue(open.names.isEmpty, "LeanKeys' capitals, gõ tắt, phrase start, glued: nothing learned")
         // Excluded: a password field.
         context = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: true, now: Date())
-        line(strict).type("mua Tiki ")
-        line(strict).type("mua Tiki ")
+        line(strict).type("mua Kiki ")
+        line(strict).type("mua Kiki ")
         XCTAssertTrue(open.names.isEmpty, "nothing learned in a password field")
         // Control: the same word mid-phrase in an ordinary field is learned.
         context = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: false, now: Date())
