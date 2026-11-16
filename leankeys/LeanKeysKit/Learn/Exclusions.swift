@@ -10,7 +10,44 @@ public enum Exclusions {
         "com.apple.keychainaccess",
         "com.apple.Passwords",
         "org.keepassxc.keepassxc",
+        // Terminals: sudo, ssh and git ask for passwords there without Secure Input or a secure text field.
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "dev.warp.Warp-Stable",
+        "com.mitchellh.ghostty",
+        "org.alacritty",
+        "net.kovidgoyal.kitty",
+        "com.github.wez.wezterm",
+        "co.zeit.hyper",
+        "org.tabby",
     ]
+
+    /// A word shaped like a password or key: at least 6 characters (sentence punctuation at its ends aside) mixing
+    /// letters with digits ("hunter2hunter2", "Matkhau2024"), or using a symbol people put in passwords
+    /// (`@ # $ % ^ & * ! ~ _ + = | \\ < > ?`) next to letters or digits ("P4ssw0rd!", "Abc@12345").
+    /// Not secret-shaped: plain words, hyphenated words ("check-in"), numbers with `. , / : -` (dates, prices,
+    /// times, house numbers), money and times with a unit ("500.000đ", "12h30"), and web addresses whose last
+    /// label is letters only ("shopee.vn/abc", "https://…"; "Matkhau.2024" is no address). Emails and phones are recognised pieces and never reach this check.
+    public static func looksLikeSecret(_ word: String) -> Bool {
+        let core = trimmedWord(word)
+        guard core.count >= 6 else { return false }
+        let lower = core.lowercased()
+        if lower.range(of: #"^(https?://)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(/\S*)?$"#, options: .regularExpression) != nil { return false }
+        if lower.range(of: #"^\d[\d.,]*(đ|d|k|vnđ|vnd|usd|tr|đồng)$"#, options: .regularExpression) != nil { return false }
+        if lower.range(of: #"^\d{1,2}h(\d{1,2})?(p|ph)?$"#, options: .regularExpression) != nil { return false }
+        var letters = false, digits = false, special = false
+        for scalar in core.unicodeScalars {
+            if CharacterSet.letters.contains(scalar) || CharacterSet.nonBaseCharacters.contains(scalar) { letters = true }
+            else if CharacterSet.decimalDigits.contains(scalar) { digits = true }
+            else if !"-'’./,:".unicodeScalars.contains(scalar) { special = true }
+        }
+        return (letters && digits) || (special && (letters || digits))
+    }
+
+    /// `word` without the sentence punctuation and quotes around it.
+    public static func trimmedWord(_ word: String) -> String {
+        word.trimmingCharacters(in: CharacterSet(charactersIn: ".,!?;:()\"'“”‘’…"))
+    }
 
     /// A number as typed: digit groups joined by single spaces, dots or dashes ("4111 1111 1111 1111",
     /// "0912.345.678", "482913").

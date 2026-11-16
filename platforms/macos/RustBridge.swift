@@ -1611,6 +1611,7 @@ private func keyboardCallback(
         }
 
         let (method, delays) = detectMethod()
+        if method == .passthrough { EngineRouter.shared.discardPending(); return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch
 
         if let (bs, chars, keyConsumed) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
             Log.key(keyCode, "enter: bs=\(bs) chars='\(String(chars))' consumed=\(keyConsumed)")
@@ -1653,6 +1654,7 @@ private func keyboardCallback(
     // iPhone Mirroring and other passthrough apps: pass all keys directly
     // These apps handle text input remotely and cannot receive macOS text injection
     if method == .passthrough {
+        EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
         return Unmanaged.passUnretained(event)
     }
 
@@ -1895,6 +1897,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
     var focused: CFTypeRef?
     var role: String?
     var bundleId: String?
+    var focusedElement: AXUIElement? // LEANKEYS-HOOK: engine-dispatch
 
     // Time the AX IPC: if a focused app is slow to answer, this is what stalls
     // the event-tap callback. The bounded messaging timeout caps each call, so a
@@ -1904,6 +1907,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
        let el = focused
     {
         let axEl = el as! AXUIElement
+        focusedElement = axEl // LEANKEYS-HOOK: engine-dispatch
 
         // Get role
         var roleVal: CFTypeRef?
@@ -1936,6 +1940,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
     func cached(_ m: InjectionMethod, _ d: (UInt32, UInt32, UInt32), _ methodName: String) -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
         // Store base detection result (before overrides) for UI hint
         DetectionCache.setDetectedDefault(for: bundleId, value: (method: "\(m)", delays: d))
+        if m == .passthrough { DetectionCache.set(m, d, logKey: "\(methodName) [\(bundleId)]"); return (m, d) } // LEANKEYS-HOOK: engine-dispatch (no per-app override replaces pass-through)
 
         // Apply per-app profile overrides from snapshot (set on app switch, thread-safe)
         if let profile = DetectionCache.activeProfile {
@@ -1980,6 +1985,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
     if remoteDesktopApps.contains(bundleId) {
         return cached(.passthrough, (0, 0, 0), "pass:remote")
     }
+    if let why = KeyPassthrough.reason(bundleID: bundleId, focused: focusedElement) { return cached(.passthrough, (0, 0, 0), "pass:" + why) } // LEANKEYS-HOOK: engine-dispatch
 
     // Selection method for autocomplete UI elements
     if role == "AXComboBox" {
