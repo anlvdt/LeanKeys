@@ -79,6 +79,9 @@ public final class UndoLearning: ObservableObject {
     private let secureField: (LearnContextProbe) -> Bool
     private let recordQueue = DispatchQueue(label: "io.github.anlvdt.leankeys.undo-learning.record")
     private let onRecordQueue: (@escaping () -> Void) -> Void
+    /// Bumped by "Xoá tất cả": a record queued under an older generation drops itself (ruling R17).
+    private var generation = 0
+    private let generationLock = NSLock()
 
     /// The instance the C filter asks. Set by `install()`; read on the key-handling thread, which also installs.
     fileprivate static var installed: UndoLearning?
@@ -153,7 +156,15 @@ public final class UndoLearning: ObservableObject {
     /// learning is off or the user is typing somewhere excluded), and one undo of `learnedName` when a learned
     /// name made it. Key-handling thread; the record runs on the background queue, as in `afterPress`.
     func capitalizationUndone(_ text: String, previous: String, learnedName: String?) {
-        if let learnedName { learnedNames.undone(word: learnedName) }
+        // On the queue, after any sighting of the name already there (review M1). It only removes data: no
+        // secure-field check.
+        if let learnedName {
+            let generation = currentGeneration()
+            onRecordQueue { [weak self, learnedNames] in
+                guard self?.currentGeneration() == generation else { return }
+                learnedNames.undone(word: learnedName)
+            }
+        }
         guard learning, let probe = includedProbe() else { return }
         // A secret-shaped word before the phrase is never kept as its context (ruling R14).
         let previous = Exclusions.looksLikeSecret(previous) ? "" : previous
@@ -177,11 +188,18 @@ public final class UndoLearning: ObservableObject {
         return isExcluded(probe) ? nil : probe
     }
 
-    /// Runs `work` on the record queue unless the probed app's focused field is a password field or cannot be told.
+    /// Runs `work` on the record queue unless the probed app's focused field is a password field or cannot be told,
+    /// or "Xoá tất cả" came after it was queued.
     private func record(_ probe: LearnContextProbe, _ work: @escaping () -> Void) {
         let secureField = secureField
-        onRecordQueue { if !secureField(probe) { work() } }
+        let generation = currentGeneration()
+        onRecordQueue { [weak self] in
+            guard self?.currentGeneration() == generation, !secureField(probe) else { return }
+            work()
+        }
     }
+
+    private func currentGeneration() -> Int { generationLock.withLock { generation } }
 
     /// Learned names kept in memory only, with the real dictionary check and the bundled titles.
     static func memoryNames() -> LearnedNames {
@@ -193,10 +211,17 @@ public final class UndoLearning: ObservableObject {
 
     public func remove(_ name: LearnedName) { learnedNames.remove(name) }
 
-    /// "Xoá tất cả" (spec 17.3): every rule, capitalisation rules included, and every learned name.
+    /// "Xoá tất cả" (spec 17.3): every rule, capitalisation rules included, and every learned name. Cleared now,
+    /// so the list empties at once, and again on the record queue behind any work already there; that work drops
+    /// itself as well (ruling R17), so nothing queued before brings a rule or a hidden count back.
     public func removeAll() {
+        generationLock.withLock { generation += 1 }
         book.removeAll()
         learnedNames.removeAll()
+        onRecordQueue { [book, learnedNames] in
+            book.removeAll()
+            learnedNames.removeAll()
+        }
     }
 
     /// Waits for queued records and the saves they started, for tests.
