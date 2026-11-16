@@ -160,6 +160,24 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(router).type("chuyeens bay ra haf nooij ⌫s"), "chuyến bay ra hà nối")
     }
 
+    /// The words ⌫ gave back stay as typed when finished unchanged, with or without a word before them, even
+    /// where the rule book would not keep them yet; editing them, or the next occurrence, is judged normally.
+    func testUndoneWordsStayAtNextBreak() {
+        let book = UndoRuleBook(store: nil)
+        let router = makeRouter(book: book)
+        XCTAssertEqual(line(router).type("nguyeenx ⌫ "), "nguyễn ", "no previous word: no rule after one undo")
+        XCTAssertEqual(line(router).type("nguyeenx ⌫."), "nguyễn.")
+        XCTAssertEqual(line(router).type("tooi o haf nooij ⌫ "), "tôi o hà nội ")
+        XCTAssertEqual(line(router).type("tooi o haf nooij ⌫ ddi "), "tôi o hà nội đi ", "the break ends it")
+        // Edited after the undo: judged again (no rule keeps "huỳnh" after one contextless undo).
+        XCTAssertEqual(line(router).type("huyfnh ⌫a⌫ "), "Huỳnh ")
+        // The next occurrence after one contextless undo (a rule needs two) is capitalised again.
+        let fresh = makeRouter()
+        XCTAssertEqual(line(fresh).type("nguyeenx ⌫ "), "nguyễn ")
+        settle()
+        XCTAssertEqual(line(fresh).type("nguyeenx "), "Nguyễn ")
+    }
+
     /// Only the very next key undoes, and not after the cursor moved or after Return.
     func testOnlyTheNextBackspaceUndoes() {
         let router = makeRouter()

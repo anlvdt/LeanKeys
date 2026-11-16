@@ -34,6 +34,9 @@ public final class EngineRouter {
     private var capitalizer: AutoCapitalizer?
     /// The word being typed began with a letter key the user typed as a capital (Shift or Caps Lock).
     private var wordStartsWithUserCapital = false
+    /// The phrase text right after a ⌫ undo of a capitalisation: while it stands unchanged, the words it gave back
+    /// are not capitalised again at the next break, whatever the rule book says (like Vikey's own undone word).
+    private var restoredByUndo: String?
     private var vikeyAttempted = false
     private var method = 0
     private var vietnamese = true
@@ -96,6 +99,8 @@ public final class EngineRouter {
         }
         let wordWasEmpty = mirror.currentWord.isEmpty
         let result = interceptVikey(vikey, keyCode: keyCode, caps: caps, shift: shift, capitalized: capitalized)
+        // The words a ⌫ undo gave back stay as typed only until they change or the break after them is typed.
+        if let restored = restoredByUndo, mirror.phraseText != restored { restoredByUndo = nil }
         // Whether the word now being typed began with the user's own capital (spec 17.1.3).
         if mirror.currentWord.isEmpty {
             wordStartsWithUserCapital = false
@@ -177,7 +182,8 @@ public final class EngineRouter {
     /// Return and punctuation are typed by the key itself after the edit, as in `expandShortcut`.
     private func capitalize(_ committed: CommittedWordContext, keyCode: UInt16, shift: Bool,
                             caps: Bool) -> (Int, [Character], Bool)? {
-        guard let undoLearning, undoLearning.autoCapitalize, let capitalizer,
+        guard committed.phraseText != restoredByUndo,
+              let undoLearning, undoLearning.autoCapitalize, let capitalizer,
               let replacement = capitalizer.replacement(phraseText: committed.phraseText,
                                                         keepsLowercase: undoLearning.keepsLowercase)
         else { return nil }
@@ -202,6 +208,7 @@ public final class EngineRouter {
                                            learnedName: capitalizer?.learnedName(in: replacement))
         let result = (replacement.capitalized.count + made.breakLength, Array(replacement.original), true)
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+        restoredByUndo = mirror.phraseText
         return result
     }
 
@@ -209,6 +216,7 @@ public final class EngineRouter {
     private func forgetWord() {
         capitalizer?.last = nil
         wordStartsWithUserCapital = false
+        restoredByUndo = nil
     }
 
     /// The user's gõ tắt, for Vikey only: Gõ Nhanh expands its own copy (`RustBridge.syncShortcuts`), so the
