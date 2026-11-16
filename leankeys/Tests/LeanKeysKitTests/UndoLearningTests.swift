@@ -380,14 +380,25 @@ final class UndoLearningTests: XCTestCase {
         XCTAssertEqual(deferred.axReads, 0)
     }
 
-    /// A store that keeps what it is handed, for checking what reached disk. Saves arrive on a private queue.
+    /// A store that keeps what it is handed, for checking what reached disk: the current data and every save ever
+    /// made (review re-review Minor 3). Saves arrive on a private queue.
     private final class KeptStore: LearnStore {
         private let lock = NSLock()
         private var data: Data?
+        private var saves: [Data] = []
         var saved: Data? { lock.withLock { data } }
+        var everySave: [Data] { lock.withLock { saves } }
         func load() throws -> Data? { lock.withLock { data } }
-        func save(_ data: Data) throws { lock.withLock { self.data = data } }
+        func save(_ data: Data) throws { lock.withLock { self.data = data; saves.append(data) } }
         func erase() throws { lock.withLock { data = nil } }
+
+        /// Whether any save ever held `text`, composed or decomposed.
+        func everSaved(_ text: String) -> Bool {
+            everySave.contains { save in
+                [text.precomposedStringWithCanonicalMapping, text.decomposedStringWithCanonicalMapping]
+                    .contains { save.range(of: Data($0.utf8)) != nil }
+            }
+        }
     }
 
     /// Ruling R17 (review I1): records queued before "Xoá tất cả" never bring a rule or a hidden count back, in
@@ -404,7 +415,16 @@ final class UndoLearningTests: XCTestCase {
         learning.userCapitalized("Tiki", previous: "mua")
         learning.userCapitalized("Tiki", previous: "mua")
         learning.removeAll()
+        // The queued records run and their saves finish before the queued clear (review re-review Minor 3): a
+        // record that ignored the generation would reach a save here, even though the clear wipes it later.
+        let queuedClear = deferred.work.removeLast()
         deferred.drain()
+        book.flush()
+        names.flush()
+        XCTAssertFalse(bookStore.everSaved("cos"), "no save ever held the queued rule")
+        XCTAssertFalse(bookStore.everSaved("cap:hà nội"), "nor the queued capitalisation rule")
+        XCTAssertFalse(namesStore.everSaved("Tiki"), "nor the queued name")
+        queuedClear()
         book.flush()
         names.flush()
         XCTAssertTrue(book.rules.isEmpty)
@@ -421,6 +441,39 @@ final class UndoLearningTests: XCTestCase {
         learning.userCapitalized("Lazada", previous: "mua")
         deferred.drain()
         XCTAssertEqual(names.names.map(\.form), ["Lazada"])
+    }
+
+    /// Re-review Minor 1: a record that reads the generation "Xoá tất cả" bumped to is queued behind the queued
+    /// clear, so the clear never wipes it. The record is made on another thread at the moment the clear is being
+    /// queued, the one point where it could slip in ahead of it.
+    func testRecordAfterRemoveAllSurvivesTheQueuedClear() {
+        let lock = NSLock()
+        var work: [() -> Void] = []
+        var removing = false
+        let other = DispatchGroup()
+        var made: UndoLearning?
+        let book = UndoRuleBook(store: nil)
+        let learning = UndoLearning(book: book, defaults: defaults, probe: { [unowned self] in context.probe },
+                                    secureField: { _ in false }, names: fakeNames(), onRecordQueue: { closure in
+            let clearing: Bool = lock.withLock { defer { removing = false }; return removing }
+            if clearing, let made {
+                // The clear is being queued: another thread makes a record now, and gets up to 200 ms to queue it
+                // first. Under the fix it waits for the bump and the clear to be queued together, and times out.
+                DispatchQueue.global().async(group: other) {
+                    made.capitalizationUndone("cap:huế", previous: "ở", learnedName: nil)
+                }
+                _ = other.wait(timeout: .now() + 0.2)
+            }
+            lock.withLock { work.append(closure) }
+        })
+        made = learning
+        self.learning = learning
+        lock.withLock { removing = true }
+        learning.removeAll()
+        other.wait()
+        let queued = lock.withLock { work }
+        queued.forEach { $0() }
+        XCTAssertEqual(book.rules.map(\.text), ["cap:huế"], "the record made after the bump survived the clear")
     }
 
     /// Review M1: the undo of a learned name goes through the same queue as its sightings, so a sighting queued

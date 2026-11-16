@@ -63,6 +63,8 @@ public final class LearnedNames: LearnedNameLookup {
     /// The store could not be read or decoded at launch: nothing is saved this session, so its file is never
     /// overwritten, until "Xoá tất cả" erases it (`removeAll`).
     private var persistent: Bool
+    /// An erase from `removeAll` is queued and has not finished: another `removeAll` queues none (re-review Minor 2).
+    private var eraseQueued = false
     private var _onChange: (() -> Void)?
 
     /// Loads the saved names synchronously. `store == nil` keeps them in memory only. `hmacKey` must be 32 bytes
@@ -229,17 +231,28 @@ public final class LearnedNames: LearnedNameLookup {
             learned = [:]
             pending = [:]
             undos = [:]
-            return !persistent && store != nil
+            guard !persistent, store != nil, !eraseQueued else { return false }
+            eraseQueued = true
+            return true
         }
         if eraseUnreadable {
             saveQueue.async { [self] in
-                guard (try? store?.erase()) != nil else { return }
+                guard (try? store?.erase()) != nil else {
+                    lock.withLock { eraseQueued = false }
+                    return
+                }
                 // The erase removed the store's HMAC key too: digest new hidden counts with its new one, so they
                 // still match after a restart (review M2).
                 let newKey = (store as? LearnKeyProvider).flatMap { try? $0.hmacKey() }
                 lock.withLock {
+                    eraseQueued = false
                     persistent = true
-                    if let newKey, newKey.count == 32 { key = SymmetricKey(data: newKey) }
+                    if let newKey, newKey.count == 32 {
+                        key = SymmetricKey(data: newKey)
+                        // Counts made since `removeAll` are digests under the deleted key: they can never match
+                        // again (re-review Minor 2).
+                        pending = [:]
+                    }
                 }
             }
         }
