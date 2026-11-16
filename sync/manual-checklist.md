@@ -44,5 +44,9 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | C2 | 4C · Tự học có ngữ cảnh | Trong một câu tiếng Anh (`about its`), gõ "its" rồi ⌫⌫ để giữ nguyên. Lần sau gõ lại `about its`: "its" được giữ nguyên ngay. | — | [ ] |
 | C3 | 4C · Tự học không ngữ cảnh | Gõ "cos" ở hai câu khác nhau, mỗi lần ⌫⌫ để giữ nguyên. Lần thứ ba, ở một câu khác nữa, "cos" được giữ nguyên ngay. Cài đặt → Nâng cao → "Từ đã học" có dòng "cos". | — | [ ] |
 | C4 | 4C · Ô mật khẩu | Trong ô mật khẩu của Safari, gõ "its" rồi ⌫⌫ hai lần: "Từ đã học" không có thêm dòng nào. | — | [ ] |
+| U1 | Cập nhật trong ô nổi | Bản Release, máy đang có mạng, đang chạy bản mới nhất: bấm trái icon → "Kiểm tra cập nhật". Thấy vòng quay "Đang kiểm tra cập nhật…", rồi "Bạn đang dùng bản mới nhất". Đóng ô nổi, mở lại: nút "Kiểm tra cập nhật" hiện lại. | — | [ ] |
+| U2 | Cập nhật trong ô nổi | Bản Release self-signed cũ hơn bản trên GitHub: bấm "Kiểm tra cập nhật" một lần, không bấm gì thêm. Thấy thanh tiến độ "Đang tải bản mới… N%", rồi "Đang cài, LeanKeys sẽ tự mở lại". App tự thoát, tự mở lại ở bản mới (Giới thiệu hiện đúng số bản), gõ được ngay, không phải cấp lại quyền Trợ năng. Đóng ô nổi giữa chừng cũng không làm dừng việc cài. | — | [ ] |
+| U3 | Cập nhật trong ô nổi | Tắt Wi-Fi, bấm "Kiểm tra cập nhật": một dòng "Không kết nối được, thử lại sau" và nút "Thử lại"; không có chữ tiếng Anh. Bật Wi-Fi, bấm "Thử lại": chạy như U1 hoặc U2. | — | [ ] |
+| U4 | Cập nhật trong ô nổi | Bản mới ký ad-hoc (`leankeys/build.sh` trên máy không có chứng chỉ, đặt DMG làm bản tải về): ô nổi báo "Không cài được bản mới", app vẫn chạy bản cũ, gõ được. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 50 ô đều đạt.
+Chỉ gõ `yes` khi cả 54 ô đều đạt.

@@ -16,6 +16,12 @@ public struct StatusPopoverActions {
     /// Shortcut suggestions waiting (4B); the line shows only when above 0.
     public var suggestionCount: () -> Int
     public var openSuggestions: () -> Void
+    /// The update row (spec §16). nil falls back to `updateReady`: "Cài bản mới" or "Kiểm tra cập nhật".
+    public var updatePhase: (() -> PopoverUpdateRow.Phase)?
+    /// "Kiểm tra cập nhật" / "Thử lại": check, and install a newer version straight away.
+    public var checkForUpdates: () -> Void
+    /// The popover closed; a finished check's result can be cleared.
+    public var popoverClosed: () -> Void
 
     public init(
         snapshot: @escaping () -> StatusSnapshot,
@@ -27,7 +33,10 @@ public struct StatusPopoverActions {
         openSettings: @escaping () -> Void,
         quit: @escaping () -> Void,
         suggestionCount: @escaping () -> Int = { 0 },
-        openSuggestions: @escaping () -> Void = {}
+        openSuggestions: @escaping () -> Void = {},
+        updatePhase: (() -> PopoverUpdateRow.Phase)? = nil,
+        checkForUpdates: @escaping () -> Void = {},
+        popoverClosed: @escaping () -> Void = {}
     ) {
         self.snapshot = snapshot
         self.method = method
@@ -39,6 +48,9 @@ public struct StatusPopoverActions {
         self.quit = quit
         self.suggestionCount = suggestionCount
         self.openSuggestions = openSuggestions
+        self.updatePhase = updatePhase
+        self.checkForUpdates = checkForUpdates
+        self.popoverClosed = popoverClosed
     }
 }
 
@@ -48,6 +60,7 @@ public final class StatusPopoverModel: ObservableObject {
     @Published public private(set) var method: Int
     @Published public private(set) var updateReady: Bool
     @Published public private(set) var suggestionCount: Int
+    @Published public private(set) var updatePhase: PopoverUpdateRow.Phase
 
     private let actions: StatusPopoverActions
     /// Set by the controller so the popover closes before Settings opens.
@@ -59,6 +72,11 @@ public final class StatusPopoverModel: ObservableObject {
         self.method = actions.method()
         self.updateReady = actions.updateReady()
         self.suggestionCount = actions.suggestionCount()
+        self.updatePhase = Self.updatePhase(actions)
+    }
+
+    private static func updatePhase(_ actions: StatusPopoverActions) -> PopoverUpdateRow.Phase {
+        actions.updatePhase?() ?? (actions.updateReady() ? .ready : .idle)
     }
 
     public func reload() {
@@ -66,6 +84,7 @@ public final class StatusPopoverModel: ObservableObject {
         method = actions.method()
         updateReady = actions.updateReady()
         suggestionCount = actions.suggestionCount()
+        updatePhase = Self.updatePhase(actions)
     }
 
     /// "Có N gợi ý gõ tắt", or nil when there are none.
@@ -91,6 +110,21 @@ public final class StatusPopoverModel: ObservableObject {
 
     func installUpdate() {
         actions.installUpdate()
+    }
+
+    /// The update row's button: check (and install), or install the update already downloaded.
+    public func tapUpdateRow() {
+        switch PopoverUpdateRow.tapAction(updatePhase) {
+        case .check?: actions.checkForUpdates()
+        case .install?: actions.installUpdate()
+        case nil: return
+        }
+        reload()
+    }
+
+    public func popoverDidClose() {
+        actions.popoverClosed()
+        reload()
     }
 
     func openSettings() {
@@ -154,10 +188,7 @@ public struct StatusPopoverView: View {
                 .fixedSize()
             }
 
-            if model.updateReady {
-                Button("Cài bản mới") { model.installUpdate() }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            UpdateRowView(phase: model.updatePhase, tap: { model.tapUpdateRow() })
 
             if let suggestionLine = model.suggestionLine {
                 Button { model.openSuggestions() } label: {
@@ -230,6 +261,7 @@ public final class StatusPopoverController: NSObject, NSPopoverDelegate {
 
     public func popoverDidClose(_ notification: Notification) {
         lastClose = Date()
+        model.popoverDidClose()
     }
 }
 
@@ -242,5 +274,60 @@ public enum StatusClickRoute: Equatable {
             return .legacyMenu
         }
         return .popover
+    }
+}
+
+/// The update row (spec §16.2): a button, or a status line with a spinner or progress bar, and "Thử lại" on failure.
+struct UpdateRowView: View {
+    let phase: PopoverUpdateRow.Phase
+    let tap: () -> Void
+
+    var body: some View {
+        let line = PopoverUpdateRow.line(phase)
+        let button = PopoverUpdateRow.buttonTitle(phase)
+        VStack(alignment: .leading, spacing: 6) {
+            if let line {
+                HStack(spacing: 6) {
+                    icon
+                    Text(line)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(line)
+                    Spacer(minLength: 0)
+                    if let button {
+                        Button(button, action: tap)
+                            .controlSize(.small)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            } else if let button {
+                Button(button, action: tap)
+            }
+            if case let .downloading(progress) = phase {
+                if let progress {
+                    ProgressView(value: progress).progressViewStyle(.linear)
+                } else {
+                    ProgressView().progressViewStyle(.linear)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder private var icon: some View {
+        switch phase {
+        case .checking, .installing:
+            ProgressView().controlSize(.mini)
+        case .upToDate:
+            Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+        case .failed:
+            Image(systemName: "exclamationmark.circle").foregroundColor(Color(NSColor.secondaryLabelColor))
+        case .downloading:
+            Image(systemName: "arrow.down.circle").foregroundColor(.accentColor)
+        case .idle, .ready:
+            EmptyView()
+        }
     }
 }

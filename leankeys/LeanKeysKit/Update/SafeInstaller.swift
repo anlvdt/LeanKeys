@@ -15,6 +15,8 @@ public enum SafeInstaller {
         case codesignFailed
         /// Silent install only: the candidate is signed with a different identity than the running app.
         case differentIdentity
+        /// Popover install only (spec §16.3): the candidate is ad-hoc signed or unsigned.
+        case unstableSignature
     }
 
     /// Outcome of `prepare`. `rejected` and `unmounted` have already detached the image.
@@ -31,14 +33,18 @@ public enum SafeInstaller {
         public var codesignValid: (URL) -> Bool
         /// True when the app satisfies the running app's designated requirement (UpdateInstallPolicy).
         public var sameIdentity: (URL) -> Bool
+        /// How the candidate is signed (UpdateInstallPolicy.signature(of:)).
+        public var signature: (URL) -> UpdateInstallPolicy.SignatureKind
 
         public init(appExists: @escaping (URL) -> Bool, bundleIdentifier: @escaping (URL) -> String?,
-                    codesignValid: @escaping (URL) -> Bool, sameIdentity: @escaping (URL) -> Bool)
+                    codesignValid: @escaping (URL) -> Bool, sameIdentity: @escaping (URL) -> Bool,
+                    signature: @escaping (URL) -> UpdateInstallPolicy.SignatureKind = { UpdateInstallPolicy.signature(of: $0) })
         {
             self.appExists = appExists
             self.bundleIdentifier = bundleIdentifier
             self.codesignValid = codesignValid
             self.sameIdentity = sameIdentity
+            self.signature = signature
         }
 
         public static let live = Checks(
@@ -64,15 +70,19 @@ public enum SafeInstaller {
 
     /// Decides whether `<mountPoint>/<appName>.app` may replace the running app. Stops at the first failed check.
     /// A nil `expectedBundleID` (nothing to compare against) is a rejection. `requireSameIdentity` (silent installs)
-    /// adds the designated-requirement check, run last.
+    /// adds the designated-requirement check; `requireStableSignature` (popover installs) rejects an ad-hoc or unsigned
+    /// candidate. Both run after codesign.
     public static func verify(mountPoint: URL, appName: String, expectedBundleID: String?, checks: Checks,
-                              requireSameIdentity: Bool = false) -> Verdict
+                              requireSameIdentity: Bool = false, requireStableSignature: Bool = false) -> Verdict
     {
         let app = mountPoint.appendingPathComponent("\(appName).app")
         guard checks.appExists(app) else { return .missingApp }
         let found = checks.bundleIdentifier(app)
         guard let expectedBundleID, found == expectedBundleID else { return .wrongBundleID(found: found) }
         guard checks.codesignValid(app) else { return .codesignFailed }
+        if requireStableSignature, !UpdateInstallPolicy.installsSilently(signature: checks.signature(app)) {
+            return .unstableSignature
+        }
         if requireSameIdentity, !checks.sameIdentity(app) { return .differentIdentity }
         return .valid(app)
     }
@@ -92,14 +102,14 @@ public enum SafeInstaller {
     /// Mounts `dmg` read-only and verifies it. Blocking (hdiutil, codesign): call off the main thread.
     /// On any failure the image is detached, the reason is logged, and the outcome says which check failed.
     public static func prepare(dmg: URL, appName: String, expectedBundleID: String?, requireSameIdentity: Bool = false,
-                               checks: Checks = .live) -> Preparation
+                               requireStableSignature: Bool = false, checks: Checks = .live) -> Preparation
     {
         guard let mount = mount(dmg) else {
             log("could not mount \(dmg.path)")
             return .unmounted
         }
         let verdict = verify(mountPoint: mount, appName: appName, expectedBundleID: expectedBundleID, checks: checks,
-                             requireSameIdentity: requireSameIdentity)
+                             requireSameIdentity: requireSameIdentity, requireStableSignature: requireStableSignature)
         guard case let .valid(app) = verdict else {
             log("rejected update \(dmg.path): \(verdict)")
             detach(mount)
