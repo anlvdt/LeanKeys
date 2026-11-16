@@ -423,10 +423,10 @@ Thêm ngày 2026-11-15, người dùng đã duyệt cả ba phương án A, B, C
 ### 14.1 Ô nổi trên menu bar (thay menu thả xuống)
 - Bấm trái icon LeanKeys mở một `NSPopover` viết bằng SwiftUI, rộng khoảng 280 pt. Nội dung từ trên xuống:
   1. **Trạng thái:** một nút gạt lớn hai nấc `Tiếng Việt` / `English`, đổi ngay khi bấm (tương đương phím tắt bật/tắt). Bên dưới là một dòng nhỏ: `Tự chuyển Việt/Anh: Bật` (hoặc `Tạm dừng` khi người dùng đã tự tắt).
-  2. **Cảnh báo** (chỉ khi có): `⚠︎ <Tên app> đang chặn gõ tiếng Việt`, lấy từ `SecureInputHolder` có sẵn.
+  2. **Cảnh báo** (chỉ khi có): `⚠︎ <Tên app> đang chặn gõ tiếng Việt` (không biết tên thì `⚠︎ Một ứng dụng đang chặn gõ tiếng Việt`), lấy từ `SecureInputHolder` có sẵn. Tooltip nói cách gỡ; VoiceOver đọc "Cảnh báo: …".
   3. **Kiểu gõ:** menu thả xuống `Telex` / `VNI`.
   4. **Cập nhật** (chỉ khi có bản mới sẵn sàng): nút `Cài bản mới` (chạy bộ cài an toàn).
-  5. Hàng cuối: `Cài đặt…` · `Thoát`.
+  5. Hàng cuối: `Cài đặt…` · `Thoát LeanKeys`.
 - Bấm phải, hoặc Option + bấm, mở menu cũ của Gõ Nhanh, để không mất chức năng nào.
 - Ô nổi tự đóng khi bấm ra ngoài (`.transient`).
 
@@ -514,12 +514,12 @@ Thay mục 4 của §14.1 bằng một hàng luôn hiện, nằm dưới `Kiểu
 | Chưa kiểm tra | nút `Kiểm tra cập nhật` | kiểm tra |
 | Đang kiểm tra | vòng quay + `Đang kiểm tra cập nhật…` | — |
 | Đang tải | thanh tiến độ + `Đang tải bản mới… 42%` | — |
-| Đang cài | vòng quay + `Đang cài, LeanKeys sẽ tự mở lại` | — |
+| Đang cài | vòng quay + `Đang cài — LeanKeys sẽ tự mở lại` | — |
 | Đã tải sẵn (tải ngầm) | nút `Cài bản mới` | cài |
 | Mới nhất | `Bạn đang dùng bản mới nhất` | — |
 | Lỗi | một dòng ngắn + nút `Thử lại` | kiểm tra lại |
 
-- Lỗi kiểm tra: `Không kết nối được, thử lại sau`; lỗi tải: `Tải bản mới thất bại`; bộ cài từ chối: `Không cài được bản mới`. Không hiện chữ lỗi kỹ thuật (tiếng Anh) của `UpdateChecker`.
+- Lỗi kiểm tra: `Lỗi kết nối, hãy kiểm tra mạng`; lỗi tải: `Không tải được bản mới`; bộ cài từ chối: `Không cài được bản mới`. Không hiện chữ lỗi kỹ thuật (tiếng Anh) của `UpdateChecker`.
 - Đóng ô nổi thì `Mới nhất` và `Lỗi` trở về `Chưa kiểm tra`.
 
 ### 16.3 Luồng

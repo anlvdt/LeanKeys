@@ -77,10 +77,10 @@ public enum PopoverUpdateRow {
         case let .downloading(progress):
             guard let progress else { return "Đang tải bản mới…" }
             return "Đang tải bản mới… \(Int((progress * 100).rounded(.down)))%"
-        case .installing: return "Đang cài, LeanKeys sẽ tự mở lại"
+        case .installing: return "Đang cài — LeanKeys sẽ tự mở lại"
         case .upToDate: return "Bạn đang dùng bản mới nhất"
-        case .failed(.network): return "Không kết nối được, thử lại sau"
-        case .failed(.download): return "Tải bản mới thất bại"
+        case .failed(.network): return "Lỗi kết nối, hãy kiểm tra mạng"
+        case .failed(.download): return "Không tải được bản mới"
         case .failed(.install): return Failure.installMessage
         }
     }

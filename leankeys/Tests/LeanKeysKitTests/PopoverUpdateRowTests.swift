@@ -29,7 +29,7 @@ final class PopoverUpdateRowTests: XCTestCase {
         XCTAssertEqual(PopoverUpdateRow.line(.downloading(progress: 0.425)), "Đang tải bản mới… 42%")
         let installing = phase(.readyToInstall, requested: true)
         XCTAssertEqual(installing, .installing)
-        XCTAssertEqual(PopoverUpdateRow.line(installing), "Đang cài, LeanKeys sẽ tự mở lại")
+        XCTAssertEqual(PopoverUpdateRow.line(installing), "Đang cài — LeanKeys sẽ tự mở lại")
         XCTAssertNil(PopoverUpdateRow.tapAction(installing), "no second click during the install")
     }
 
@@ -66,11 +66,11 @@ final class PopoverUpdateRowTests: XCTestCase {
         // UpdateChecker's English text is never shown.
         let network = phase(.error("Network error: The Internet connection appears to be offline."))
         XCTAssertEqual(network, .failed(.network))
-        XCTAssertEqual(PopoverUpdateRow.line(network), "Không kết nối được, thử lại sau")
+        XCTAssertEqual(PopoverUpdateRow.line(network), "Lỗi kết nối, hãy kiểm tra mạng")
         XCTAssertEqual(phase(.error("Server error: 403")), .failed(.network))
         XCTAssertEqual(phase(.error("Tải về thất bại")), .failed(.download))
         XCTAssertEqual(phase(.error("Không thể lưu bản cập nhật")), .failed(.download))
-        XCTAssertEqual(PopoverUpdateRow.line(.failed(.download)), "Tải bản mới thất bại")
+        XCTAssertEqual(PopoverUpdateRow.line(.failed(.download)), "Không tải được bản mới")
         XCTAssertEqual(phase(.error(PopoverUpdateRow.Failure.installMessage)), .failed(.install))
         XCTAssertEqual(PopoverUpdateRow.line(.failed(.install)), "Không cài được bản mới")
         for failure in [PopoverUpdateRow.Failure.network, .download, .install] {
