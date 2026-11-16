@@ -71,6 +71,7 @@ final class UndoRuleBookTests: XCTestCase {
         b.record(before: "its", previous: "about", reverse: false)
         b.record(before: "its", previous: "", reverse: false)
         b.record(before: "car", previous: "", reverse: false)
+        b.record(before: "car", previous: "", reverse: false)
         XCTAssertTrue(b.shouldKeep(before: "its", previous: "about"))
         XCTAssertTrue(b.shouldKeep(before: "its", previous: "x"))
 
@@ -78,24 +79,26 @@ final class UndoRuleBookTests: XCTestCase {
         XCTAssertFalse(b.shouldKeep(before: "its", previous: "about"), "every rule for the text goes")
         XCTAssertFalse(b.shouldKeep(before: "its", previous: "x"))
         XCTAssertFalse(b.rules.contains { $0.text == "its" })
+        XCTAssertTrue(b.shouldKeep(before: "car", previous: "x"), "other texts are untouched")
 
-        // Two records only wear the block down.
+        // Spec 12.2: two more same-direction undos recreate the rule. With context: the context rule and the
+        // contextless count both come back after the second.
         b.record(before: "its", previous: "about", reverse: false)
-        XCTAssertFalse(b.shouldKeep(before: "its", previous: "about"))
-        b.record(before: "its", previous: "about", reverse: false)
-        XCTAssertFalse(b.shouldKeep(before: "its", previous: "about"))
-        XCTAssertFalse(b.rules.contains { $0.text == "its" })
-
-        // Then it counts again: a context rule after one, contextless after two.
-        b.record(before: "its", previous: "about", reverse: false)
-        XCTAssertTrue(b.shouldKeep(before: "its", previous: "about"))
+        XCTAssertFalse(b.shouldKeep(before: "its", previous: "about"), "one undo after a reverse: still blocked")
         XCTAssertFalse(b.shouldKeep(before: "its", previous: "x"))
-        b.record(before: "its", previous: "", reverse: false)
-        XCTAssertTrue(b.shouldKeep(before: "its", previous: "x"))
+        XCTAssertFalse(b.rules.contains { $0.text == "its" }, "a blocked text is not shown")
+        b.record(before: "its", previous: "about", reverse: false)
+        XCTAssertTrue(b.shouldKeep(before: "its", previous: "about"), "two undos after a reverse: the context rule")
+        XCTAssertTrue(b.shouldKeep(before: "its", previous: "x"), "those two undos also reach contextless count 2")
 
-        // Other texts are untouched.
+        // Without context.
+        b.record(before: "car", previous: "", reverse: true)
+        XCTAssertFalse(b.shouldKeep(before: "car", previous: "x"))
         b.record(before: "car", previous: "", reverse: false)
-        XCTAssertTrue(b.shouldKeep(before: "car", previous: "x"))
+        XCTAssertFalse(b.shouldKeep(before: "car", previous: "x"), "one undo after a reverse: still blocked")
+        b.record(before: "car", previous: "", reverse: false)
+        XCTAssertTrue(b.shouldKeep(before: "car", previous: "x"), "two undos after a reverse: the contextless rule")
+        XCTAssertEqual(b.rules.first { $0.text == "car" }?.count, 2)
     }
 
     func testLRUCap() {
@@ -167,12 +170,11 @@ final class UndoRuleBookTests: XCTestCase {
         XCTAssertEqual(again.rules, b.rules)
         XCTAssertTrue(again.shouldKeep(before: "its", previous: "about"))
         XCTAssertTrue(again.shouldKeep(before: "cos", previous: "x"))
-        // The block survives too: two records wear it down before any counting.
-        again.record(before: "car", previous: "", reverse: false)
-        again.record(before: "car", previous: "", reverse: false)
+        // The block survives too: the first record after reloading still keeps nothing, the second does.
+        again.record(before: "car", previous: "a", reverse: false)
+        XCTAssertFalse(again.shouldKeep(before: "car", previous: "a"))
         again.record(before: "car", previous: "a", reverse: false)
         XCTAssertTrue(again.shouldKeep(before: "car", previous: "a"))
-        XCTAssertFalse(again.shouldKeep(before: "car", previous: ""))
 
         // Memory only.
         let none = book(nil)

@@ -15,9 +15,10 @@ public struct UndoRule: Codable, Equatable, Identifiable {
 /// The learned "keep as typed" rules (spec 12.2–12.3).
 ///
 /// - A context rule `(previous, text)` keeps `text` after `previous` from its first undo.
-/// - The contextless count of `text` keeps it anywhere from its second undo, unless `text` is blocked.
-/// - A reverse undo (the user undid a keep) drops every rule for `text` and blocks it: the next two undos only wear
-///   the block down, then counting starts again.
+/// - The contextless count of `text` keeps it anywhere from its second undo.
+/// - A reverse undo (the user undid a keep) drops every rule for `text` and blocks it. The next undos count as usual,
+///   but nothing keeps `text` until two of them clear the block (spec 12.2: "thêm 2 lần hoàn tác cùng chiều mới tạo
+///   lại luật"); from then its rules apply, the contextless one with the count those two undos made.
 /// - At most `capacity` entries (context rules and contextless counts together); the least recently used goes first.
 ///
 /// Thread-safe behind one lock, held only for dictionary work: `shouldKeep` runs on the key-handling thread and does
@@ -44,7 +45,7 @@ public final class UndoRuleBook {
 
     // Guarded by `lock`.
     private var entries: [Key: UndoRule] = [:]
-    /// Text → same-direction undos still to be ignored.
+    /// Text → same-direction undos still needed before its rules apply again.
     private var blocked: [String: Int] = [:]
     private var savePending = false
     /// The store could not be read at launch: nothing is saved this session, so its file is never overwritten.
@@ -86,13 +87,12 @@ public final class UndoRuleBook {
             if reverse {
                 entries = entries.filter { $0.key.text != text }
                 blocked[text] = 2
-            } else if let left = blocked[text] {
-                blocked[text] = left > 1 ? left - 1 : nil
             } else {
                 let date = now()
                 if !previous.isEmpty { bump(Key(previous: previous, text: text), at: date) }
                 bump(Key(previous: "", text: text), at: date)
                 evictOverCapacity()
+                if let left = blocked[text] { blocked[text] = left > 1 ? left - 1 : nil }
             }
         }
         didChange()
@@ -103,8 +103,9 @@ public final class UndoRuleBook {
         let text = before.lowercased()
         let previous = previous.lowercased()
         let hit: Bool = lock.withLock {
+            guard blocked[text] == nil else { return false }
             if !previous.isEmpty, markUsed(Key(previous: previous, text: text)) { return true }
-            guard blocked[text] == nil, let rule = entries[Key(previous: "", text: text)], rule.count >= 2 else {
+            guard let rule = entries[Key(previous: "", text: text)], rule.count >= 2 else {
                 return false
             }
             return markUsed(Key(previous: "", text: text))
@@ -114,10 +115,11 @@ public final class UndoRuleBook {
         return hit
     }
 
-    /// The rules worth showing: every context rule, and contextless counts of 2 or more. Most recently used first.
+    /// The rules worth showing: every context rule, and contextless counts of 2 or more, except for blocked texts
+    /// (they apply nowhere yet). Most recently used first.
     public var rules: [UndoRule] {
-        let all = lock.withLock { entries }
-        return all.values.filter { !$0.previous.isEmpty || $0.count >= 2 }
+        let (all, blocks) = lock.withLock { (entries, blocked) }
+        return all.values.filter { blocks[$0.text] == nil && (!$0.previous.isEmpty || $0.count >= 2) }
             .sorted { $0.lastUsed != $1.lastUsed ? $0.lastUsed > $1.lastUsed : $0.id < $1.id }
     }
 
