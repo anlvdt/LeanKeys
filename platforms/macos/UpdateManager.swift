@@ -42,6 +42,7 @@ class UpdateManager: NSObject, ObservableObject {
         super.init()
         // Restore pending update from previous session
         if let path = UserDefaults.standard.string(forKey: dmgKey),
+           SafeInstaller.isExpectedUpdatePath(path, caches: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]), // LEANKEYS-HOOK: branding
            FileManager.default.fileExists(atPath: path)
         {
             let version = UserDefaults.standard.string(forKey: versionKey) ?? "?"
@@ -648,17 +649,20 @@ extension UpdateManager {
 
     /// Not Gõ Nhanh's restartToUpdate: SafeInstaller mounts and checks the update off the main thread, and the app
     /// quits only once the swap script (which always relaunches an app) has started. Any failure drops the update,
-    /// logs it, and leaves this app running. `silent` (the unattended install) also requires the update to carry the
-    /// running app's designated requirement; when it does not, the update stays ready for the one-click item.
+    /// logs it, and leaves this app running. Security audit MEDIUM-5: the click ("Khởi động lại để cập nhật") runs the
+    /// popover's checks: a stably signed update, newer than this app, carrying this app's designated requirement when
+    /// this app is stably signed. An update with a different identity is dropped, not kept for the click.
     private func installSafely(_ dmgPath: URL, silent: Bool) {
         let installedApp = URL(fileURLWithPath: Bundle.main.bundlePath)
         let bundleID = Bundle.main.bundleIdentifier
+        let requireSameIdentity = silent || UpdateInstallPolicy.installsSilently()
+        let currentVersion = AppMetadata.version
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let preparation = SafeInstaller.prepare(dmg: dmgPath, appName: LeanBranding.name, expectedBundleID: bundleID,
-                                                    requireSameIdentity: silent)
+                                                    requireSameIdentity: requireSameIdentity, requireStableSignature: true,
+                                                    currentVersion: currentVersion)
             DispatchQueue.main.async {
                 guard let self else { return }
-                if case .rejected(.differentIdentity) = preparation { return }
                 if case let .prepared(prepared) = preparation,
                    SafeInstaller.launchSwap(prepared, dmg: dmgPath, installedApp: installedApp)
                 {
@@ -763,9 +767,11 @@ extension UpdateManager {
         let installedApp = URL(fileURLWithPath: Bundle.main.bundlePath)
         let bundleID = Bundle.main.bundleIdentifier
         let requireSameIdentity = UpdateInstallPolicy.installsSilently()
+        let currentVersion = AppMetadata.version
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let preparation = SafeInstaller.prepare(dmg: dmgPath, appName: LeanBranding.name, expectedBundleID: bundleID,
-                                                    requireSameIdentity: requireSameIdentity, requireStableSignature: true)
+                                                    requireSameIdentity: requireSameIdentity, requireStableSignature: true,
+                                                    currentVersion: currentVersion)
             DispatchQueue.main.async {
                 guard let self else { return }
                 if case let .prepared(prepared) = preparation,
