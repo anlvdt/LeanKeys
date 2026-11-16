@@ -136,6 +136,20 @@ public final class PhraseLearner {
         var handled: [String]
     }
 
+    /// Drops kept texts that today's rules would never have learned: a whole-line phrase with one word or a
+    /// password-shaped word, or a text holding a card number or OTP. Before this rule a password typed in a terminal
+    /// could reach the review list.
+    private func purgeSecretShapedTexts() {
+        var changed = false
+        for (id, entry) in entries {
+            guard let text = entry.text else { continue }
+            let bad = Exclusions.containsSensitiveNumber(text)
+                || (entry.kind == .phrase && !PhraseDetector.isLearnablePhrase(text))
+            if bad { entries[id] = nil; changed = true }
+        }
+        if changed { save() }
+    }
+
     private func wipePlaintext() {
         guard loaded, entries.values.contains(where: { $0.text != nil || $0.kind != nil }) else { return }
         for (id, var entry) in entries where entry.text != nil || entry.kind != nil {
@@ -167,6 +181,7 @@ public final class PhraseLearner {
             return false
         }
         loaded = true
+        purgeSecretShapedTexts()
         prune(today: Self.day(now))
         return true
     }
@@ -258,9 +273,47 @@ enum PhraseDetector {
                                 options: .regularExpression) != nil
     }
 
+    /// A whole line counts as a phrase only when it has at least two words and no word outside the recognised pieces
+    /// (phones, tax codes, emails, addresses) looks like a password. A password typed where macOS does not flag a
+    /// password field (a terminal prompt, an app's own login box) ends with Return like any line: one word, or a
+    /// password-shaped word in a line, never becomes a suggestion.
+    private static let wordPattern = try! NSRegularExpression(pattern: #"\S+"#)
+
+    static func isLearnablePhrase(_ text: String, outside pieces: [NSRange]? = nil) -> Bool {
+        let ns = text as NSString
+        let ranges = pieces ?? Self.pieces(in: text).map(\.0)
+        var words = 0
+        let wordRegex = try! NSRegularExpression(pattern: #"\S+"#)
+        for m in wordRegex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            words += 1
+            // The word without the punctuation around it ("an@vidu.vn." ends a sentence): covered by a recognised
+            // piece (email, phone, tax code, address), it is that piece, not a password.
+            let word = ns.substring(with: m.range)
+            let core = Exclusions.trimmedWord(word)
+            let coreStart = (word as NSString).range(of: core).location
+            let coreRange = core.isEmpty || coreStart == NSNotFound ? m.range
+                : NSRange(location: m.range.location + coreStart, length: (core as NSString).length)
+            if ranges.contains(where: { NSIntersectionRange($0, coreRange).length == coreRange.length }) { continue }
+            if Exclusions.looksLikeSecret(word) { return false }
+        }
+        return words >= 2
+    }
+
     /// `text` must be `normalizedDisplay` output. The whole phrase comes first, as `.phrase` unless one piece
     /// covers all of it (then only that piece).
     static func items(in text: String) -> [Item] {
+        let all = NSRange(location: 0, length: (text as NSString).length)
+        let pieces = Self.pieces(in: text)
+        var items: [Item] = []
+        if !pieces.contains(where: { $0.0 == all }), isLearnablePhrase(text, outside: pieces.map(\.0)) {
+            items.append(Item(kind: .phrase, key: "phrase:" + normalizedKey(text), display: text))
+        }
+        items += pieces.sorted { $0.0.location < $1.0.location }.map(\.1)
+        return items
+    }
+
+    /// The recognised pieces of `text` (emails, phones, tax codes, an address) with their ranges.
+    static func pieces(in text: String) -> [(NSRange, Item)] {
         let ns = text as NSString
         let all = NSRange(location: 0, length: ns.length)
         var pieces: [(NSRange, Item)] = []
@@ -295,11 +348,6 @@ enum PhraseDetector {
             pieces.append((range, Item(kind: .address, key: "address:" + normalizedKey(s), display: s)))
         }
 
-        var items: [Item] = []
-        if !pieces.contains(where: { $0.0 == all }) {
-            items.append(Item(kind: .phrase, key: "phrase:" + normalizedKey(text), display: text))
-        }
-        items += pieces.sorted { $0.0.location < $1.0.location }.map(\.1)
-        return items
+        return pieces
     }
 }
