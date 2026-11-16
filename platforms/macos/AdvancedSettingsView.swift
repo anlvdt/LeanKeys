@@ -49,10 +49,10 @@ struct AdvancedSettingsView: View {
         VStack(spacing: 0) {
             SettingsToggleRow(
                 "Chế độ điều khiển từ xa", // LEANKEYS-HOOK: copy
-                subtitle: "Bật khi bạn điều khiển máy Mac này từ máy khác (RustDesk, AnyDesk, TeamViewer)", // LEANKEYS-HOOK: copy
+                subtitle: "Khi điều khiển máy Mac này từ máy khác (RustDesk, AnyDesk…)", // LEANKEYS-HOOK: copy
                 isOn: $appState.sessionTapMode
             )
-            .help("Nhận phím ở tầng phiên (session) thay vì tầng thiết bị (HID). Bàn phím Trợ năng đã được hỗ trợ sẵn.") // LEANKEYS-HOOK: copy
+            .help("Dùng khi điều khiển từ xa bằng RustDesk, AnyDesk, TeamViewer. Nhận phím ở tầng phiên (session) thay vì tầng thiết bị (HID). Bàn phím Trợ năng đã được hỗ trợ sẵn.") // LEANKEYS-HOOK: copy
         }
         .cardBackground()
     }
@@ -64,7 +64,7 @@ struct AdvancedSettingsView: View {
             SettingsRow {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Nhật ký gỡ lỗi").font(.system(size: 13, weight: .medium)) // LEANKEYS-HOOK: copy
-                    Text("Ghi cách xử lý từng phím vào ~/Library/Logs/LeanKeys/debug.log, không ghi chữ bạn gõ. Tắt là xoá tệp.") // LEANKEYS-HOOK: debug-log
+                    Text("Ghi cách xử lý phím vào ~/Library/Logs/LeanKeys/debug.log, không ghi chữ bạn gõ") // LEANKEYS-HOOK: debug-log
                         .font(.system(size: 11))
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
                 }
@@ -200,11 +200,11 @@ struct PerAppProfileRow: View {
             // GN · Inject
             HStack(spacing: 8) {
                 profilePicker("Tiếng Việt", selection: enabledBinding, width: 140) { // LEANKEYS-HOOK: copy
-                    Text("Theo cài đặt chung").tag(0) // LEANKEYS-HOOK: copy
+                    Text("Mặc định").tag(0) // LEANKEYS-HOOK: copy
                     Text("Luôn bật").tag(1) // LEANKEYS-HOOK: copy
                     Text("Luôn tắt").tag(-1) // LEANKEYS-HOOK: copy
                 }
-                profilePicker("Cách gửi phím", selection: injectionBinding, width: 110) { // LEANKEYS-HOOK: copy
+                profilePicker("Cách gửi phím", selection: injectionBinding, width: 120) { // LEANKEYS-HOOK: copy
                     ForEach(InjectionOverride.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
                 }
                 Spacer()

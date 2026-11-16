@@ -88,7 +88,7 @@ public enum PopoverUpdateRow {
             return "Đang tải bản mới… \(Int((progress * 100).rounded(.down)))%"
         case .installing: return "Đang cài — LeanKeys sẽ tự mở lại"
         case .upToDate: return "Bạn đang dùng bản mới nhất"
-        case .failed(.network): return "Lỗi kết nối, hãy kiểm tra mạng"
+        case .failed(.network): return "Không kiểm tra được, thử lại sau"
         case .failed(.download): return "Không tải được bản mới"
         case .failed(.install): return Failure.installMessage
         }

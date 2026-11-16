@@ -17,11 +17,11 @@ public struct UndoLearningSection: View {
     static let listTitle = "Từ giữ nguyên"
     static let emptyText = "Chưa có. Bấm ⌫⌫ ngay sau khi một từ bị tự đổi để thêm."
     static let namesTitle = "Tên đã học"
-    static let namesEmptyText = "Chưa có. Tên bạn tự viết hoa từ hai lần sẽ hiện ở đây."
+    static let namesEmptyText = "Chưa có. Tên bạn tự viết hoa từ hai lần trở lên sẽ hiện ở đây."
     /// A `cap:` rule records that the user undid a capital: LeanKeys keeps that phrase lowercase.
     static let capitalizationSuffix = " (giữ chữ thường)"
     static let removeAllLabel = "Xoá tất cả"
-    static let removeAllConfirmTitle = "Xoá mọi từ và tên đã học?"
+    static let removeAllConfirmTitle = "Xoá mọi từ giữ nguyên và tên đã học?"
     static let removeAllConfirmMessage = "Mọi từ giữ nguyên và tên đã học sẽ bị xoá. Không hoàn tác được."
     static let removeAllConfirm = "Xoá"
     static let removeAllCancel = "Huỷ"

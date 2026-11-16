@@ -388,7 +388,7 @@ struct UpdatePopupView: View {
                 .font(.system(size: 36))
                 .foregroundColor(.orange)
 
-            Text("Bản cập nhật đã sẵn sàng")
+            Text("Bản mới đã sẵn sàng") // LEANKEYS-HOOK: copy
                 .font(.system(size: 15, weight: .semibold))
 
             Text("Đã tải \(AppMetadata.name) \(manager.pendingVersion).\nBấm Cài và mở lại để dùng bản mới.") // LEANKEYS-HOOK: copy

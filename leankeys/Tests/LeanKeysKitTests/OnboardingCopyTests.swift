@@ -21,7 +21,7 @@ final class OnboardingCopyTests: XCTestCase {
         XCTAssertEqual(copy.title, "Chào mừng đến với LeanKeys")
         XCTAssertEqual(copy.message, LeanOnboardingView.Strings.message)
         // Copy audit F1: says what to do once System Settings opens.
-        XCTAssertEqual(copy.message, "Bấm nút bên dưới, rồi bật công tắc cạnh LeanKeys trong Cài đặt hệ thống › Trợ năng. Sau đó cứ thế gõ — LeanKeys tự chuyển Việt/Anh cho bạn.")
+        XCTAssertEqual(copy.message, "Bấm nút bên dưới, rồi bật công tắc cạnh LeanKeys trong Cài đặt hệ thống › Quyền riêng tư & Bảo mật › Trợ năng. Sau đó cứ thế gõ — LeanKeys tự chuyển Việt/Anh cho bạn.")
     }
 
     /// Ruling R24's steps, worded per copy audit F2 (only names a control that exists: the button); the minus is U+2212.

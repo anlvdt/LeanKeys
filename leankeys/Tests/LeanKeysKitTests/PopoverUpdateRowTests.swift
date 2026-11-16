@@ -66,7 +66,7 @@ final class PopoverUpdateRowTests: XCTestCase {
         // UpdateChecker's English text is never shown.
         let network = phase(.error("Network error: The Internet connection appears to be offline."))
         XCTAssertEqual(network, .failed(.network))
-        XCTAssertEqual(PopoverUpdateRow.line(network), "Lỗi kết nối, hãy kiểm tra mạng")
+        XCTAssertEqual(PopoverUpdateRow.line(network), "Không kiểm tra được, thử lại sau")
         XCTAssertEqual(phase(.error("Server error: 403")), .failed(.network))
         XCTAssertEqual(phase(.error("Tải về thất bại")), .failed(.download))
         XCTAssertEqual(phase(.error("Không thể lưu bản cập nhật")), .failed(.download))

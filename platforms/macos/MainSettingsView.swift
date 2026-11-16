@@ -943,6 +943,7 @@ struct UpdateBadgeView: View {
         if updateManager.isChecking { return "Đang kiểm tra…" } // LEANKEYS-HOOK: copy
         if updateManager.isReadyToInstall { return "Cài bản mới" } // LEANKEYS-HOOK: copy
         if updateManager.updateAvailable { return "Có bản mới" } // LEANKEYS-HOOK: copy
+        if case .downloading = updateManager.state { return "Đang tải bản mới…" } // LEANKEYS-HOOK: copy
         if case .upToDate = updateManager.state { return "Mới nhất" } // LEANKEYS-HOOK: copy
         return "Kiểm tra cập nhật" // LEANKEYS-HOOK: copy
     } // LEANKEYS-HOOK: copy
@@ -1050,7 +1051,7 @@ struct SettingsPageView: View {
             // Bộ gõ
             if part == .general { // LEANKEYS-HOOK: settings-engine
             VStack(spacing: 0) {
-                SettingsToggleRow("Gõ tiếng Việt", subtitle: "Tắt là gõ English, như chọn English trên menu bar", weight: .semibold, isOn: $appState.isEnabled) // LEANKEYS-HOOK: settings-engine (copy audit H4)
+                SettingsToggleRow("Gõ tiếng Việt", subtitle: "Tắt là gõ English, như chọn English trên thanh menu", weight: .semibold, isOn: $appState.isEnabled) // LEANKEYS-HOOK: settings-engine (copy audit H4)
                 Divider().padding(.leading, 12)
                 inputMethodRow
                 if appState.currentMethod == .telex {
@@ -1568,7 +1569,7 @@ struct ShortcutRecorderRow: View {
     private var shortcutDisplay: some View {
         HStack(spacing: 4) {
             if isRecording {
-                Text("Nhấn phím mới… (Esc: huỷ)") // LEANKEYS-HOOK: copy
+                Text("Bấm phím mới… (Esc: huỷ)") // LEANKEYS-HOOK: copy
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.accentColor)
                     .padding(.horizontal, 6)
@@ -1665,7 +1666,7 @@ struct RestoreShortcutRecorderRow: View {
     private var shortcutDisplay: some View {
         HStack(spacing: 4) {
             if isRecording {
-                Text("Nhấn phím mới…") // LEANKEYS-HOOK: copy
+                Text("Bấm phím mới…") // LEANKEYS-HOOK: copy
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.accentColor)
                     .padding(.horizontal, 6)
