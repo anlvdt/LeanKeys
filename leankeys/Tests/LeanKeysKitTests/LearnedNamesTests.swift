@@ -235,6 +235,80 @@ final class LearnedNamesTests: XCTestCase {
         XCTAssertEqual(second.name(after: nil, word: "shopee"), "Shopee", "the hidden count matched after a restart")
     }
 
+    /// An unreadable store whose erase waits for the test, then deletes the file and the HMAC key.
+    private final class GatedStore: LearnStore, LearnKeyProvider {
+        let gate = DispatchSemaphore(value: 0)
+        var failNextErase = false
+        private let lock = NSLock()
+        private var data: Data? = Data("not json".utf8)
+        private var keyByte: UInt8 = 1
+        private var _erases = 0
+        var erases: Int { lock.withLock { _erases } }
+        var saved: Data? { lock.withLock { data } }
+        func load() throws -> Data? { lock.withLock { data } }
+        func save(_ data: Data) throws { lock.withLock { self.data = data } }
+        func erase() throws {
+            gate.wait()
+            try lock.withLock {
+                _erases += 1
+                if failNextErase {
+                    failNextErase = false
+                    throw CocoaError(.fileWriteUnknown)
+                }
+                data = nil
+                keyByte += 1
+            }
+        }
+        func hmacKey() throws -> Data { lock.withLock { Data(repeating: keyByte, count: 32) } }
+    }
+
+    /// The hidden counts in the store's last save.
+    private func savedPending(_ store: GatedStore) throws -> [String: Any] {
+        let saved = try XCTUnwrap(store.saved)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: saved) as? [String: Any])
+        return try XCTUnwrap(json["pending"] as? [String: Any])
+    }
+
+    /// Re-review Minor 2: a hidden count recorded between "Xoá tất cả" and the erase finishing is digested with the
+    /// key the erase deletes, so it is dropped when the new key is taken; and a second "Xoá tất cả" in that window
+    /// queues no second erase (which would delete the new key as well).
+    func testRemoveAllWhileErasingDropsOldKeyCountsAndErasesOnce() throws {
+        let store = GatedStore()
+        let n = LearnedNames(store: store, hmacKey: try? store.hmacKey(), titles: Self.titles,
+                             isDictionaryWord: { _ in false })
+        n.removeAll()
+        n.removeAll()
+        n.observe(word: "Shopee", previous: nil)
+        store.gate.signal()
+        store.gate.signal()
+        n.flush()
+        XCTAssertEqual(store.erases, 1, "one erase for both")
+        XCTAssertEqual(try store.hmacKey(), Data(repeating: 2, count: 32))
+        n.observe(word: "Lazada", previous: nil)
+        n.flush()
+        XCTAssertEqual(try savedPending(store).count, 1, "only the count made under the new key")
+        // The new key's counts still add up.
+        n.observe(word: "Lazada", previous: nil)
+        XCTAssertEqual(n.names.map(\.form), ["Lazada"])
+    }
+
+    /// A failed erase can be tried again by the next "Xoá tất cả".
+    func testFailedEraseIsRetried() {
+        let store = GatedStore()
+        store.failNextErase = true
+        let n = LearnedNames(store: store, hmacKey: try? store.hmacKey(), titles: Self.titles,
+                             isDictionaryWord: { _ in false })
+        store.gate.signal()
+        n.removeAll()
+        n.flush()
+        XCTAssertEqual(store.erases, 1)
+        store.gate.signal()
+        n.removeAll()
+        n.flush()
+        XCTAssertEqual(store.erases, 2)
+        XCTAssertEqual(try store.hmacKey(), Data(repeating: 2, count: 32))
+    }
+
     func testBelowThresholdNotStoredInClear() throws {
         let store = InMemoryStore()
         let n = names(store)
