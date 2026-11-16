@@ -2326,7 +2326,7 @@ class PerAppModeManager {
     /// Called by FocusChangeObserver when a special panel app (Spotlight, Raycast) becomes active.
     /// This is event-driven and happens BEFORE any keystroke, fixing the race condition.
     func handleSpecialPanelAppActivated(_ bundleId: String) {
-        guard !(AppState.shared.advancedMode && AppState.shared.disablePanelDetection) else { return }
+        guard !(SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode) && AppState.shared.disablePanelDetection) else { return } // LEANKEYS-HOOK: copy (copy audit I2)
         spotlightChecked = true // Mark as checked (AXObserver detected it)
         handleAppSwitch(bundleId)
     }
@@ -2337,7 +2337,7 @@ class PerAppModeManager {
         // Reset to previous app - this ensures next panel open will trigger handleAppSwitch
         currentBundleId = previousApp
         spotlightChecked = false
-        DetectionCache.activeProfile = AppState.shared.advancedMode ? AppState.shared.perAppProfiles[previousApp] : nil
+        DetectionCache.activeProfile = SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode) ? AppState.shared.perAppProfiles[previousApp] : nil // LEANKEYS-HOOK: copy
         // Same order as handleAppSwitch: profile first, then per-app mode
         AppState.shared.applyPerAppProfile(bundleId: previousApp)
         restorePerAppMode(for: previousApp)
@@ -2350,7 +2350,7 @@ class PerAppModeManager {
 
     func checkSpotlightOnce() {
         // Skip if panel detection is disabled (advanced setting)
-        guard !(AppState.shared.advancedMode && AppState.shared.disablePanelDetection) else { return }
+        guard !(SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode) && AppState.shared.disablePanelDetection) else { return } // LEANKEYS-HOOK: copy (copy audit I2)
         // Skip if already checked in this session
         guard !spotlightChecked else { return }
         spotlightChecked = true
@@ -2398,7 +2398,7 @@ class PerAppModeManager {
         clearDetectionCache() // Clear injection method cache on app switch
 
         // Snapshot per-app profile for keystroke hot path (thread-safe read)
-        DetectionCache.activeProfile = AppState.shared.advancedMode ? AppState.shared.perAppProfiles[bundleId] : nil
+        DetectionCache.activeProfile = SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode) ? AppState.shared.perAppProfiles[bundleId] : nil // LEANKEYS-HOOK: copy
 
         // Update auto-capitalize state for new app (handles per-app exclusion)
         AppState.shared.updateAutoCapitalizeEngine()
@@ -2421,7 +2421,7 @@ class PerAppModeManager {
     /// Restore per-app mode for a bundle ID and update UI
     private func restorePerAppMode(for bundleId: String) {
         // Skip if per-app profile has disabled GN — applyPerAppProfile handles it
-        if AppState.shared.advancedMode,
+        if SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode), // LEANKEYS-HOOK: copy
            let profile = AppState.shared.perAppProfiles[bundleId],
            profile.enabledState == -1
         {

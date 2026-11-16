@@ -80,22 +80,22 @@ enum InjectionOverride: Int, CaseIterable {
     var name: String {
         switch self {
         case .auto: "Tự động"
-        case .fast: "Fast"
-        case .slow: "Slow"
-        case .charByChar: "Char-by-char"
-        case .selection: "Selection"
-        case .emptyCharPrefix: "Empty char"
+        case .fast: "Nhanh" // LEANKEYS-HOOK: copy
+        case .slow: "Chậm" // LEANKEYS-HOOK: copy
+        case .charByChar: "Từng ký tự" // LEANKEYS-HOOK: copy
+        case .selection: "Chọn rồi thay" // LEANKEYS-HOOK: copy
+        case .emptyCharPrefix: "Ký tự rỗng" // LEANKEYS-HOOK: copy
         }
     }
 
     var subtitle: String {
         switch self {
         case .auto: "Để hệ thống chọn"
-        case .fast: "Mặc định, backspace + text"
-        case .slow: "Delay cao hơn cho Electron"
-        case .charByChar: "Gõ từng ký tự, Safari/GDocs"
-        case .selection: "Select + replace, combo box"
-        case .emptyCharPrefix: "Phá autocomplete trình duyệt"
+        case .fast: "Mặc định: xoá lùi rồi gõ lại" // LEANKEYS-HOOK: copy
+        case .slow: "Chậm hơn, cho ứng dụng Electron" // LEANKEYS-HOOK: copy
+        case .charByChar: "Gõ từng ký tự (Safari, Google Docs)" // LEANKEYS-HOOK: copy
+        case .selection: "Chọn chữ rồi thay (ô có danh sách gợi ý)" // LEANKEYS-HOOK: copy
+        case .emptyCharPrefix: "Chặn tự hoàn thành của trình duyệt" // LEANKEYS-HOOK: copy
         }
     }
 

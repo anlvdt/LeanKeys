@@ -29,14 +29,14 @@ struct AdvancedSettingsView: View {
     private var performanceSection: some View {
         VStack(spacing: 0) {
             SettingsToggleRow(
-                "Tắt phát hiện Spotlight/Raycast",
-                subtitle: "Bỏ qua panel app, giảm CPU/RAM sử dụng",
+                "Không theo dõi ô tìm kiếm Spotlight/Raycast", // LEANKEYS-HOOK: copy
+                subtitle: "Tiết kiệm CPU và bộ nhớ; gõ trong các ô đó có thể kém ổn định hơn", // LEANKEYS-HOOK: copy
                 isOn: $appState.disablePanelDetection
             )
             Divider().padding(.horizontal, 14)
             SettingsToggleRow(
-                "Khởi động lại khi đóng cài đặt",
-                subtitle: "Tự động giải phóng RAM của cài đặt khi đóng",
+                "Mở lại LeanKeys khi đóng Cài đặt", // LEANKEYS-HOOK: copy
+                subtitle: "Giải phóng bộ nhớ mà cửa sổ Cài đặt đã dùng", // LEANKEYS-HOOK: copy
                 isOn: $appState.restartOnClose
             )
         }
@@ -48,10 +48,11 @@ struct AdvancedSettingsView: View {
     private var compatibilitySection: some View {
         VStack(spacing: 0) {
             SettingsToggleRow(
-                "Chế độ remote desktop",
-                subtitle: "Bật khi gõ qua RustDesk, AnyDesk, TeamViewer. Bắt synthetic events ở session level thay vì HID level. (Bàn phím trợ năng / Accessibility Keyboard đã tự động được hỗ trợ.)",
+                "Chế độ điều khiển từ xa", // LEANKEYS-HOOK: copy
+                subtitle: "Bật khi bạn điều khiển máy Mac này từ máy khác (RustDesk, AnyDesk, TeamViewer)", // LEANKEYS-HOOK: copy
                 isOn: $appState.sessionTapMode
             )
+            .help("Nhận phím ở tầng phiên (session) thay vì tầng thiết bị (HID). Bàn phím Trợ năng đã được hỗ trợ sẵn.") // LEANKEYS-HOOK: copy
         }
         .cardBackground()
     }
@@ -62,8 +63,8 @@ struct AdvancedSettingsView: View {
         VStack(spacing: 0) {
             SettingsRow {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Debug Log").font(.system(size: 13, weight: .medium))
-                    Text("Ghi log xử lý phím vào ~/Library/Logs/LeanKeys (không ghi chữ đã gõ)") // LEANKEYS-HOOK: debug-log
+                    Text("Nhật ký gỡ lỗi").font(.system(size: 13, weight: .medium)) // LEANKEYS-HOOK: copy
+                    Text("Ghi cách xử lý từng phím vào ~/Library/Logs/LeanKeys/debug.log, không ghi chữ bạn gõ. Tắt là xoá tệp.") // LEANKEYS-HOOK: debug-log
                         .font(.system(size: 11))
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
                 }
@@ -85,7 +86,7 @@ struct AdvancedSettingsView: View {
             SettingsRow {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Tuỳ chỉnh theo ứng dụng").font(.system(size: 13, weight: .medium))
-                    Text("Tuỳ chỉnh cách Gõ Nhanh hoạt động cho từng ứng dụng")
+                    Text("Tuỳ chỉnh cách \(AppMetadata.name) gõ trong từng ứng dụng") // LEANKEYS-HOOK: copy
                         .font(.system(size: 11))
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
                 }
@@ -96,6 +97,7 @@ struct AdvancedSettingsView: View {
                         .foregroundColor(.accentColor)
                 }
                 .buttonStyle(.plain)
+                .help("Thêm ứng dụng").accessibilityLabel(Text("Thêm ứng dụng")) // LEANKEYS-HOOK: copy
             }
 
             ForEach(sortedProfiles, id: \.key) { entry in
@@ -165,13 +167,14 @@ struct PerAppProfileRow: View {
                         .foregroundColor(resetHovered ? .accentColor : Color(NSColor.quaternaryLabelColor))
                 }
                 .buttonStyle(.plain).onHover { resetHovered = $0 }
-                .help("Reset về mặc định")
+                .help("Đặt lại mặc định").accessibilityLabel(Text("Đặt lại mặc định cho \(appName)")) // LEANKEYS-HOOK: copy
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
                         .foregroundColor(removeHovered ? .red : Color(NSColor.quaternaryLabelColor))
                 }
                 .buttonStyle(.plain).onHover { removeHovered = $0 }
+                .help("Bỏ tuỳ chỉnh cho ứng dụng này").accessibilityLabel(Text("Bỏ tuỳ chỉnh cho \(appName)")) // LEANKEYS-HOOK: copy
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -179,7 +182,7 @@ struct PerAppProfileRow: View {
             // Delay
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text("Delay").font(labelFont).foregroundColor(labelColor)
+                    Text("Độ trễ").font(labelFont).foregroundColor(labelColor) // LEANKEYS-HOOK: copy
                         .frame(width: labelWidth, alignment: .leading)
                     Slider(value: delaySliderBinding, in: 0 ... Double(DelayPreset.allCases.count - 1), step: 1)
                     Text(delayPresetName)
@@ -187,7 +190,7 @@ struct PerAppProfileRow: View {
                         .foregroundColor(delayPresetColor)
                         .frame(width: 52, alignment: .trailing)
                 }
-                Text("Tăng nếu bị nuốt chữ · Giảm nếu app phản hồi nhanh")
+                Text("Tăng nếu bị mất chữ · Giảm nếu ứng dụng phản hồi nhanh") // LEANKEYS-HOOK: copy
                     .font(.system(size: 11)) // LEANKEYS-HOOK: copy
                     .foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
                     .padding(.leading, labelWidth + 6)
@@ -196,12 +199,12 @@ struct PerAppProfileRow: View {
 
             // GN · Inject
             HStack(spacing: 8) {
-                profilePicker("Bật Gõ Nhanh", selection: enabledBinding, width: 80) {
-                    Text("Tự động").tag(0)
-                    Text("Bật").tag(1)
-                    Text("Tắt").tag(-1)
+                profilePicker("Tiếng Việt", selection: enabledBinding, width: 140) { // LEANKEYS-HOOK: copy
+                    Text("Theo cài đặt chung").tag(0) // LEANKEYS-HOOK: copy
+                    Text("Luôn bật").tag(1) // LEANKEYS-HOOK: copy
+                    Text("Luôn tắt").tag(-1) // LEANKEYS-HOOK: copy
                 }
-                profilePicker("Kiểu Inject", selection: injectionBinding, width: 110) {
+                profilePicker("Cách gửi phím", selection: injectionBinding, width: 110) { // LEANKEYS-HOOK: copy
                     ForEach(InjectionOverride.allCases, id: \.rawValue) { Text($0.name).tag($0.rawValue) }
                 }
                 Spacer()
@@ -253,7 +256,7 @@ struct PerAppProfileRow: View {
 
     /// Show detected default injection method as badge (e.g. "fast", "slow")
     private var detectedHint: String? {
-        getDetectedDefault(for: bundleId)?.method
+        getDetectedDefault(for: bundleId).map { InjectionOverride.from(detectedMethod: $0.method).name } // LEANKEYS-HOOK: copy (not raw "fast"/"slow")
     }
 
     private var appName: String {

@@ -353,7 +353,7 @@ class AppState: ObservableObject {
     /// Runs BEFORE restorePerAppMode in handleAppSwitch. restorePerAppMode checks
     /// profile.enabled to avoid re-enabling GN when profile has it disabled.
     func applyPerAppProfile(bundleId: String) {
-        guard advancedMode, let profile = perAppProfiles[bundleId] else {
+        guard SettingsLayout.advancedSettingsApply(advancedMode: advancedMode), let profile = perAppProfiles[bundleId] else { // LEANKEYS-HOOK: settings-engine (copy audit I2)
             restoreProfileDefaults()
             return
         }

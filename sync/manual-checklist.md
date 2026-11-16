@@ -13,6 +13,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | 5 | Slack | Gõ câu thử trong ô soạn tin nhắn (chưa gửi). | [ ] | [ ] |
 | 6 | Đổi engine khi đang gõ | Gõ dở một từ (`vieej`), đổi engine trong Cài đặt → Nâng cao → Lõi gõ, quay lại gõ tiếp. Ô nhập không hỏng, từ sau gõ đúng với engine mới. | [ ] | [ ] |
 | 7 | Đổi app có nhớ ngôn ngữ | Bật "Nhớ Việt/Anh theo từng ứng dụng" (Cài đặt → Chung). Tắt tiếng Việt ở Terminal, bật ở Slack; chuyển qua lại vài lần, mỗi app giữ đúng trạng thái của nó. | [ ] | [ ] |
+| 7b | Tuỳ chỉnh theo ứng dụng | Cài đặt → Nâng cao → Tuỳ chỉnh theo ứng dụng: thêm Notes, đặt "Tiếng Việt: Luôn tắt". Chuyển sang Notes: icon hiện E, gõ `vieejt ` ra nguyên chữ. Chuyển app khác: về lại như trước. Bỏ tuỳ chỉnh (nút ✕) sau khi thử. | [ ] | [ ] |
 | 8 | Return/Enter sau từ Vikey khôi phục | Gõ `more` (Vikey giữ nguyên tiếng Anh) rồi Return ngay: tin nhắn được gửi trong một ô chat (Slack, kênh thử riêng) và một form trên trang web được gửi. Chữ trước đó không đổi. | — | [ ] |
 | 9 | Dấu câu sau từ đã sửa | Gõ một từ Vikey sửa (`more`, `vieejt`) rồi `,`; làm lại với `.`. Dấu phẩy, dấu chấm hiện đúng một lần. | — | [ ] |
 | 10 | Caps Lock | Bật Caps Lock, gõ câu thử: ra "TIẾNG VIỆT TRƯỜNG HỌC". Tắt Caps Lock, gõ tiếp bình thường. | [ ] | [ ] |
@@ -51,7 +52,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | K1 | Phím đi thẳng · ô đăng nhập | Safari, một trang đăng nhập: gõ `nguyenvana` vào ô Email hoặc Username khi đang bật tiếng Việt: chữ giữ nguyên, không thành "nguyễnvana". | — | [ ] |
 | K2 | Phím đi thẳng · điều khiển từ xa | Điều khiển một máy Windows qua MacViewer, TeamViewer hoặc AnyDesk, bật bộ gõ bên Windows: gõ `tieengs vieejt` ra "tiếng việt" một lần, không bị lỗi hay bỏ dấu hai lần. | — | [ ] |
 | K3 | Không học mật khẩu | Bật "Gợi ý gõ tắt". Trong Terminal chạy `sudo -k; sudo true` ba lần, gõ mật khẩu rồi Enter; trong TextEdit gõ một từ trộn chữ và số (ví dụ `Thu@2024`) rồi Enter ba lần: không có gợi ý gõ tắt nào. | — | [ ] |
-| K4 | Nhật ký debug không lộ chữ gõ | Cài đặt nâng cao: bật Debug Log, gõ `xin chào bạn` rồi Enter, mở `~/Library/Logs/LeanKeys/debug.log`: không có chữ nào đã gõ, phím chữ hiện là `char`, chỉ có độ dài như `<3>`; không có tệp `/tmp/gonhanh_debug.log` mới. Tắt Debug Log: tệp bị xoá. | — | [ ] |
+| K4 | Nhật ký gỡ lỗi không lộ chữ gõ | Cài đặt → Nâng cao: bật "Nhật ký gỡ lỗi", gõ `xin chào bạn` rồi Enter, mở `~/Library/Logs/LeanKeys/debug.log`: không có chữ nào đã gõ, phím chữ hiện là `char`, chỉ có độ dài như `<3>`; không có tệp `/tmp/gonhanh_debug.log` mới. Tắt "Nhật ký gỡ lỗi": tệp bị xoá. | — | [ ] |
 | D1 | 4D · Tự viết hoa tên riêng | Vikey, tiếng Việt, Notes: gõ `tooi owr haf nooij ` ra "tôi ở Hà Nội". | — | [ ] |
 | D2 | 4D · Tự viết hoa tên riêng | Vikey, Notes: gõ `nguyeenx vawn an ` ra "Nguyễn Văn An". | — | [ ] |
 | D3 | 4D · Tên tự học | Vikey, Notes: gõ `anh Hufng ` (tự gõ chữ H hoa) ở hai câu khác nhau, rồi gõ `anh hufng ` (chữ thường): ra "anh Hùng". Cài đặt → Nâng cao → "Tên đã học" có dòng "Hùng". | — | [ ] |
@@ -59,4 +60,4 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | D5 | 4D · Bỏ phím lỡ bấm cùng Enter | Vikey, Notes: gõ "xong." rồi bấm `\` và Enter gần như cùng lúc: dòng kết thúc ở "xong.", không có `\`. | — | [ ] |
 | D6 | 4D · Bỏ phím lỡ bấm cùng Enter | Vikey, Terminal: gõ `\` rồi Enter: `\` vẫn được giữ. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 64 ô đều đạt.
+Chỉ gõ `yes` khi cả 66 ô đều đạt.

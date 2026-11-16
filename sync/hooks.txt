@@ -22,3 +22,7 @@ copy	platforms/macos/MainSettingsView.swift
 copy	platforms/macos/AdvancedSettingsView.swift
 copy	platforms/macos/AppMetadata.swift
 copy	platforms/macos/LogViewer.swift
+copy	platforms/macos/RustBridge.swift
+copy	platforms/macos/MenuBar.swift
+copy	platforms/macos/PerAppConfigModels.swift
+copy	platforms/macos/AppPickerSheet.swift

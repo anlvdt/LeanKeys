@@ -701,7 +701,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
         // Restart app to reclaim memory if enabled
         // Use deferred restart: if app is quitting, applicationWillTerminate
         // will cancel this before it runs
-        guard AppState.shared.advancedMode,
+        guard SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode), // LEANKEYS-HOOK: settings-engine (copy audit I2)
               AppState.shared.restartOnClose else { return }
         let path = Bundle.main.bundleURL.path
         let work = DispatchWorkItem { [weak self] in
