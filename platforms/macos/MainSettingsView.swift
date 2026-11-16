@@ -689,7 +689,7 @@ struct SettingsToggleRow: View {
                 }
             }
             Spacer()
-            Toggle("", isOn: $isOn).toggleStyle(.switch).controlSize(.mini).labelsHidden() // LEANKEYS-HOOK: settings-engine
+            Toggle(title, isOn: $isOn).toggleStyle(.switch).controlSize(.mini).labelsHidden() // LEANKEYS-HOOK: settings-engine (title: VoiceOver name)
         }
     }
 }
@@ -817,6 +817,7 @@ struct ClickableTextField: NSViewRepresentable {
 }
 
 struct DeleteButton: View {
+    let label: String // LEANKEYS-HOOK: copy (VoiceOver name of the icon-only button)
     let action: () -> Void
     @State private var hovered = false
 
@@ -829,6 +830,7 @@ struct DeleteButton: View {
         .buttonStyle(.borderless)
         .onHover { hovered = $0 }
         .help("Xoá")
+        .accessibilityLabel(Text(label)) // LEANKEYS-HOOK: copy
     }
 }
 
@@ -1048,7 +1050,7 @@ struct SettingsPageView: View {
             // Bộ gõ
             if part == .general { // LEANKEYS-HOOK: settings-engine
             VStack(spacing: 0) {
-                SettingsToggleRow("Bộ gõ tiếng Việt", weight: .semibold, isOn: $appState.isEnabled) // LEANKEYS-HOOK: settings-engine
+                SettingsToggleRow("Gõ tiếng Việt", subtitle: "Tắt là gõ English, như chọn English trên menu bar", weight: .semibold, isOn: $appState.isEnabled) // LEANKEYS-HOOK: settings-engine (copy audit H4)
                 Divider().padding(.leading, 12)
                 inputMethodRow
                 if appState.currentMethod == .telex {
@@ -1073,16 +1075,18 @@ struct SettingsPageView: View {
                 Divider().padding(.leading, 12)
                 ShortcutRecorderRow(shortcut: $appState.secondaryToggleShortcut,
                                     isRecording: $isRecordingSecondaryShortcut,
-                                    title: "Phím tắt bật/tắt thứ hai",
+                                    title: "Phím tắt chuyển Việt/Anh thứ hai", // LEANKEYS-HOOK: copy
                                     subtitle: "Khi bàn phím rời không có fn",
                                     isEnabled: $appState.secondaryToggleShortcutEnabled,
                                     duplicateOf: appState.toggleShortcut)
+                if SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active) { // LEANKEYS-HOOK: copy (Gõ Nhanh only: Vikey takes Esc as a word break, no restore)
                 Divider().padding(.leading, 12)
                 RestoreShortcutRecorderRow(
                     shortcut: $appState.restoreShortcut,
                     isEnabled: $appState.restoreShortcutEnabled,
                     isRecording: $isRecordingRestoreShortcut
                 )
+                } // LEANKEYS-HOOK: copy
             }
             .cardBackground()
             } // LEANKEYS-HOOK: settings-engine
@@ -1106,9 +1110,9 @@ struct SettingsPageView: View {
                 Divider().padding(.leading, 12) // LEANKEYS-HOOK: settings-engine
                 LearnSettingsSection(model: .shared, part: .general) // LEANKEYS-HOOK: settings-engine
                 Divider().padding(.leading, 12)
-                SettingsToggleRow("Nhớ trạng thái theo app", subtitle: "Tự bật/tắt khi chuyển ứng dụng", isOn: $appState.perAppModeEnabled)
+                SettingsToggleRow("Nhớ Việt/Anh theo từng ứng dụng", subtitle: "Quay lại ứng dụng nào thì dùng lại ngôn ngữ đã chọn ở đó", isOn: $appState.perAppModeEnabled) // LEANKEYS-HOOK: copy
                 Divider().padding(.leading, 12)
-                SettingsToggleRow("Âm thanh khi bật/tắt", isOn: $appState.soundEnabled)
+                SettingsToggleRow("Âm thanh khi chuyển Việt/Anh", isOn: $appState.soundEnabled) // LEANKEYS-HOOK: copy
             }
             .cardBackground()
 
@@ -1132,7 +1136,7 @@ struct SettingsPageView: View {
         SettingsRow {
             Text("Kiểu gõ").font(.system(size: 13))
             Spacer()
-            Picker("", selection: $appState.currentMethod) {
+            Picker("Kiểu gõ", selection: $appState.currentMethod) { // LEANKEYS-HOOK: copy
                 ForEach(InputMode.allCases, id: \.self) { Text($0.name).tag($0) }
             }
             .labelsHidden()
@@ -1209,7 +1213,7 @@ struct ShortcutsSheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 4) {
                         Text("Nội dung").font(.system(size: 11)).foregroundColor(.secondary)
-                        Text("(⌥↩ xuống dòng)").font(.system(size: 10)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
+                        Text("(⌥↩ để xuống dòng)").font(.system(size: 10)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
                     }
                     // Issue #343: TextEditor for multiline replacement (supports newlines)
                     TextEditor(text: $formValue)
@@ -1253,14 +1257,14 @@ struct ShortcutsSheet: View {
         if appState.shortcuts.isEmpty {
             VStack(spacing: 8) {
                 Image(systemName: "text.badge.plus").font(.system(size: 32)).foregroundColor(.secondary)
-                Text("Chưa có từ viết tắt").font(.system(size: 13)).foregroundColor(.secondary)
-                Text("Điền form ở trên để thêm mới").font(.system(size: 11)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
+                Text("Chưa có từ viết tắt nào").font(.system(size: 13)).foregroundColor(.secondary) // LEANKEYS-HOOK: copy
+                Text("Điền Viết tắt và Nội dung ở trên, rồi bấm Thêm").font(.system(size: 11)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Table(appState.shortcuts, selection: $selectedIds) {
                 TableColumn("") { item in
-                    Toggle("", isOn: Binding(
+                    Toggle("Bật \(item.key)", isOn: Binding( // LEANKEYS-HOOK: copy
                         get: { item.isEnabled },
                         set: { newValue in
                             if let idx = appState.shortcuts.firstIndex(where: { $0.id == item.id }) {
@@ -1289,7 +1293,7 @@ struct ShortcutsSheet: View {
                 }
 
                 TableColumn("") { item in
-                    DeleteButton { deleteItem(item.id) }
+                    DeleteButton(label: "Xoá \(item.key)") { deleteItem(item.id) } // LEANKEYS-HOOK: copy
                 }
                 .width(28)
             }
@@ -1351,7 +1355,7 @@ struct ShortcutsSheet: View {
         // Dispatch panel creation to next run loop to prevent UI blocking
         DispatchQueue.main.async { [weak appState] in
             let panel = NSOpenPanel()
-            panel.title = "Nhập từ viết tắt"
+            panel.title = "Nhập Bảng gõ tắt" // LEANKEYS-HOOK: copy
             panel.allowedContentTypes = [.plainText]
             panel.allowsMultipleSelection = false
             panel.canChooseDirectories = false
@@ -1372,8 +1376,8 @@ struct ShortcutsSheet: View {
         // Dispatch panel creation to next run loop to prevent UI blocking
         DispatchQueue.main.async { [weak appState] in
             let panel = NSSavePanel()
-            panel.title = "Xuất từ viết tắt"
-            panel.nameFieldStringValue = "gonhanh-shortcuts.txt"
+            panel.title = "Xuất Bảng gõ tắt" // LEANKEYS-HOOK: copy
+            panel.nameFieldStringValue = "leankeys-bang-go-tat.txt" // LEANKEYS-HOOK: copy
             panel.allowedContentTypes = [.plainText]
             panel.begin { response in
                 guard response == .OK, let url = panel.url else { return }
@@ -1494,8 +1498,8 @@ private let systemShortcuts: Set<String> = [
 struct ShortcutRecorderRow: View {
     @Binding var shortcut: KeyboardShortcut
     @Binding var isRecording: Bool
-    var title = "Bật/tắt bộ gõ"
-    var subtitle = "Nhấn để thay đổi"
+    var title = "Chuyển Việt/Anh" // LEANKEYS-HOOK: copy
+    var subtitle = "Bấm để đổi phím tắt" // LEANKEYS-HOOK: copy
     /// When provided, shows an on/off switch and blocks recording while off.
     var isEnabled: Binding<Bool>?
     /// Another shortcut this one must not equal (e.g. the primary toggle for the secondary row).
@@ -1509,7 +1513,7 @@ struct ShortcutRecorderRow: View {
 
     private var conflictMessage: String? {
         if let other = duplicateOf, other == shortcut {
-            return "Trùng với phím tắt bật/tắt chính"
+            return "Trùng với phím tắt chuyển Việt/Anh chính" // LEANKEYS-HOOK: copy
         }
         if systemShortcuts.contains(shortcut.displayParts.joined()) {
             return "Phím tắt này có thể xung đột với hệ thống"
@@ -1524,12 +1528,15 @@ struct ShortcutRecorderRow: View {
                 Text(subtitle)
                     .font(.system(size: 11))
                     .foregroundColor(Color(NSColor.secondaryLabelColor))
+                if let conflictMessage { // LEANKEYS-HOOK: copy (shown, not only in the triangle's tooltip)
+                    Text(conflictMessage).font(.system(size: 11)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
+                } // LEANKEYS-HOOK: copy
             }
             Spacer()
             HStack(spacing: 8) {
                 shortcutDisplay
                 if let isEnabled {
-                    Toggle("", isOn: isEnabled)
+                    Toggle(title, isOn: isEnabled) // LEANKEYS-HOOK: copy
                         .toggleStyle(.switch)
                         .controlSize(.mini) // LEANKEYS-HOOK: settings-engine
                         .labelsHidden()
@@ -1545,6 +1552,11 @@ struct ShortcutRecorderRow: View {
             guard enabled else { return }
             isRecording ? stopRecording() : startRecording()
         }
+        .accessibilityElement(children: .contain) // LEANKEYS-HOOK: copy
+        .accessibilityAction(named: Text("Đổi phím tắt")) { // LEANKEYS-HOOK: copy
+            guard enabled else { return } // LEANKEYS-HOOK: copy
+            isRecording ? stopRecording() : startRecording() // LEANKEYS-HOOK: copy
+        } // LEANKEYS-HOOK: copy
         .onDisappear { stopRecording() }
         .onChange(of: enabled) { _ in
             if isRecording {
@@ -1556,7 +1568,7 @@ struct ShortcutRecorderRow: View {
     private var shortcutDisplay: some View {
         HStack(spacing: 4) {
             if isRecording {
-                Text("Nhấn phím...")
+                Text("Nhấn phím mới… (Esc: huỷ)") // LEANKEYS-HOOK: copy
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.accentColor)
                     .padding(.horizontal, 6)
@@ -1569,6 +1581,7 @@ struct ShortcutRecorderRow: View {
                         .font(.system(size: 12))
                         .foregroundColor(.orange)
                         .help(conflictMessage)
+                        .accessibilityLabel(Text(conflictMessage)) // LEANKEYS-HOOK: copy
                 }
             }
         }
@@ -1601,6 +1614,7 @@ struct ShortcutRecorderRow: View {
 // MARK: - Restore Shortcut Recorder Row
 
 struct RestoreShortcutRecorderRow: View {
+    static let title = "Trả từ đang gõ về phím gốc" // LEANKEYS-HOOK: copy (not "Hoàn tác": 4C's ⌫⌫ is the undo)
     @Binding var shortcut: KeyboardShortcut
     @Binding var isEnabled: Bool
     @Binding var isRecording: Bool
@@ -1612,15 +1626,15 @@ struct RestoreShortcutRecorderRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Hoàn tác dấu vừa gõ").font(.system(size: 13))
-                Text("Nhấn để thay đổi")
+                Text(Self.title).font(.system(size: 13)) // LEANKEYS-HOOK: copy
+                Text("Ví dụ: việt → vieejt · Bấm để đổi phím tắt") // LEANKEYS-HOOK: copy
                     .font(.system(size: 11))
                     .foregroundColor(Color(NSColor.secondaryLabelColor))
             }
             Spacer()
             HStack(spacing: 8) {
                 shortcutDisplay
-                Toggle("", isOn: $isEnabled)
+                Toggle(Self.title, isOn: $isEnabled) // LEANKEYS-HOOK: copy
                     .toggleStyle(.switch)
                     .controlSize(.mini) // LEANKEYS-HOOK: settings-engine
                     .labelsHidden()
@@ -1635,6 +1649,11 @@ struct RestoreShortcutRecorderRow: View {
             guard isEnabled else { return } // Disable click when OFF
             isRecording ? stopRecording() : startRecording()
         }
+        .accessibilityElement(children: .contain) // LEANKEYS-HOOK: copy
+        .accessibilityAction(named: Text("Đổi phím tắt")) { // LEANKEYS-HOOK: copy
+            guard isEnabled else { return } // LEANKEYS-HOOK: copy
+            isRecording ? stopRecording() : startRecording() // LEANKEYS-HOOK: copy
+        } // LEANKEYS-HOOK: copy
         .onDisappear { stopRecording() }
         .onChange(of: isEnabled) { _ in
             if isRecording {
@@ -1646,7 +1665,7 @@ struct RestoreShortcutRecorderRow: View {
     private var shortcutDisplay: some View {
         HStack(spacing: 4) {
             if isRecording {
-                Text("Nhấn phím...")
+                Text("Nhấn phím mới…") // LEANKEYS-HOOK: copy
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.accentColor)
                     .padding(.horizontal, 6)
@@ -1690,12 +1709,13 @@ struct ShortcutsRowView: View {
     @State private var hovered = false
 
     var body: some View {
+        Button { action() } label: { // LEANKEYS-HOOK: copy (a button: keyboard focus, Space, VoiceOver)
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Bảng gõ tắt").font(.system(size: 13))
                 Text(appState.shortcuts.isEmpty
-                    ? "Chưa có từ viết tắt"
-                    : "\(appState.shortcuts.filter(\.isEnabled).count)/\(appState.shortcuts.count) đang bật")
+                    ? "Chưa có từ viết tắt nào" // LEANKEYS-HOOK: copy
+                    : "\(appState.shortcuts.filter(\.isEnabled).count)/\(appState.shortcuts.count) mục đang bật") // LEANKEYS-HOOK: copy
                     .font(.system(size: 11))
                     .foregroundColor(Color(NSColor.secondaryLabelColor))
             }
@@ -1708,8 +1728,9 @@ struct ShortcutsRowView: View {
         .padding(.vertical, 10)
         .background(hovered ? Color(NSColor.controlBackgroundColor).opacity(0.3) : .clear)
         .contentShape(Rectangle())
+        } // LEANKEYS-HOOK: copy
         .onHover { hovered = $0 }
-        .onTapGesture { action() }
+        .buttonStyle(.plain) // LEANKEYS-HOOK: copy
     }
 }
 
@@ -1725,15 +1746,17 @@ struct AutoCapitalizeRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Tự viết hoa đầu câu").font(.system(size: 13))
                 if appState.autoCapitalize {
+                    Button { showSheet = true } label: { // LEANKEYS-HOOK: copy (a button: keyboard focus, Space, VoiceOver)
                     Text(subtitleText)
                         .font(.system(size: 11))
                         .foregroundColor(hovered ? Color(NSColor.labelColor) : Color(NSColor.secondaryLabelColor))
+                    } // LEANKEYS-HOOK: copy
                         .onHover { hovered = $0 }
-                        .onTapGesture { showSheet = true }
+                    .buttonStyle(.plain) // LEANKEYS-HOOK: copy
                 }
             }
             Spacer()
-            Toggle("", isOn: $appState.autoCapitalize).toggleStyle(.switch).controlSize(.mini).labelsHidden() // LEANKEYS-HOOK: settings-engine
+            Toggle("Tự viết hoa đầu câu", isOn: $appState.autoCapitalize).toggleStyle(.switch).controlSize(.mini).labelsHidden() // LEANKEYS-HOOK: settings-engine (title: VoiceOver name)
         }
         .sheet(isPresented: $showSheet) {
             AutoCapitalizeExcludedAppsSheet(appState: appState)
@@ -1742,7 +1765,7 @@ struct AutoCapitalizeRow: View {
 
     private var subtitleText: String {
         if appState.autoCapitalizeExcludedApps.isEmpty {
-            "Loại trừ ứng dụng"
+            "Chọn ứng dụng không tự viết hoa…" // LEANKEYS-HOOK: copy
         } else {
             "Loại trừ \(appState.autoCapitalizeExcludedApps.count) ứng dụng"
         }
@@ -1762,7 +1785,7 @@ struct AutoCapitalizeExcludedAppsSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader("Loại trừ viết hoa", subtitle: subtitle)
+            SheetHeader("Không tự viết hoa đầu câu trong", subtitle: subtitle) // LEANKEYS-HOOK: copy
             Divider()
             if allApps.isEmpty {
                 VStack(spacing: 8) {
@@ -1869,7 +1892,7 @@ struct AppToggleRow: View {
             Spacer()
 
             // Toggle switch
-            Toggle("", isOn: Binding(
+            Toggle("Không viết hoa trong \(name)", isOn: Binding( // LEANKEYS-HOOK: copy
                 get: { isExcluded },
                 set: { onToggle($0) }
             ))
@@ -1888,9 +1911,9 @@ struct LaunchAtLoginToggleRow: View {
 
     var body: some View {
         SettingsRow {
-            Text("Khởi động cùng hệ thống").font(.system(size: 13))
+            Text("Mở LeanKeys khi đăng nhập").font(.system(size: 13)) // LEANKEYS-HOOK: copy
             Spacer()
-            Toggle("", isOn: Binding(
+            Toggle("Mở LeanKeys khi đăng nhập", isOn: Binding( // LEANKEYS-HOOK: copy
                 get: { appState.isLaunchAtLoginEnabled },
                 set: { appState.toggleLaunchAtLogin($0) }
             ))

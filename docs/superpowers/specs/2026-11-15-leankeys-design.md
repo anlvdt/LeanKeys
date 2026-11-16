@@ -438,10 +438,10 @@ Thêm ngày 2026-11-15, người dùng đã duyệt cả ba phương án A, B, C
 - **Thanh bên:** logo 48 pt cạnh tên "LeanKeys" trên cùng một hàng; dưới đó là nhãn cập nhật, nơi duy nhất hiện phiên bản (`v1.2 · Mới nhất`; "Mới nhất" chỉ sau một lần kiểm tra báo vậy, chưa kiểm tra thì `Kiểm tra cập nhật`). Nhãn là một nút: dùng được bằng bàn phím và VoiceOver. Bên dưới là `Chung` · `Phím tắt` · `Nâng cao` · `Giới thiệu`, mỗi mục có biểu tượng SF Symbol.
 - **Chung:**
   - Thẻ trạng thái giống phần đầu của ô nổi: trạng thái, dòng tự chuyển, cảnh báo nếu có.
-  - Công tắc `Bộ gõ tiếng Việt`, chữ đậm hơn các mục khác.
+  - Công tắc `Gõ tiếng Việt` (dòng phụ "Tắt là gõ English, như chọn English trên menu bar"), chữ đậm hơn các mục khác.
   - `Kiểu gõ`.
   - Các mục chỉ dành cho Gõ Nhanh (`Gõ W thành Ư`, `Gõ [ ] thành Ơ Ư`, `Tự khôi phục tiếng Anh`, `Tự viết hoa đầu câu`) **chỉ hiện khi** engine là "Chỉ dùng Gõ Nhanh". Ở chế độ "Tự động", chúng không xuất hiện.
-- **Phím tắt:** các dòng phím tắt bật/tắt hiện có của Gõ Nhanh, chuyển nguyên sang trang này.
+- **Phím tắt:** các dòng phím tắt hiện có của Gõ Nhanh, chuyển sang trang này, gọi là `Chuyển Việt/Anh` và `Phím tắt chuyển Việt/Anh thứ hai`. Phím tắt khôi phục của Gõ Nhanh có tên `Trả từ đang gõ về phím gốc` (không gọi là "Hoàn tác", từ đó dành cho ⌫⌫ của 4C) và, như các mục chỉ dành cho Gõ Nhanh, chỉ hiện khi engine là "Chỉ dùng Gõ Nhanh": Vikey coi Esc là phím ngắt từ, không khôi phục. Hàng nào bấm được (phím tắt, Bảng gõ tắt) là nút: dùng được bằng bàn phím và VoiceOver; mọi công tắc, ô chọn và nút chỉ có biểu tượng đều có tên cho VoiceOver.
 - **Nâng cao:** thẻ thu gọn `Lõi gõ` (mục 13; trên giao diện, engine gọi là "lõi gõ"), rồi `Gợi ý gõ tắt`, `Tự sửa và tự học`, tuỳ chỉnh theo ứng dụng; các phần ít dùng và kỹ thuật (hiệu năng, tương thích, nhật ký gỡ lỗi) nằm cuối.
 - **Giới thiệu:** giữ như hiện tại, có ghi công.
 - **Ghi chú trên giao diện tối đa một dòng.** Giải thích dài hơn nằm trong tooltip của biểu tượng ⓘ. Không đưa chữ kỹ thuật như "giai đoạn 4" ra giao diện.

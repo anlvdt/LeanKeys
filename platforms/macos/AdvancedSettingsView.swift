@@ -215,7 +215,7 @@ struct PerAppProfileRow: View {
         HStack(spacing: 4) {
             Text(label).font(labelFont).foregroundColor(labelColor)
                 .lineLimit(1).fixedSize()
-            Picker("", selection: selection, content: content)
+            Picker(label, selection: selection, content: content) // LEANKEYS-HOOK: copy (VoiceOver name)
                 .labelsHidden().frame(width: width)
         }
     }

@@ -21,3 +21,4 @@ debug-log	platforms/macos/AdvancedSettingsView.swift
 copy	platforms/macos/MainSettingsView.swift
 copy	platforms/macos/AdvancedSettingsView.swift
 copy	platforms/macos/AppMetadata.swift
+copy	platforms/macos/LogViewer.swift

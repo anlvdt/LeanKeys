@@ -64,7 +64,7 @@ public struct EngineSettingsSection: View {
     /// Spec §3.5: one line on screen; the list of hidden Gõ Nhanh-only settings is in `vikeyNoteDetail`.
     static let vikeyNote = "Ở chế độ Tự động, các mục chỉ dành cho Gõ Nhanh được ẩn."
     /// Tooltip (ⓘ) for `vikeyNote`.
-    static let vikeyNoteDetail = "Ẩn ở chế độ Tự động vì chỉ Gõ Nhanh có: Gõ W thành Ư, Gõ [ ] thành Ơ Ư, Tự khôi phục tiếng Anh, Tự viết hoa đầu câu. Chọn kiểu gõ VNI thì LeanKeys tự dùng Gõ Nhanh."
+    static let vikeyNoteDetail = "Ẩn ở chế độ Tự động vì chỉ Gõ Nhanh có: Gõ W thành Ư, Gõ [ ] thành Ơ Ư, Tự khôi phục tiếng Anh, Tự viết hoa đầu câu, Trả từ đang gõ về phím gốc. Chọn kiểu gõ VNI thì LeanKeys tự dùng Gõ Nhanh."
 
     @StateObject private var model: EngineSettingsModel
     @State private var isExpanded = false

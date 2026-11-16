@@ -12,7 +12,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | 4 | Terminal | Gõ câu thử sau dấu nhắc lệnh, xoá bằng Backspace giữa chừng rồi gõ tiếp. | [ ] | [ ] |
 | 5 | Slack | Gõ câu thử trong ô soạn tin nhắn (chưa gửi). | [ ] | [ ] |
 | 6 | Đổi engine khi đang gõ | Gõ dở một từ (`vieej`), đổi engine trong Cài đặt → Nâng cao → Lõi gõ, quay lại gõ tiếp. Ô nhập không hỏng, từ sau gõ đúng với engine mới. | [ ] | [ ] |
-| 7 | Đổi app có nhớ ngôn ngữ | Bật nhớ ngôn ngữ theo app. Tắt tiếng Việt ở Terminal, bật ở Slack; chuyển qua lại vài lần, mỗi app giữ đúng trạng thái của nó. | [ ] | [ ] |
+| 7 | Đổi app có nhớ ngôn ngữ | Bật "Nhớ Việt/Anh theo từng ứng dụng" (Cài đặt → Chung). Tắt tiếng Việt ở Terminal, bật ở Slack; chuyển qua lại vài lần, mỗi app giữ đúng trạng thái của nó. | [ ] | [ ] |
 | 8 | Return/Enter sau từ Vikey khôi phục | Gõ `more` (Vikey giữ nguyên tiếng Anh) rồi Return ngay: tin nhắn được gửi trong một ô chat (Slack, kênh thử riêng) và một form trên trang web được gửi. Chữ trước đó không đổi. | — | [ ] |
 | 9 | Dấu câu sau từ đã sửa | Gõ một từ Vikey sửa (`more`, `vieejt`) rồi `,`; làm lại với `.`. Dấu phẩy, dấu chấm hiện đúng một lần. | — | [ ] |
 | 10 | Caps Lock | Bật Caps Lock, gõ câu thử: ra "TIẾNG VIỆT TRƯỜNG HỌC". Tắt Caps Lock, gõ tiếp bình thường. | [ ] | [ ] |

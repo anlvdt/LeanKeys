@@ -8,7 +8,7 @@ struct LogToggleButton: View {
     @Binding var isEnabled: Bool
 
     var body: some View {
-        Toggle("", isOn: $isEnabled)
+        Toggle("Nhật ký gỡ lỗi", isOn: $isEnabled) // LEANKEYS-HOOK: copy
             .toggleStyle(.switch)
             .labelsHidden()
             .onChange(of: isEnabled) { newValue in
@@ -33,9 +33,9 @@ struct LogViewerSection: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
                 if logLines.isEmpty {
-                    Text("Gõ phím để bắt đầu ghi log.")
+                    Text("Gõ vài phím để xem nhật ký.") // LEANKEYS-HOOK: copy
                         .font(.system(size: 11))
-                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                        .foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy (4.5:1 contrast)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 24)
                 } else {
@@ -66,7 +66,7 @@ struct LogViewerSection: View {
                     HStack(spacing: 4) {
                         logActionButton(
                             icon: copyFeedback ? "checkmark" : "doc.on.doc",
-                            label: copyFeedback ? "Đã copy" : "Copy",
+                            label: copyFeedback ? "Đã sao chép" : "Sao chép", // LEANKEYS-HOOK: copy
                             color: copyFeedback ? .green : Color(NSColor.secondaryLabelColor),
                             action: copyLog
                         )

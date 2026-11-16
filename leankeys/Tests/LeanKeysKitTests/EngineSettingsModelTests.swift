@@ -132,7 +132,7 @@ final class EngineSettingsModelTests: XCTestCase {
 
     func testVikeyNoteIsOneLineWithDetailInTooltip() {
         let note = "Ở chế độ Tự động, các mục chỉ dành cho Gõ Nhanh được ẩn."
-        let detail = "Ẩn ở chế độ Tự động vì chỉ Gõ Nhanh có: Gõ W thành Ư, Gõ [ ] thành Ơ Ư, Tự khôi phục tiếng Anh, Tự viết hoa đầu câu. Chọn kiểu gõ VNI thì LeanKeys tự dùng Gõ Nhanh."
+        let detail = "Ẩn ở chế độ Tự động vì chỉ Gõ Nhanh có: Gõ W thành Ư, Gõ [ ] thành Ơ Ư, Tự khôi phục tiếng Anh, Tự viết hoa đầu câu, Trả từ đang gõ về phím gốc. Chọn kiểu gõ VNI thì LeanKeys tự dùng Gõ Nhanh."
         XCTAssertEqual(EngineSettingsSection.vikeyNote, note)
         XCTAssertFalse(EngineSettingsSection.vikeyNote.contains("\n"))
         XCTAssertEqual(EngineSettingsSection.vikeyNoteDetail, detail)
