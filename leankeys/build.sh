@@ -116,6 +116,9 @@ $PB -c "Set :CFBundleName $NAME" "$PLIST"
 $PB -c "Set :CFBundleDisplayName $NAME" "$PLIST" 2>/dev/null || $PB -c "Add :CFBundleDisplayName string $NAME" "$PLIST"
 # Nothing sends Apple Events (HIGH-1): no usage string for them.
 $PB -c "Delete :NSAppleEventsUsageDescription" "$PLIST" 2>/dev/null || true
+# Finder's Get Info: Gõ Nhanh's "All rights reserved." line does not fit a GPL derivative.
+$PB -c "Set :NSHumanReadableCopyright © 2025 Kha Phan (Gõ Nhanh) · © 2026 $NAME · GPL-3.0" "$PLIST" 2>/dev/null ||
+    $PB -c "Add :NSHumanReadableCopyright string © 2025 Kha Phan (Gõ Nhanh) · © 2026 $NAME · GPL-3.0" "$PLIST"
 # The asset catalog adds CFBundleIconName, which would make macOS use Gõ Nhanh's icon from Assets.car.
 $PB -c "Delete :CFBundleIconName" "$PLIST" 2>/dev/null || true
 $PB -c "Set :CFBundleIconFile AppIcon" "$PLIST" 2>/dev/null || $PB -c "Add :CFBundleIconFile string AppIcon" "$PLIST"

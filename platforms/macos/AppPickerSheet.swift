@@ -59,16 +59,17 @@ struct AppPickerSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader("Thêm ứng dụng", subtitle: "Chọn app để tuỳ chỉnh")
+            SheetHeader("Thêm ứng dụng", subtitle: "Chọn ứng dụng cần tuỳ chỉnh") // LEANKEYS-HOOK: copy
             Divider()
 
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundColor(.secondary)
-                TextField("Tìm kiếm...", text: $searchText).textFieldStyle(.plain).font(.system(size: 13))
+                TextField("Tìm kiếm", text: $searchText).textFieldStyle(.plain).font(.system(size: 13)) // LEANKEYS-HOOK: copy
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 12)).foregroundColor(.secondary)
                     }.buttonStyle(.plain)
+                    .accessibilityLabel(Text("Xoá ô tìm kiếm")) // LEANKEYS-HOOK: copy
                 }
             }
             .padding(.horizontal, 12)
@@ -77,7 +78,7 @@ struct AppPickerSheet: View {
             Divider()
 
             if filtered.isEmpty {
-                Text("Không tìm thấy").font(.system(size: 12)).foregroundColor(.secondary)
+                Text("Không tìm thấy ứng dụng nào").font(.system(size: 12)).foregroundColor(.secondary) // LEANKEYS-HOOK: copy
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {

@@ -3,7 +3,7 @@ import Foundation
 import VikeyShim
 
 /// Spec 12.2–12.3 on the Vikey path: the "keep as typed" filter the shim asks before Vikey fixes a word, learning
-/// from the user's ⌫⌫ undos, and the two switches ("⌫ sửa phím gõ đúp", "Tự học từ hoàn tác"), both on by default.
+/// from the user's ⌫⌫ undos, and the two switches ("Sửa lỗi bấm đúp phím dấu", "Nhớ từ bạn giữ nguyên"), both on by default.
 ///
 /// Threading: `install()`, the C filter and `afterPress` run on the key-handling (event-tap, main) thread, like the
 /// engine; the switches and `rules` live on main too. The key path does no I/O: the filter is one `shouldKeep`
@@ -23,7 +23,7 @@ public final class UndoLearning: ObservableObject {
     public static let doubleKeyFixKey = "LeanKeys.doubleKeyFix", learningKey = "LeanKeys.undoLearning"
     /// Spec 17.3: "Tự viết hoa tên riêng".
     public static let autoCapitalizeKey = "LeanKeys.autoCapitalize"
-    /// Spec 17.3: "Bỏ ký tự gõ dính khi Enter".
+    /// Spec 17.3: "Bỏ phím \ ] ' lỡ bấm cùng Enter".
     public static let strayEnterKey = "LeanKeys.strayEnter"
 
     /// The app's instance: rules in `undo-rules.bin`, learned names in `learned-names.bin`, switches in

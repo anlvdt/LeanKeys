@@ -20,14 +20,16 @@ final class OnboardingCopyTests: XCTestCase {
         let copy = LeanOnboardingView.Strings.copy(wasTrusted: false)
         XCTAssertEqual(copy.title, "Chào mừng đến với LeanKeys")
         XCTAssertEqual(copy.message, LeanOnboardingView.Strings.message)
+        // Copy audit F1: says what to do once System Settings opens.
+        XCTAssertEqual(copy.message, "Bấm nút bên dưới, rồi bật công tắc cạnh LeanKeys trong Cài đặt hệ thống › Quyền riêng tư & Bảo mật › Trợ năng. Sau đó cứ thế gõ — LeanKeys tự chuyển Việt/Anh cho bạn.")
     }
 
-    /// Ruling R24, exact wording; the minus is U+2212.
+    /// Ruling R24's steps, worded per copy audit F2 (only names a control that exists: the button); the minus is U+2212.
     func testReturningUserGetsTheRegrantSteps() {
         let copy = LeanOnboardingView.Strings.copy(wasTrusted: true)
         XCTAssertEqual(copy.title, "LeanKeys vừa được cập nhật")
         XCTAssertEqual(copy.message,
-                       "macOS cần bạn cấp lại quyền Trợ năng: mở Cài đặt Trợ năng, chọn LeanKeys, bấm nút − để xoá, rồi bấm + và thêm lại LeanKeys.")
+                       "macOS cần bạn cấp lại quyền Trợ năng. Bấm nút bên dưới, chọn LeanKeys trong danh sách, bấm − để xoá, rồi bấm + và chọn lại LeanKeys trong thư mục Ứng dụng.")
         XCTAssertTrue(copy.message.unicodeScalars.contains("\u{2212}"))
         XCTAssertEqual(LeanOnboardingView.Strings.openSettings, "Cấp quyền Trợ năng")
     }
@@ -36,14 +38,14 @@ final class OnboardingCopyTests: XCTestCase {
     func testCopyWhenResetDone() {
         let copy = LeanOnboardingView.Strings.copy(wasTrusted: true, resetDone: true)
         XCTAssertEqual(copy.title, "LeanKeys vừa được cập nhật")
-        XCTAssertEqual(copy.message, "Bấm nút bên dưới rồi bật lại LeanKeys trong danh sách Trợ năng.")
+        XCTAssertEqual(copy.message, "Bấm nút bên dưới, rồi bật lại công tắc cạnh LeanKeys trong danh sách Trợ năng.")
     }
 
     /// The reset failed: the existing −/+ instructions remain.
     func testCopyFallsBackWhenResetFailed() {
         let copy = LeanOnboardingView.Strings.copy(wasTrusted: true, resetDone: false)
         XCTAssertEqual(copy.message,
-                       "macOS cần bạn cấp lại quyền Trợ năng: mở Cài đặt Trợ năng, chọn LeanKeys, bấm nút \u{2212} để xoá, rồi bấm + và thêm lại LeanKeys.")
+                       "macOS cần bạn cấp lại quyền Trợ năng. Bấm nút bên dưới, chọn LeanKeys trong danh sách, bấm \u{2212} để xoá, rồi bấm + và chọn lại LeanKeys trong thư mục Ứng dụng.")
     }
 
     func testWasTrustedIsRecordedOnlyWhenTrustedAndNeverCleared() {

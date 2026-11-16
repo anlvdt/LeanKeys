@@ -138,9 +138,11 @@ main() {
     range="refs/heads/$main_branch"
   fi
   log="$(git log --first-parent --format='- %s' -n 40 "$range")"
-  local notes="Engine: Gõ Nhanh ${g_tag:-?} · Vikey ${v_tag:-?}
+  local notes="Tải LeanKeys-$ver.dmg, mở ra và kéo LeanKeys vào Applications. Máy đang chạy LeanKeys sẽ tự cập nhật.
 
-Thay đổi${prev:+ từ $prev}:
+Lõi gõ: Gõ Nhanh ${g_tag:-?} · Vikey ${v_tag:-?}
+
+Thay đổi kỹ thuật${prev:+ từ $prev}:
 ${log:-- (không có commit mới)}"
 
   local push_cmd="git push origin refs/heads/${main_branch}:refs/heads/$main_branch refs/tags/${tag}:refs/tags/$tag"

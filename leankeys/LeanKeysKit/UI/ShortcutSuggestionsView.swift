@@ -9,6 +9,19 @@ public struct ShortcutSuggestionsView: View {
     static let addLabel = "Thêm"
     static let editLabel = "Sửa"
     static let dismissLabel = "Bỏ qua"
+    /// Placeholder and VoiceOver name of the trigger edit field.
+    static let triggerFieldLabel = "Từ viết tắt"
+    static let addHelp = "Thêm vào Bảng gõ tắt"
+
+    /// Tooltip of the trigger chip: it is what the user types.
+    static func triggerHelp(_ trigger: String) -> String {
+        "Gõ “\(trigger)” rồi dấu cách để chèn nội dung này"
+    }
+
+    /// VoiceOver name of the trigger chip.
+    static func triggerAccessibilityLabel(_ trigger: String) -> String {
+        "Từ viết tắt \(trigger)"
+    }
 
     @ObservedObject private var model: ShortcutSuggestionsModel
 
@@ -65,7 +78,7 @@ private struct SuggestionRowView: View {
                 .help(row.candidate.text)
             HStack(spacing: 8) {
                 if editing {
-                    TextField("", text: $draft)
+                    TextField(ShortcutSuggestionsView.triggerFieldLabel, text: $draft)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 12, design: .monospaced))
                         .frame(width: 110)
@@ -76,6 +89,8 @@ private struct SuggestionRowView: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(RoundedRectangle(cornerRadius: 4).fill(Color(NSColor.quaternaryLabelColor)))
+                        .help(ShortcutSuggestionsView.triggerHelp(row.trigger))
+                        .accessibilityLabel(Text(ShortcutSuggestionsView.triggerAccessibilityLabel(row.trigger)))
                 }
                 Text("\(ShortcutSuggestionsView.kindLabel(row.candidate.kind)) · \(row.candidate.count) lần")
                     .font(.system(size: 11))
@@ -83,6 +98,7 @@ private struct SuggestionRowView: View {
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Button(ShortcutSuggestionsView.addLabel, action: add)
+                    .help(ShortcutSuggestionsView.addHelp)
                     .keyboardShortcut(editing ? .defaultAction : nil)
                 Button(ShortcutSuggestionsView.editLabel, action: startEdit)
                     .disabled(editing)

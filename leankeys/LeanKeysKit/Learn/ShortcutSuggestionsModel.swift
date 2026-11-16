@@ -27,7 +27,7 @@ public enum LearnEnableResult: Equatable {
     case needsConsent
 }
 
-/// Drives 4B: the "Đề xuất gõ tắt" switch and its first-time consent, the learner settings, and the suggestions list.
+/// Drives 4B: the "Gợi ý gõ tắt" switch and its first-time consent, the learner settings, and the suggestions list.
 ///
 /// Threading (ruling R9): the `PhraseLearner` is created and used only inside `onLearnerQueue` (a serial background
 /// queue in the app), so observing, file I/O and Keychain access never run on the event-tap thread. Everything
@@ -42,8 +42,8 @@ public final class ShortcutSuggestionsModel: ObservableObject {
     public static let defaultThreshold = 3
     public static let thresholdChoices = [2, 3, 4, 5]
 
-    static let takenMessage = "Tên tắt này đã có"
-    static let invalidMessage = "Tên tắt không được trống hay có dấu cách"
+    static let takenMessage = "Từ viết tắt này đã có trong Bảng gõ tắt"
+    static let invalidMessage = "Từ viết tắt không được để trống hoặc chứa dấu cách"
 
     /// Learning is on (consent given). Mirrored on main so a phrase costs nothing while it is off.
     @Published public private(set) var enabled: Bool
@@ -133,7 +133,7 @@ public final class ShortcutSuggestionsModel: ObservableObject {
 
     // MARK: Switch and consent
 
-    /// The "Đề xuất gõ tắt" switch. The first time on returns `.needsConsent` and changes nothing yet.
+    /// The "Gợi ý gõ tắt" switch. The first time on returns `.needsConsent` and changes nothing yet.
     @discardableResult
     public func setEnabled(_ on: Bool) -> LearnEnableResult {
         if on {
@@ -351,7 +351,7 @@ public final class ShortcutSuggestionsModel: ObservableObject {
 
     // MARK: Settings
 
-    /// "Xoá dữ liệu đã học": counts, texts, dismissals, the file and its keys.
+    /// "Xoá dữ liệu gợi ý gõ tắt": counts, texts, dismissals, the file and its keys.
     public func eraseAll() {
         handled = []
         candidates = []

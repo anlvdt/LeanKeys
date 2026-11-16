@@ -215,6 +215,8 @@ test_first_release_creates_repo() {
   check $0 "release created with the DMG" log_has "gh release create v1.1 dist/LeanKeys-1.1.dmg --title LeanKeys 1.1" &&
   check $0 "release names the repo (two remotes)" log_has "-R anlvdt/LeanKeys" &&
   check $0 "notes name the engines" log_has "v1.0.166" &&
+  check $0 "notes start with how to install" log_has "Tải LeanKeys-1.1.dmg, mở ra và kéo LeanKeys vào Applications" &&
+  check $0 "notes say Lõi gõ, not Engine" log_has "Lõi gõ: Gõ Nhanh" &&
   check $0 "notes have the changelog" log_has "Sync Gõ Nhanh v1.0.166" &&
   check $0 "main pushed" [ "$(git -C "$bare" rev-parse main)" = "$(git -C "$repo" rev-parse main)" ] &&
   check $0 "tag pushed at main" [ "$(git -C "$bare" rev-parse 'v1.1^{commit}')" = "$(git -C "$repo" rev-parse main)" ] &&

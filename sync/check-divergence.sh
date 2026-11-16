@@ -19,6 +19,8 @@
 emulate -L zsh
 setopt no_unset pipe_fail
 
+[[ "${1:-}" == (-h|--help) ]] && { sed -n '2,16p' "${0:A}"; exit 0 }
+
 if (( $# != 1 )); then
   print -u2 "usage: $0 <gonhanh-tag>"
   exit 2

@@ -143,6 +143,12 @@ public final class StatusPopoverModel: ObservableObject {
 }
 
 public struct StatusPopoverView: View {
+    /// VoiceOver names of the two pickers (their labels are hidden on screen).
+    static let languagePickerTitle = "Ngôn ngữ gõ"
+    static let methodPickerTitle = "Kiểu gõ"
+    /// Quitting stops Vietnamese typing, so the button says what it quits.
+    static let quitLabel = "Thoát LeanKeys"
+
     @ObservedObject private var model: StatusPopoverModel
 
     public init(model: StatusPopoverModel) {
@@ -151,7 +157,7 @@ public struct StatusPopoverView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("", selection: Binding(
+            Picker(StatusPopoverView.languagePickerTitle, selection: Binding(
                 get: { model.snapshot.vietnamese },
                 set: { model.choose(vietnamese: $0) }
             )) {
@@ -167,16 +173,16 @@ public struct StatusPopoverView: View {
                     .foregroundColor(Color(NSColor.secondaryLabelColor))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .help(autoSwitchLine)
+                    .help(model.snapshot.autoSwitchHelp)
             }
             if let warningLine = model.snapshot.warningLine {
-                WarningLine(warningLine)
+                WarningLine(warningLine, help: StatusSnapshot.warningHelp)
             }
 
             HStack {
-                Text("Kiểu gõ")
+                Text(StatusPopoverView.methodPickerTitle)
                 Spacer()
-                Picker("", selection: Binding(
+                Picker(StatusPopoverView.methodPickerTitle, selection: Binding(
                     get: { model.method },
                     set: { model.choose(method: $0) }
                 )) {
@@ -212,7 +218,7 @@ public struct StatusPopoverView: View {
             HStack {
                 Button("Cài đặt…") { model.openSettings() }
                 Spacer()
-                Button("Thoát") { model.quit() }
+                Button(StatusPopoverView.quitLabel) { model.quit() }
             }
         }
         .padding(14)
