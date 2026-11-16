@@ -13,8 +13,13 @@ typedef struct { int deleteCount; int length; uint16_t text[256]; int languageCh
 
 int  lk_vikey_init(void);                       // 1 = ok
 void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out);
-void lk_vikey_reset_context(void);
-void lk_vikey_set_language(int vietnamese);     // 1 = Việt, 0 = Anh
+void lk_vikey_reset_context(void);              // also clears the shim's copy of the current line
+
+// Spec 12.1, on by default: Backspace right after a doubled key that undid a mark (Telex "hocjj" shows "hocj")
+// gives back the word from before the doubled key ("học") and keeps Vietnamese, in one edit (delete the word,
+// type the old one; languageChanged when the language comes back to Vietnamese). Off: Vikey's own Backspace.
+void lk_vikey_set_double_key_fix(int on);
+void lk_vikey_set_language(int vietnamese);     // 1 = Việt, 0 = Anh; clears the copy of the line too
 int  lk_vikey_language(void);
 void lk_vikey_set_options(int modernOrthography, int autoSwitch, int telexStyle);
 

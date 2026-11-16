@@ -57,6 +57,12 @@ public final class VikeyEngine: TypingEngine {
 
     public var isVietnamese: Bool { lk_vikey_language() == 1 }
 
+    /// Spec 12.1: Backspace right after a doubled key ("hocjj") gives back the Vietnamese word ("học").
+    /// On by default; process-wide, like the engine.
+    public static func setDoubleKeyFix(_ on: Bool) {
+        lk_vikey_set_double_key_fix(on ? 1 : 0)
+    }
+
     public func setAutoSwitch(_ on: Bool) {
         Self.options.autoSwitch = on
         Self.applyOptions()
