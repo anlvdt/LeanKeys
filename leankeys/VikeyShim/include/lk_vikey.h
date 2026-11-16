@@ -35,6 +35,7 @@ void lk_vikey_set_fix_filter(lk_fix_filter filter); // NULL = never veto (the de
 // a veto (the shim applies the fix after all: `after` comes back with its language; reverse = 1).
 typedef struct { lk_fix fix; int reverse; } lk_undo;
 // 1 and fills `out` once per undo; 0 when there is none. One slot: a newer undo replaces one not yet taken.
+// No lock: call it on the thread that calls lk_vikey_press, right after the press.
 int  lk_vikey_take_undo(lk_undo* out);
 
 void lk_vikey_set_language(int vietnamese);     // 1 = Việt, 0 = Anh; clears the copy of the line too

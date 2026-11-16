@@ -26,6 +26,8 @@ public final class EngineRouter {
     private let settings: LeanSettings
     private let makeVikey: () -> TypingEngine?
     private var vikey: TypingEngine?
+    /// `vikey` when it is the real engine: undo learning (spec 12.2) drains its undo events.
+    private var vikeyEngine: VikeyEngine?
     private var vikeyAttempted = false
     private var method = 0
     private var vietnamese = true
@@ -82,7 +84,9 @@ public final class EngineRouter {
             observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
             return .handled(result)
         }
-        guard let edit = vikey.process(keyCode: keyCode, caps: caps, shift: shift) else {
+        let processed = vikey.process(keyCode: keyCode, caps: caps, shift: shift)
+        if let vikeyEngine { UndoLearning.shared.afterPress(engine: vikeyEngine) }
+        guard let edit = processed else {
             observe(keyCode: keyCode, shift: shift, caps: caps, result: nil)
             return .handled(nil)
         }
@@ -225,6 +229,10 @@ public final class EngineRouter {
         if !vikeyAttempted {
             vikeyAttempted = true
             vikey = makeVikey()
+            if let engine = vikey as? VikeyEngine {
+                vikeyEngine = engine
+                UndoLearning.shared.install()
+            }
             vikey?.setVietnamese(vietnamese)
             vikey?.setAutoSwitch(autoSwitch)
             vikey?.setModernTone(modernTone)

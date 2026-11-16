@@ -63,6 +63,23 @@ public final class VikeyEngine: TypingEngine {
         lk_vikey_set_double_key_fix(on ? 1 : 0)
     }
 
+    /// Spec 12.2: the user's ⌫⌫ undo of Vikey's fix of a word, once per undo; nil when there is none. Call it on the
+    /// key-handling thread, right after `process` (the shim's undo slot has no lock).
+    public func takeUndo() -> (before: String, after: String, previous: String, reverse: Bool)? {
+        var undo = lk_undo()
+        guard lk_vikey_take_undo(&undo) == 1 else { return nil }
+        return (Self.string(undo.fix.before, undo.fix.beforeLength), Self.string(undo.fix.after, undo.fix.afterLength),
+                Self.string(undo.fix.previous, undo.fix.previousLength), undo.reverse != 0)
+    }
+
+    /// A word from one of the shim's fixed UTF-16 buffers (lk_fix: 64 units each).
+    static func string<Units>(_ units: Units, _ length: Int32) -> String {
+        withUnsafeBytes(of: units) { bytes in
+            let all = bytes.bindMemory(to: UInt16.self)
+            return String(decoding: all.prefix(max(0, min(Int(length), all.count))), as: UTF16.self)
+        }
+    }
+
     public func setAutoSwitch(_ on: Bool) {
         Self.options.autoSwitch = on
         Self.applyOptions()
