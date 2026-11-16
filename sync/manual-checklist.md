@@ -14,6 +14,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | 6 | Đổi engine khi đang gõ | Gõ dở một từ (`vieej`), đổi engine trong Cài đặt → Nâng cao → Lõi gõ, quay lại gõ tiếp. Ô nhập không hỏng, từ sau gõ đúng với engine mới. | [ ] | [ ] |
 | 7 | Đổi app có nhớ ngôn ngữ | Bật "Nhớ Việt/Anh theo từng ứng dụng" (Cài đặt → Chung). Tắt tiếng Việt ở Terminal, bật ở Slack; chuyển qua lại vài lần, mỗi app giữ đúng trạng thái của nó. | [ ] | [ ] |
 | 7b | Tuỳ chỉnh theo ứng dụng | Cài đặt → Nâng cao → Tuỳ chỉnh theo ứng dụng: thêm Notes, đặt "Tiếng Việt: Luôn tắt". Chuyển sang Notes: icon hiện E, gõ `vieejt ` ra nguyên chữ. Chuyển app khác: về lại như trước. Bỏ tuỳ chỉnh (nút ✕) sau khi thử. | [ ] | [ ] |
+| 7c | Phím tắt khôi phục | Chỉ dùng Gõ Nhanh: Cài đặt → Phím tắt có dòng "Trả từ đang gõ về phím gốc"; bật nó, gõ `vieejt` rồi Esc: ra `vieejt`. Đổi sang Tự động: dòng đó biến mất, Esc không đổi chữ đang gõ. | [ ] | [ ] |
 | 8 | Return/Enter sau từ Vikey khôi phục | Gõ `more` (Vikey giữ nguyên tiếng Anh) rồi Return ngay: tin nhắn được gửi trong một ô chat (Slack, kênh thử riêng) và một form trên trang web được gửi. Chữ trước đó không đổi. | — | [ ] |
 | 9 | Dấu câu sau từ đã sửa | Gõ một từ Vikey sửa (`more`, `vieejt`) rồi `,`; làm lại với `.`. Dấu phẩy, dấu chấm hiện đúng một lần. | — | [ ] |
 | 10 | Caps Lock | Bật Caps Lock, gõ câu thử: ra "TIẾNG VIỆT TRƯỜNG HỌC". Tắt Caps Lock, gõ tiếp bình thường. | [ ] | [ ] |
@@ -60,4 +61,4 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | D5 | 4D · Bỏ phím lỡ bấm cùng Enter | Vikey, Notes: gõ "xong." rồi bấm `\` và Enter gần như cùng lúc: dòng kết thúc ở "xong.", không có `\`. | — | [ ] |
 | D6 | 4D · Bỏ phím lỡ bấm cùng Enter | Vikey, Terminal: gõ `\` rồi Enter: `\` vẫn được giữ. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 66 ô đều đạt.
+Chỉ gõ `yes` khi cả 68 ô đều đạt.

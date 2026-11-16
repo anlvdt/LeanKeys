@@ -1553,6 +1553,7 @@ private func keyboardCallback(
         if let peak = modifierChord.modifiersChanged(to: flags.intersection(kModifierMask)) {
             // Chord completed cleanly - evaluate against the peak modifiers held.
             if AppState.shared.restoreShortcutEnabled,
+               SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active), // LEANKEYS-HOOK: copy (row hidden under Vikey, so the shortcut is off too)
                currentRestoreShortcut.isModifierOnly,
                currentRestoreShortcut.matchesModifierOnly(flags: peak)
             {
@@ -1631,7 +1632,7 @@ private func keyboardCallback(
     // Issue #149: Restore shortcut - restore raw ASCII if enabled
     // Issue #157: Pass key through after restore so it still functions normally (Tab inserts tab, ESC closes dialog)
     // Issue #303: Only pass through special keys (ESC, Tab, etc.), not letter/number keys with modifiers (Shift-Z, Option-Z)
-    if AppState.shared.restoreShortcutEnabled && matchesRestoreShortcut(keyCode: keyCode, flags: flags) {
+    if AppState.shared.restoreShortcutEnabled && SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active) && matchesRestoreShortcut(keyCode: keyCode, flags: flags) { // LEANKEYS-HOOK: copy
         triggerRestoreShortcut(flags: flags, proxy: proxy)
         // Only pass through special keys that should still function after restore
         // (ESC closes dialogs, Tab moves focus, Enter submits, etc.)
