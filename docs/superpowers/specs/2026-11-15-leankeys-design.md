@@ -276,39 +276,96 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 - **4A:** xếp hạng gợi ý, Tab chèn đúng phần còn thiếu, ẩn ô khi con trỏ đổi chỗ.
 - **Thử tay:** địa chỉ hay SĐT gõ 3 lần thì có đề xuất, Thêm xong gõ `sdt` bung ra đúng; ô mật khẩu không bị học.
 
-## 12. 4C: Tự học từ hoàn tác (từ điển cá nhân Việt/Anh)
+## 12. 4C: Sửa lỗi gõ và tự học từ hoàn tác
 
-Thêm ngày 2026-11-15.
+Viết ngày 2026-11-15, viết lại ngày 2026-11-16 sau khi đo. Người dùng muốn hướng tối ưu cho người Việt và không cần hỏi lại. Họ phàn nàn: "gõ tiếng Việt mà sai là nó chuyển sang tiếng Anh, rồi phải mất công chuyển lại hoặc xoá hết gõ lại".
 
-**Bối cảnh.** Đo bằng `tools/mixbench` (2026-11-15) cho thấy engine Vikey chỉ sai 0.1–0.2% số từ khi gõ trộn. Phần sai còn lại hầu hết là các cặp từ trùng nhau giữa tiếng Anh và Telex: `cos/có`, `car/cả`, `sex/sẽ`, `nos/nó`, `its/ít`, `queen/quên`, `moon/môn`. Không quy tắc chung nào sửa được hết mà không hỏng tiếng Anh. Đáp án đúng tuỳ người, nên LeanKeys học từ chính người dùng.
+**Đo trước khi thiết kế** (bản dựng thử trên engine Vikey thật; kho `chat_messages` 1.869 tin, 20.676 từ). Mỗi chế độ chèn lỗi vào 30% số từ tiếng Việt, hoặc 50% số từ tiếng Anh cho các chế độ tiếng Anh; người gõ sửa lỗi bằng ⌫ như người thật:
 
-### 12.1 Hành vi
-- **Tín hiệu học.** Mỗi lần người dùng hoàn tác một lần engine tự đổi từ là một tín hiệu: ⌫⌫ ngay sau khi Vikey tự sửa (Vikey D61), ESC hoặc Backspace hoàn tác auto-restore của Gõ Nhanh, hay đổi ngôn ngữ bằng tay rồi gõ lại đúng từ vừa gõ.
-- **Nội dung lưu** là một luật: (từ đứng trước, chuỗi phím của từ) → kết quả người dùng muốn (giữ nguyên phím, hay dạng tiếng Việt). Mỗi luật kèm số lần được xác nhận.
-- **Khi nào áp dụng:**
-  - Luật có ngữ cảnh (cùng từ đứng trước): áp dụng ngay sau **1** lần hoàn tác.
-  - Luật không ngữ cảnh: áp dụng sau **2** lần hoàn tác cùng chiều. Nếu người dùng hoàn tác ngược chiều thì bỏ luật, và luật đó cần thêm 2 lần xác nhận nữa mới được dùng lại.
-- **Cách áp dụng.** Khi một từ được chốt (phím cách hoặc dấu câu), nếu có luật khớp và kết quả của engine khác kết quả người dùng muốn, LeanKeys thay từ đó qua `word-commit`. Chạy với cả hai engine.
-- **Không cần thao tác.** Tính năng bật sẵn, không có bước cài đặt. Cài đặt có danh sách "Từ đã học" để xem, xoá từng mục, xoá hết, hoặc tắt hẳn.
+| Lỗi rồi sửa bằng ⌫ | Vikey hiện tại | Có sửa ⌫ (12.1) | Từ hỏng thêm / từ được sửa |
+|---|---|---|---|
+| Không có lỗi | VN 0.15% · EN 0.25% | như cũ | 0 / 0 |
+| Phím dấu bấm đúp rồi ⌫ (`hocjj⌫`) | **VN 28.64%** | **VN 0.95%** | 6 / 3.113 |
+| Chữ thừa rồi ⌫ | VN 9.54% | VN 9.09% | 4 / 54 |
+| Sai giữa từ, xoá lùi gõ lại | VN 7.43% | VN 7.43% | 8 / 8 |
+| Chữ cuối gõ đúp trong từ tiếng Anh rồi ⌫ | EN 7.37% | EN 4.43% | 5 / 282 |
+| Chữ thừa trong từ tiếng Anh rồi ⌫ | EN 4.75% | EN 4.69% | 1 / 7 |
 
-### 12.2 Bảo mật
-- Chỉ lưu những từ người dùng đã hoàn tác, không lưu văn bản khác. Lưu trên máy, mã hoá bằng khoá trong Keychain, không gửi đi đâu.
-- Không học trong Secure Input, ô mật khẩu, hay các app bị loại trừ ở 11.1.
-- Giới hạn 5.000 luật. Khi đầy, bỏ luật lâu không dùng nhất (LRU).
+- **Nguyên nhân chính.** Bấm một phím dấu hai lần (`ss`, `jj`, `xx`…) là "huỷ dấu" trong Telex. Vikey hiểu lần bấm thứ hai là dấu hiệu của từ tiếng Anh: nó trả cả từ về chữ thô và **chuyển ngôn ngữ sang Anh ngay giữa từ** (`học` + `j` → `hocj`, biểu tượng thành EN). Sau đó ⌫ chỉ xoá chữ thô (`hoc`), nên người dùng phải đổi ngôn ngữ lại hoặc xoá cả từ.
+- **Lỗi không sửa thì gần như vô hại.** Một từ gõ sai mà không sửa chỉ làm các từ tiếng Việt *phía sau* sai thêm 0.05–0.13 điểm phần trăm (0.15% → 0.20–0.28%), vì Vikey tự chuyển lại ở từ kế tiếp.
+- **Bỏ phương án "dựng lại engine sau mỗi ⌫".** Phương án này làm số từ tiếng Anh sai tăng gấp đôi (4.43% → 9.66%) mà tiếng Việt không khá hơn.
+- **Lỗi ngữ cảnh còn lại** là các cặp từ trùng nhau giữa tiếng Anh và Telex (`cos/có`, `car/cả`, `been/bên`…). Đáp án đúng tuỳ người, nên LeanKeys học từ chính người dùng (12.2).
 
-### 12.3 Liên quan tới repo gốc
-- Không sửa `vendor/vikey`. Việc thay từ diễn ra trong LeanKeys, sau khi engine đã ra kết quả.
-- Nếu `tools/mixbench` hay báo lỗi của người dùng cho thấy một lỗi chung (không phải sở thích riêng), lỗi đó được đề xuất lên Vikey dưới dạng PR kèm ca test. Mỗi PR chỉ gửi khi người dùng đồng ý.
+### 12.1 ⌫ ngay sau phím gõ đúp: lấy lại chữ trước đó
+- **Khi nào kích hoạt.** Người dùng bấm ⌫ ngay sau một phím thoả cả bốn điều kiện:
+  - (a) giống hệt phím ngay trước nó (bấm đúp);
+  - (b) đã thay chữ có sẵn chứ không chỉ thêm chữ;
+  - (c) để lại một từ không phải tiếng Việt hợp lệ;
+  - (d) **hoặc** làm Vikey chuyển sang tiếng Anh giữa một từ bắt đầu bằng tiếng Việt, **hoặc** đã thêm dấu vào một từ toàn chữ không dấu (`qua` + `a` → `quâ`).
+- **Kết quả.** ⌫ đưa từ về đúng như trước phím bấm đúp và giữ tiếng Việt:
+  - `hocjj⌫` → `học`; `tieengss⌫` → `tiếng`; `ddaxx⌫` → `đã`; `quaa⌫` → `qua`.
+  - Engine được nạp lại đúng chữ đó, nên gõ tiếp vẫn bỏ dấu và đổi dấu bình thường.
+- **Không kích hoạt khi từ tiếng Anh phổ biến hơn.** Nếu chữ trên màn hình là một từ tiếng Anh, nó chỉ được thay khi chữ trước đó là từ tiếng Việt có điểm từ điển ≥ điểm tiếng Anh. Điểm lấy từ `vAutoSwitchWordScore`.
+  - `userr⌫` → `use`, giữ nguyên như Vikey.
+  - `coss⌫` → `có`; `carr⌫` → `cả`.
+- **Mọi trường hợp khác** (⌫ sau phím không bấm đúp, ⌫ sau khi từ hợp lệ, ⌫ lần hai…) giữ nguyên hành vi của Vikey.
+- **Nơi xử lý.** Lớp shim C++ (`leankeys/VikeyShim`). Shim giữ một bản sao chữ đang gõ trên màn hình, dựng từ chính các bản sửa nó trả về, rồi trả về một bản sửa: xoá cả từ, gõ lại từ cũ, kèm `languageChanged` nếu ngôn ngữ đổi về Việt.
+  - Không sửa `vendor/vikey`.
+  - Không thêm điểm gắn vào code Gõ Nhanh.
+
+### 12.2 Tự học từ hoàn tác
+- **Tín hiệu học.** Khi người dùng bấm ⌫⌫ ngay sau một lần Vikey tự đổi từ (hành vi có sẵn của Vikey):
+  - "Tự đổi" gồm đổi Anh → Việt (`cos` → `có`) và trả về tiếng Anh (`ít` → `its`).
+  - Shim báo lại: chữ trước khi đổi, chữ sau khi đổi, và từ đứng trước.
+  - Chỉ ⌫⌫ là tín hiệu. Đổi ngôn ngữ bằng tay rồi gõ lại thì không tính, vì khó đoán đúng ý.
+- **Luật.** Một luật gồm: từ đứng trước (có thể trống), chữ trước khi đổi (viết thường), và quyết định "giữ nguyên, không đổi".
+  - Luật có từ đứng trước được dùng ngay sau **1** lần hoàn tác.
+  - Luật không có từ đứng trước được dùng sau **2** lần hoàn tác cùng chữ, ở bất kỳ ngữ cảnh nào.
+- **Áp dụng.** Đúng lúc Vikey sắp đổi một từ, shim gọi bộ lọc (một callback C) do LeanKeys đăng ký. Nếu luật nói "giữ", shim làm ⌫⌫ hộ bên trong engine và gõ lại phím ngắt.
+  - Kết quả là một bản sửa duy nhất, nên màn hình không nhấp nháy.
+  - Ngôn ngữ trở về như trước lần đổi đó.
+- **Đổi ý.** Ngay sau khi luật vừa giữ nguyên một từ, nếu người dùng bấm ⌫⌫ thì shim áp lại đúng lần đổi của engine, và đó là một **lần hoàn tác ngược chiều**:
+  - Luật của chữ đó (mọi ngữ cảnh) bị bỏ.
+  - Chữ đó bị chặn: phải có thêm 2 lần hoàn tác cùng chiều mới tạo lại luật.
+- **Từ đứng trước** là từ liền trước trong cùng dòng, viết thường. Bấm chuột, phím mũi tên, chuyển app hay Enter thì coi như không có từ đứng trước.
+- **Chỉ cho engine Vikey** (chế độ "Tự động", mặc định).
+  - Gõ Nhanh chỉ được dùng cho VNI (gõ dấu bằng số, nên gần như không trùng với tiếng Anh) hoặc khi người dùng tự chọn.
+  - Làm cho Gõ Nhanh phải sửa lõi Rust của repo gốc.
+
+### 12.3 Cài đặt và bảo mật
+- **Bật sẵn, không có bước cài đặt.** Cả 12.1 và 12.2 đều bật mặc định.
+- **Trang Nâng cao có thẻ "Tự sửa và tự học" gồm:**
+  - công tắc "⌫ sửa phím gõ đúp";
+  - công tắc "Tự học từ hoàn tác";
+  - danh sách "Từ đã học" (chữ, từ đứng trước nếu có, số lần), mỗi mục có nút xoá;
+  - nút "Xoá tất cả".
+- **Lưu trữ.** Chỉ lưu những chữ người dùng đã hoàn tác, không lưu văn bản khác.
+  - File `~/Library/Application Support/LeanKeys/undo-rules.bin`, quyền 0600, mã hoá AES-GCM bằng khoá trong login Keychain.
+  - Dùng lại `KeychainEncryptedFileStore` của 4B với tên file và mục Keychain riêng.
+  - Không gửi đi đâu.
+- **Giới hạn 5.000 luật.** Khi đầy, bỏ luật lâu không dùng nhất (LRU).
+- **Không học trong:** Secure Input, ô mật khẩu, và các app trong danh sách loại trừ của 4B. Luật đã học vẫn được áp dụng ở mọi nơi engine chạy.
 
 ### 12.4 Test
-- **Đơn vị:**
-  - Học sau 1 lần (có ngữ cảnh) và sau 2 lần (không ngữ cảnh).
-  - Hoàn tác ngược chiều thì bỏ luật.
-  - Giới hạn và loại bỏ theo LRU.
-  - Không học khi Secure Input bật.
-  - Xoá một luật hay xoá hết.
-- **mixbench:** thêm chế độ "người dùng tự học". Mỗi từ sai sinh một lần hoàn tác, gõ lại cả kho câu, và báo tỉ lệ sai sau khi học. Mục tiêu: lỗi lặp lại của cùng một cặp từ trong cùng ngữ cảnh giảm về 0.
-- **Thử tay:** gõ "its" trong một câu tiếng Anh, ⌫⌫, lần sau trong cùng ngữ cảnh thì giữ "its". Gõ "cos" ở đầu câu tiếng Việt thì ra "có".
+- **Shim (C++ qua Swift, engine thật):**
+  - Các ví dụ của 12.1, gồm `userr⌫`, `coss⌫`, gõ tiếp sau khi sửa (`hocjj⌫` + ` ` → `học `), và ⌫ sau phím không bấm đúp giữ hành vi cũ.
+  - Bộ lọc giữ nguyên trả về một bản sửa duy nhất đúng.
+  - Báo hoàn tác có đủ chữ trước, chữ sau và từ đứng trước.
+  - ⌫⌫ sau khi giữ nguyên thì áp lại lần đổi.
+- **Luật (Swift):**
+  - Có ngữ cảnh dùng sau 1 lần, không ngữ cảnh sau 2 lần.
+  - Ngược chiều thì bỏ luật và chặn chữ.
+  - LRU 5.000; xoá một luật, xoá hết; tắt thì không học và không áp dụng.
+  - File lưu không chứa chữ ở dạng rõ.
+  - Không học khi Secure Input bật hay trong ô mật khẩu.
+- **mixbench:** thêm `tools/mixbench/lk.cpp` (chạy qua shim thật thay vì `Driver`) và `typo.py` (các chế độ lỗi của bảng trên).
+  - README ghi kết quả.
+  - Yêu cầu: chế độ không có lỗi không đổi, và không chế độ nào có số từ sai tăng so với Vikey.
+- **Thử tay:**
+  - `hocjj` rồi ⌫ ra `học`, biểu tượng vẫn VI.
+  - Gõ "its" trong câu tiếng Anh, ⌫⌫, lần sau trong cùng ngữ cảnh giữ "its".
+  - Gõ "cos" hai lần ở hai câu khác nhau, mỗi lần ⌫⌫, lần thứ ba giữ "cos".
+  - Trong ô mật khẩu không học.
 
 ## 13. Mặc định "cài xong là gõ"
 
