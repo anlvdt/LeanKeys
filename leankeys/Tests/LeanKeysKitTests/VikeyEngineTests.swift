@@ -1,4 +1,5 @@
 import XCTest
+import VikeyShim
 @testable import LeanKeysKit
 
 /// Mac virtual key codes, from vendor/vikey/Engine/platforms/mac.h.
@@ -72,6 +73,8 @@ final class VikeyEngineTests: XCTestCase {
         // Options are process-wide: put back the defaults for the next test.
         engine?.setAutoSwitch(true)
         engine?.setModernTone(true)
+        // A router on the real engine installs UndoLearning.shared's fix filter (the user's own rules): unregister it.
+        lk_vikey_set_fix_filter(nil)
         engine?.setVietnamese(true)
         engine?.resetContext()
         super.tearDown()
