@@ -314,6 +314,19 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(router).type("gui nguyeenx vawn "), "gui Nguyễn Văn ")
     }
 
+    /// N1 with learned names: a learned name only ever changes the last word, so it never reaches a glued first
+    /// word. The glued word still counts as the title before it (`@anh hùng`): only the separate word changes.
+    func testGluedWordWithLearnedNames() {
+        let router = makeRouter(names: permissiveNames())
+        line(router).type("mua Tiki ")
+        line(router).type("mua Tiki ")
+        line(router).type("chaof anh Hufng ")
+        line(router).type("chaof anh Hufng ")
+        XCTAssertEqual(line(router).type("xem #shop tiki "), "xem #shop Tiki ")
+        XCTAssertEqual(line(router).type("gui @anh hufng "), "gui @anh Hùng ")
+        XCTAssertEqual(line(router).type("xem ~/tiki "), "xem ~/tiki ", "R13: the glued word itself")
+    }
+
     /// Final re-review N2: a capital right after `:` or an opening quote is sentence case, like a phrase start
     /// (ruling R11(a) extended): it is no name cue, and it is not learned.
     func testCapitalAfterColonOrQuoteIsSentenceCase() {
@@ -345,6 +358,13 @@ final class AutoCapitalizerTests: XCTestCase {
         line(router).type("chaof chij Lan ")
         line(router).type("chaof chij Lan ")
         XCTAssertEqual(names.names.map(\.form), ["Lan"], "control: right after the title")
+    }
+
+    /// Task 3 review minor 2, pinned: a tone key after ⌫ back into a word LeanKeys capitalised keeps the capital.
+    /// The review feared Vikey's buffer would retype the word lowercase ("Hà nối"); it does not, and this keeps it so.
+    func testToneAfterBackspaceIntoCapitalisedWord() {
+        let router = makeRouter()
+        XCTAssertEqual(line(router).type("tooi owr haf nooij a⌫⌫s"), "tôi ở Hà Nối")
     }
 
     func testSwitchOff() {

@@ -323,6 +323,7 @@ final class LearnedNamesTests: XCTestCase {
         // Task 2 minor 2: letters only, so a hyphen or apostrophe does not make every such word a non-word.
         XCTAssertEqual(LearnedNames.asciiFolded("Ê-đê"), "ede")
         XCTAssertEqual(LearnedNames.asciiFolded("O’Neil"), "oneil")
+        XCTAssertFalse(LearnedNames.isDictionaryWord("ede"), "Ê-đê is still learned anywhere")
         XCTAssertTrue(LearnedNames.isDictionaryWord("store"))
         XCTAssertTrue(LearnedNames.isDictionaryWord(LearnedNames.asciiFolded("Hùng")))
         XCTAssertFalse(LearnedNames.isDictionaryWord("shopee"))
