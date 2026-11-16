@@ -209,15 +209,23 @@ final class VikeyEngineTests: XCTestCase {
 
     // Ruling R12: after Vikey fixes a word, a break key is typed by the key itself, not injected as text.
 
-    func testReturnAfterRestoreLetsKeyThrough() {
+    /// Vikey D62 (v1.0.34): Return sends what is on screen. It ends the word but never fixes it, so the transformed
+    /// word goes out as shown and Return is typed by the key itself.
+    func testReturnSendsWhatIsOnScreen() {
         let field = Field(engine)
         let typed = field.type("test")
         XCTAssertNotEqual(typed, "test", "precondition: Telex transforms the word")
-        let edit = field.press(kReturn, shift: false, own: "\n")
-        XCTAssertNotNil(edit, "Vikey restores the word on Return")
-        XCTAssertEqual(edit?.keyPassesThrough, true)
-        XCTAssertFalse(edit?.text.contains("\n") ?? true)
-        XCTAssertEqual(String(field.text), "test\n")
+        XCTAssertNil(field.press(kReturn, shift: false, own: "\n"), "no fix at Return")
+        XCTAssertEqual(String(field.text), typed + "\n")
+    }
+
+    /// A Space before Return still lets Vikey restore the word, and Return then goes through as typed.
+    func testSpaceThenReturnStillRestores() {
+        let field = Field(engine)
+        XCTAssertNotEqual(field.type("test"), "test", "precondition: Telex transforms the word")
+        _ = field.press(kSpace, shift: false, own: " ")
+        XCTAssertNil(field.press(kReturn, shift: false, own: "\n"))
+        XCTAssertEqual(String(field.text), "test \n")
     }
 
     func testCommaAfterRestoreLetsKeyThrough() {
