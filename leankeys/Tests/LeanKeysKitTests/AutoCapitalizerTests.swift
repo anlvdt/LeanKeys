@@ -11,8 +11,8 @@ private let macKey: [Character: UInt16] = [
     "n": 45, "o": 31, "p": 35, "q": 12, "r": 15, "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7, "y": 16, "z": 6,
     " ": 49, ",": 43, ".": 47, "⌫": 51, "\n": 36, "/": 44, "-": 27,
 ]
-/// Symbols typed with Shift: Shift+2, Shift+3, Shift+` (US layout).
-private let shiftedMacKey: [Character: UInt16] = ["@": 19, "#": 20, "~": 50]
+/// Symbols typed with Shift: Shift+2, Shift+3, Shift+`, Shift+-, Shift+', Shift+; (US layout).
+private let shiftedMacKey: [Character: UInt16] = ["@": 19, "#": 20, "~": 50, "_": 27, "\"": 39, ":": 41]
 
 /// A text field fed by `router.intercept`, applying each result the way the macOS key handler does: the key itself
 /// is typed when the result is nil, or when it is not consumed (Return and punctuation after an edit).
@@ -90,8 +90,9 @@ final class AutoCapitalizerTests: XCTestCase {
     /// A router over the real engine with a memory-only rule book and `names` (memory-only real names by default).
     private func makeRouter(book: UndoRuleBook = UndoRuleBook(store: nil),
                             names: LearnedNames? = nil) -> EngineRouter {
+        // Records run at once, so a name typed twice is learned by the next line.
         let made = UndoLearning(book: book, defaults: defaults, context: { [unowned self] in self.context },
-                                names: names ?? UndoLearning.memoryNames())
+                                names: names ?? UndoLearning.memoryNames(), onRecordQueue: { $0() })
         learning = made
         let engine = self.engine!
         return EngineRouter(defaults: defaults, makeVikey: { engine }, undoLearning: { made },
@@ -226,6 +227,8 @@ final class AutoCapitalizerTests: XCTestCase {
         let open = permissiveNames()
         let strict = makeRouter(names: open)
         strict.setShortcuts([("hnn", "Hà Nội")])
+        // Documentation only (plan-mandated; no capital key is pressed, so they cannot fail). The recommitted
+        // "Nội" after ⌫ below is the case that discriminates.
         XCTAssertEqual(line(strict).type("tooi owr haf nooij "), "tôi ở Hà Nội ")
         XCTAssertEqual(line(strict).type("tooi owr haf nooij "), "tôi ở Hà Nội ")
         XCTAssertEqual(line(strict).type("ddi hnn "), "đi Hà Nội ")
@@ -292,6 +295,97 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(router).type("xem #tiki "), "xem #tiki ")
         XCTAssertEqual(line(router).type("xem @tiki "), "xem @tiki ")
         XCTAssertEqual(line(router).type("ten-tiki "), "ten-tiki ")
+    }
+
+    /// Final re-review N1: the first word of a multi-word phrase glued to a symbol is never capitalised, so the
+    /// phrase is left as typed; an opening quote is no glue.
+    func testGluedFirstWordOfPhraseStaysAsTyped() {
+        let router = makeRouter()
+        XCTAssertEqual(line(router).type("cd ~/haf nooij "), "cd ~/hà nội ")
+        XCTAssertEqual(line(router).type("xem /haf nooij "), "xem /hà nội ")
+        XCTAssertEqual(line(router).type("xem #haf nooij "), "xem #hà nội ")
+        XCTAssertEqual(line(router).type("ten_haf nooij "), "ten_hà nội ")
+        XCTAssertEqual(line(router).type("ten-haf nooij "), "ten-hà nội ")
+        XCTAssertEqual(line(router).type("gui @nguyeenx vawn "), "gui @nguyễn văn ")
+        XCTAssertEqual(line(router).type("gui @nguyeenx vawn an "), "gui @nguyễn văn an ")
+        // Review M4: a glued cue word does not enable the words after it ("hòa bình" needs a cue such as "ở").
+        XCTAssertEqual(line(router).type("cd ~/owr hoaf binhf "), "cd ~/ở hoà bình ")
+        XCTAssertEqual(line(router).type("xem #owr hoaf binhf "), "xem #ở hoà bình ")
+        XCTAssertEqual(line(router).type("xem owr hoaf binhf "), "xem ở Hoà Bình ", "control: the cue, unglued")
+        // A place that needs no cue is still capitalised when its own words are separate.
+        XCTAssertEqual(line(router).type("cd ~/owr haf nooij "), "cd ~/ở Hà Nội ")
+        // Controls: the same phrases with a space, or after an opening quote.
+        XCTAssertEqual(line(router).type("xem haf nooij "), "xem Hà Nội ")
+        XCTAssertEqual(line(router).type("xem \"haf nooij "), "xem \"Hà Nội ")
+        XCTAssertEqual(line(router).type("gui nguyeenx vawn "), "gui Nguyễn Văn ")
+    }
+
+    /// N1 with learned names: a learned name only ever changes the last word, so it never reaches a glued first
+    /// word, and the glued word is no title or cue for the words after it either (review M4).
+    func testGluedWordWithLearnedNames() {
+        // Every word a dictionary word: "Tiki" and "Hùng" are learned after a title only.
+        let router = makeRouter(names: LearnedNames(store: nil, hmacKey: nil,
+                                                    titles: Set(ProperNounData.bundled.titles),
+                                                    isDictionaryWord: { _ in true }))
+        line(router).type("chij Tiki ")
+        line(router).type("chij Tiki ")
+        line(router).type("chaof anh Hufng ")
+        line(router).type("chaof anh Hufng ")
+        XCTAssertEqual(line(router).type("xem #chij tiki "), "xem #chị tiki ", "a glued title enables nothing")
+        XCTAssertEqual(line(router).type("gui @anh hufng "), "gui @anh hùng ")
+        XCTAssertEqual(line(router).type("gui anh hufng "), "gui anh Hùng ", "control: the title, unglued")
+        XCTAssertEqual(line(router).type("xem chij tiki "), "xem chị Tiki ", "control")
+        XCTAssertEqual(line(router).type("xem ~/tiki "), "xem ~/tiki ", "R13: the glued word itself")
+    }
+
+    /// Final re-review N2: a capital right after `:` or an opening quote is sentence case, like a phrase start
+    /// (ruling R11(a) extended): it is no name cue, and it is not learned.
+    func testCapitalAfterColonOrQuoteIsSentenceCase() {
+        let names = permissiveNames()
+        let router = makeRouter(names: names)
+        XCTAssertEqual(line(router).type("Anh nois: \"Mai anh qua "), "Anh nói: \"Mai anh qua ")
+        XCTAssertEqual(line(router).type("Em ghi chus: Luwowng taam laf "), "Em ghi chú: Lương tâm là ")
+        XCTAssertEqual(line(router).type("Em ghi chus:Luwowng taam laf "), "Em ghi chú:Lương tâm là ")
+        // Control: a capital mid-phrase is still a name cue.
+        XCTAssertEqual(line(router).type("xin chaof Mai anh "), "xin chào Mai Anh ")
+        // Not learned after ':' either.
+        line(router).type("ghi chus: Shopee ")
+        line(router).type("ghi chus: Shopee ")
+        XCTAssertTrue(names.names.isEmpty, "a capital after ':' is sentence case")
+        line(router).type("mua Shopee ")
+        line(router).type("mua Shopee ")
+        XCTAssertEqual(names.names.map(\.form), ["Shopee"], "control")
+    }
+
+    /// Task 3 review minor 7: learning reads "the word before" as capitalisation does, not across punctuation, so
+    /// "chị, Lan" does not count as a name after a title.
+    func testLearningPreviousStopsAtPunctuation() {
+        let names = LearnedNames(store: nil, hmacKey: nil, titles: Set(ProperNounData.bundled.titles),
+                                 isDictionaryWord: { _ in true })
+        let router = makeRouter(names: names)
+        line(router).type("chaof chij, Lan ")
+        line(router).type("chaof chij, Lan ")
+        XCTAssertTrue(names.names.isEmpty)
+        line(router).type("chaof chij Lan ")
+        line(router).type("chaof chij Lan ")
+        XCTAssertEqual(names.names.map(\.form), ["Lan"], "control: right after the title")
+    }
+
+    /// Task 3 review minor 2, pinned: a tone key after ⌫ back into a word LeanKeys capitalised keeps the capital.
+    /// The review feared Vikey's buffer would retype the word lowercase ("Hà nối"); it does not, and this keeps it so.
+    func testToneAfterBackspaceIntoCapitalisedWord() {
+        let router = makeRouter()
+        XCTAssertEqual(line(router).type("tooi owr haf nooij a⌫⌫s"), "tôi ở Hà Nối")
+    }
+
+    /// Review M3: a capitalisation made with a learned name marks it used (most recent first in "Tên đã học").
+    func testAppliedLearnedNameIsMarkedUsed() {
+        let names = permissiveNames()
+        let router = makeRouter(names: names)
+        for line in ["mua Tiki ", "mua Tiki ", "mua Lazada ", "mua Lazada "] { self.line(router).type(line) }
+        XCTAssertEqual(names.names.first?.form, "Lazada")
+        XCTAssertEqual(line(router).type("mua tiki "), "mua Tiki ")
+        XCTAssertEqual(names.names.first?.form, "Tiki")
     }
 
     func testSwitchOff() {

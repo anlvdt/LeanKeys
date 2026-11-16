@@ -25,7 +25,8 @@ public struct LearnedName: Codable, Equatable, Identifiable {
 /// - The second undo of a learned name (anywhere) removes it.
 ///
 /// Thread-safe behind one lock, held only for dictionary work: `name(after:word:)` runs on the key-handling thread
-/// and does no I/O. Every change is saved through `store` on a private serial queue (JSON; the store encrypts it)
+/// and does no I/O. `observe` is split for the router (audit item 4): `sighting` runs the dictionary check, which
+/// the real `isDictionaryWord` allows on the key-handling thread only; `record` counts it on any thread. Every change is saved through `store` on a private serial queue (JSON; the store encrypts it)
 /// and announced through `onChange` on the main queue. Nothing is logged.
 public final class LearnedNames: LearnedNameLookup {
     public static let capacity = 2_000, threshold = 2
@@ -46,7 +47,8 @@ public final class LearnedNames: LearnedNameLookup {
     }
 
     private let store: LearnStore?
-    private let key: SymmetricKey
+    /// Guarded by `lock`: a "Xoá tất cả" that erased an unreadable file takes the store's new key.
+    private var key: SymmetricKey
     private let titles: Set<String>
     private let isDictionaryWord: (String) -> Bool
     private let now: () -> Date
@@ -58,7 +60,8 @@ public final class LearnedNames: LearnedNameLookup {
     private var pending: [String: Pending] = [:]
     private var undos: [String: Int] = [:]
     private var savePending = false
-    /// The store could not be read at launch: nothing is saved this session, so its file is never overwritten.
+    /// The store could not be read or decoded at launch: nothing is saved this session, so its file is never
+    /// overwritten, until "Xoá tất cả" erases it (`removeAll`).
     private var persistent: Bool
     private var _onChange: (() -> Void)?
 
@@ -80,7 +83,12 @@ public final class LearnedNames: LearnedNameLookup {
         persistent = store != nil
         guard let store else { return }
         do {
-            if let data = try store.load(), let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) {
+            if let data = try store.load() {
+                // A file that cannot be decoded (corrupt, or from a later version) is never overwritten.
+                guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else {
+                    persistent = false
+                    return
+                }
                 for name in snapshot.names where !name.form.isEmpty && name.count > 0 {
                     learned[Self.normalized(name.form)] = name
                 }
@@ -99,21 +107,41 @@ public final class LearnedNames: LearnedNameLookup {
         set { lock.withLock { _onChange = newValue } }
     }
 
+    /// A word that would count, with what was decided about it on the key-handling thread. Memory only: it holds
+    /// the typed word until `record` counts it (as a digest below the threshold).
+    public struct Sighting {
+        fileprivate let form: String
+        fileprivate let id: String
+        fileprivate let afterTitle: Bool
+        fileprivate let anywhere: Bool
+    }
+
     /// A word the user typed with a capital (Shift or Caps Lock), mid-sentence, not all caps, at least 2 letters,
     /// not capitalised by LeanKeys. `previous` = the word before it (lowercased) or nil.
     ///
     /// The caller decides "typed by the user, mid-sentence, not by LeanKeys, not in Secure Input or an excluded
     /// app"; this drops words without a capital, all caps, or with fewer than 2 letters.
     public func observe(word: String, previous: String?) {
+        if let sighting = sighting(word: word, previous: previous) { record(sighting) }
+    }
+
+    /// The first half of `observe`: whether `word` would count, or nil. Key-handling thread when `isDictionaryWord`
+    /// is the real check (ruling R4: it replays the engine). Touches no state.
+    public func sighting(word: String, previous: String?) -> Sighting? {
         let form = word.precomposedStringWithCanonicalMapping
-        guard Self.looksLikeTypedName(form) else { return }
+        guard Self.looksLikeTypedName(form) else { return nil }
         let id = form.lowercased()
         let afterTitle = previous.map { titles.contains(Self.normalized($0)) } ?? false
         let anywhere = !isDictionaryWord(Self.asciiFolded(id))
-        guard afterTitle || anywhere else { return }
-        let digest = Self.digest(id, key: key)
+        guard afterTitle || anywhere else { return nil }
+        return Sighting(form: form, id: id, afterTitle: afterTitle, anywhere: anywhere)
+    }
 
+    /// The second half of `observe`: counts `sighting`. Any thread (one lock; the save is queued).
+    public func record(_ sighting: Sighting) {
+        let (form, id, afterTitle, anywhere) = (sighting.form, sighting.id, sighting.afterTitle, sighting.anywhere)
         let namesChanged: Bool = lock.withLock {
+            let digest = Self.digest(id, key: key)
             let date = now()
             if var name = learned[id] {
                 name.count += 1
@@ -138,20 +166,28 @@ public final class LearnedNames: LearnedNameLookup {
         if namesChanged { didChange() } else { scheduleSave() }
     }
 
-    /// The learned form of `word` when it is learned and either holds anywhere or `previous` is a title. A hit marks
-    /// the name used. Key-handling thread: one short lock, no I/O.
+    /// The learned form of `word` when it is learned and either holds anywhere or `previous` is a title.
+    /// Key-handling thread: one short lock, no I/O. A lookup is no use yet: the rules or a `cap:` rule may still
+    /// reject it (`markUsed` once a capitalisation is made with it; review M3).
     public func name(after previous: String?, word: String) -> String? {
         let id = Self.normalized(word)
         let isTitle = previous.map { titles.contains(Self.normalized($0)) } ?? false
-        let form: String? = lock.withLock {
-            guard var name = learned[id], !name.afterTitleOnly || isTitle else { return nil }
-            name.lastUsed = now()
-            learned[id] = name
+        return lock.withLock {
+            guard let name = learned[id], !name.afterTitleOnly || isTitle else { return nil }
             return name.form
         }
-        // The new `lastUsed` is saved, but the UI is not told: only the order of `names` moved.
-        if form != nil { scheduleSave() }
-        return form
+    }
+
+    /// A capitalisation was made with the learned name `word`: it is the most recently used. Key-handling thread:
+    /// one short lock. The new `lastUsed` rides along with the next save (no write of the whole file per name
+    /// typed), and the UI is not told: only the order of `names` moved.
+    public func markUsed(word: String) {
+        let id = Self.normalized(word)
+        lock.withLock {
+            guard var name = learned[id] else { return }
+            name.lastUsed = now()
+            learned[id] = name
+        }
     }
 
     /// The user undid a capitalisation of `word`; the second undo of a learned name (anywhere) removes it.
@@ -186,12 +222,26 @@ public final class LearnedNames: LearnedNameLookup {
         if removed { didChange() }
     }
 
-    /// Forgets every name, hidden count and undo count.
+    /// Forgets every name, hidden count and undo count. A file this session could not read is erased, so its names
+    /// do not come back at the next launch; from then on changes are saved.
     public func removeAll() {
-        lock.withLock {
+        let eraseUnreadable: Bool = lock.withLock {
             learned = [:]
             pending = [:]
             undos = [:]
+            return !persistent && store != nil
+        }
+        if eraseUnreadable {
+            saveQueue.async { [self] in
+                guard (try? store?.erase()) != nil else { return }
+                // The erase removed the store's HMAC key too: digest new hidden counts with its new one, so they
+                // still match after a restart (review M2).
+                let newKey = (store as? LearnKeyProvider).flatMap { try? $0.hmacKey() }
+                lock.withLock {
+                    persistent = true
+                    if let newKey, newKey.count == 32 { key = SymmetricKey(data: newKey) }
+                }
+            }
         }
         didChange()
     }
@@ -208,11 +258,11 @@ public final class LearnedNames: LearnedNameLookup {
         lk_vikey_word_score(0, letters) != LK_VIKEY_NOT_A_WORD || lk_vikey_word_score(1, letters) != LK_VIKEY_NOT_A_WORD
     }
 
-    /// Lowercase without Vietnamese marks, đ as d: "Đường" → "duong".
+    /// Lowercase ASCII letters without Vietnamese marks, đ as d: "Đường" → "duong", "Ê-đê" → "ede".
     static func asciiFolded(_ word: String) -> String {
         let lower = word.lowercased().replacingOccurrences(of: "đ", with: "d")
         let scalars = lower.decomposedStringWithCanonicalMapping.unicodeScalars
-            .filter { !(0x0300...0x036F).contains($0.value) }
+            .filter { ("a"..."z").contains($0) }
         return String(String.UnicodeScalarView(scalars))
     }
 

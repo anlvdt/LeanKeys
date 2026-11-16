@@ -92,8 +92,10 @@ public final class ShortcutSuggestionsModel: ObservableObject {
     private let onLearnerQueue: (@escaping () -> Void) -> Void
     private let onMain: (@escaping () -> Void) -> Void
     private let suggest: (Candidate, Set<String>) -> String
-    /// Reads where the user is typing; main thread, called only while enabled.
-    var contextReader: () -> LearnContext = { LearnContext(bundleID: nil, secureInput: true, secureField: true, now: Date()) }
+    /// Reads where the user is typing, without IPC; main (event-tap) thread, called only while enabled.
+    var contextProbe: () -> LearnContextProbe = { LearnContextProbe(bundleID: nil, pid: nil, secureInput: true, now: Date()) }
+    /// Whether the probed app's focused field is a password field, or cannot be told (AX IPC); learner queue only.
+    var secureField: (LearnContextProbe) -> Bool = { _ in true }
 
     /// Learner-queue state: touched only inside `onLearnerQueue`.
     private var learner: PhraseLearning?
@@ -193,22 +195,33 @@ public final class ShortcutSuggestionsModel: ObservableObject {
         self.existingTriggers = existingTriggers
         self.existingReplacements = existingReplacements
         self.addShortcut = addShortcut
-        contextReader = LearnContextReader.current
+        contextProbe = LearnContextReader.probe
+        secureField = LearnContextReader.isSecureField
         router.mirror.onPhrase = { [weak self] phrase in self?.phraseCommitted(phrase) }
     }
 
-    /// From the mirror, on the event-tap (main) thread: nothing while off; otherwise read the context and hop.
+    /// From the mirror, on the event-tap (main) thread: nothing while off. Secure Input, excluded apps and LeanKeys
+    /// itself are decided here from the probe (no IPC); the secure-field check (AX) runs on the learner queue, which
+    /// drops the phrase when the field is secure or the check fails (audit item 4). The learner checks again.
     func phraseCommitted(_ phrase: CommittedPhrase) {
         guard enabled else { return }
-        observe(phrase, context: contextReader())
+        let probe = contextProbe()
+        guard !probe.secureInput, let bundleID = probe.bundleID, !excludedBundleIDs.contains(bundleID) else { return }
+        let secureField = secureField
+        enqueue(phrase, bundleID: bundleID) { secureField(probe) ? nil : probe.context(secureField: false) }
     }
 
     /// Main thread. Hands the phrase to the learner queue unless learning is off or it was typed in LeanKeys.
     public func observe(_ phrase: CommittedPhrase, context: LearnContext) {
-        guard enabled, context.bundleID == nil || context.bundleID != ownBundleID else { return }
+        enqueue(phrase, bundleID: context.bundleID) { context }
+    }
+
+    /// Main thread. `context` runs on the learner queue; nil drops the phrase.
+    private func enqueue(_ phrase: CommittedPhrase, bundleID: String?, context: @escaping () -> LearnContext?) {
+        guard enabled, bundleID == nil || bundleID != ownBundleID else { return }
         let replacements = existingReplacements()
         onLearnerQueue { [self] in
-            guard let learner, learner.enabled else { return }
+            guard let learner, learner.enabled, let context = context() else { return }
             queueReplacements = Self.normalized(replacements)
             learner.observe(phrase, context: context)
             publishReady(learner)

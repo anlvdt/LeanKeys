@@ -7,11 +7,16 @@ import XCTest
 private final class InMemoryStore: LearnStore {
     private let lock = NSLock()
     private var data: Data?
-    private(set) var saves = 0
+    private var _saves = 0, _erased = 0
 
+    init(_ data: Data? = nil) { self.data = data }
+
+    var saved: Data? { lock.withLock { data } }
+    var saves: Int { lock.withLock { _saves } }
+    var erased: Int { lock.withLock { _erased } }
     func load() throws -> Data? { lock.withLock { data } }
-    func save(_ data: Data) throws { lock.withLock { self.data = data; saves += 1 } }
-    func erase() throws { lock.withLock { data = nil } }
+    func save(_ data: Data) throws { lock.withLock { self.data = data; _saves += 1 } }
+    func erase() throws { lock.withLock { data = nil; _erased += 1 } }
 }
 
 /// A clock that moves one second per reading, so every record has its own `lastUsed`.
@@ -153,6 +158,33 @@ final class UndoRuleBookTests: XCTestCase {
         }
         DispatchQueue.global().async { b.record(before: "cos", previous: "the", reverse: false) }
         wait(for: [changed], timeout: 5)
+    }
+
+    /// Ruling R16: a rules file that cannot be decoded (corrupt, or from a later version) is never overwritten by
+    /// the session that could not read it.
+    func testUndecodableFileIsNotOverwritten() {
+        let garbage = Data("not json".utf8)
+        let store = InMemoryStore(garbage)
+        let b = book(store)
+        b.record(before: "its", previous: "about", reverse: false)
+        b.flush()
+        XCTAssertTrue(b.shouldKeep(before: "its", previous: "about"), "the rule still works this session")
+        XCTAssertEqual(store.saved, garbage)
+        XCTAssertEqual(store.saves, 0)
+    }
+
+    /// Ruling R16, as for learned names: "Xoá tất cả" erases a file the session could not read, so its rules do
+    /// not come back at the next launch; from then on changes are saved.
+    func testRemoveAllErasesAnUnreadableFile() {
+        let store = InMemoryStore(Data("not json".utf8))
+        let b = book(store)
+        b.removeAll()
+        b.flush()
+        XCTAssertEqual(store.erased, 1)
+        XCTAssertNil(store.saved)
+        b.record(before: "its", previous: "about", reverse: false)
+        b.flush()
+        XCTAssertTrue(book(store).shouldKeep(before: "its", previous: "about"))
     }
 
     func testPersistsThroughStore() {

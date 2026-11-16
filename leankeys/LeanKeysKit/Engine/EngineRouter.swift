@@ -110,8 +110,7 @@ public final class EngineRouter {
         if ctrl {
             vikey.resetContext()
             mirror.discard()
-            wordStartsWithUserCapital = false
-            strayEnter = StrayEnterFilter()
+            forgetWord()
             return .handled(nil)
         }
         let wordWasEmpty = mirror.currentWord.isEmpty
@@ -175,11 +174,13 @@ public final class EngineRouter {
     private func dropStrayKey(_ vikey: TypingEngine, keyCode: UInt16, caps: Bool, shift: Bool,
                               option: Bool) -> (Int, [Character], Bool)? {
         guard let undoLearning, undoLearning.strayEnter else { return nil }
-        // Only Enter and the keys next to it can be acted on: the frontmost app is asked for those only.
-        let mayAct = StrayEnterFilter.enterKeys.contains(keyCode) || StrayEnterFilter.adjacentKeys[keyCode] != nil
+        // Only Enter and the keys next to it can be acted on: the frontmost app is asked for those only, and the
+        // line is read (as a String) only at Enter, the one key the filter reads it for.
+        let isEnter = StrayEnterFilter.enterKeys.contains(keyCode)
+        let mayAct = isEnter || StrayEnterFilter.adjacentKeys[keyCode] != nil
         let decision = strayEnter.decide(keyCode: keyCode, shift: shift, otherModifiers: option, time: now(),
-                                         lineBeforeCursor: mirror.typedTail,
-                                         lineStartKnown: mirror.lineBeforeCursor != nil,
+                                         lineBeforeCursor: isEnter ? mirror.typedTail : "",
+                                         lineStartKnown: mirror.lineStartKnown,
                                          bundleID: mayAct ? frontmostBundleID() : nil,
                                          bracketTypesLetter: vikey.isVietnamese)
         let result: (Int, [Character], Bool)
@@ -204,9 +205,11 @@ public final class EngineRouter {
     private struct CommittedWordContext {
         let word: String
         let phraseText: String
-        /// The phrase's word before `word`, lowercased.
+        /// The word before `word`, lowercased, when only spaces separate them (as `AutoCapitalizer` reads it).
         let previous: String?
-        let atPhraseStart: Bool
+        /// The word starts the phrase or a sentence inside it (after `:` or an opening quote): its capital is
+        /// sentence case (ruling R11(a), final re-review N2).
+        let atSentenceStart: Bool
         let userCapital: Bool
     }
 
@@ -217,15 +220,20 @@ public final class EngineRouter {
         guard capitalizer != nil else { return nil }
         let word = mirror.currentWord
         guard !word.isEmpty, !mirror.currentWordFollowsBreak, let phraseText = mirror.phraseText else { return nil }
-        return CommittedWordContext(word: word, phraseText: phraseText,
-                                    previous: mirror.phraseWords.dropLast().last?.lowercased(),
-                                    atPhraseStart: mirror.atPhraseStart, userCapital: wordStartsWithUserCapital)
+        let before = phraseText.dropLast(word.count)
+        let atSentenceStart = mirror.atPhraseStart || AutoCapitalizer.startsSentence(after: before)
+        // Not across punctuation: "chị, Lan" is no name after a title (task 3 review minor 7).
+        let beforeWord = before.reversed().drop(while: { $0 == " " })
+        let previous = beforeWord.first.map(TextMirror.isWordCharacter) == true
+            ? String(beforeWord.prefix(while: TextMirror.isWordCharacter).reversed()).lowercased() : nil
+        return CommittedWordContext(word: word, phraseText: phraseText, previous: previous,
+                                    atSentenceStart: atSentenceStart, userCapital: wordStartsWithUserCapital)
     }
 
     /// Spec 17.1.3: a word the user typed with a capital, mid-phrase, goes to the learned names. Words LeanKeys
     /// wrote (capitalisation, gõ tắt, Vikey's edits) never start with the user's capital key, so they never count.
     private func learnName(_ committed: CommittedWordContext) {
-        guard committed.userCapital, !committed.atPhraseStart, committed.word.first?.isUppercase == true else { return }
+        guard committed.userCapital, !committed.atSentenceStart, committed.word.first?.isUppercase == true else { return }
         undoLearning?.userCapitalized(committed.word, previous: committed.previous)
     }
 
@@ -242,6 +250,8 @@ public final class EngineRouter {
               // Not in a terminal or code editor (ruling R12). Asked only once a rule fired, not at every Space.
               !CodeApps.contains(frontmostBundleID())
         else { return nil }
+        // A learned name that made it is now in use (review M3: not at lookup, which the rules may still reject).
+        if let name = capitalizer.learnedName(in: replacement) { undoLearning.learnedNames.markUsed(word: name) }
         let isSpace = keyCode == Self.spaceKey
         let result = (replacement.original.count, Array(replacement.capitalized) + (isSpace ? [" "] : []), isSpace)
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)

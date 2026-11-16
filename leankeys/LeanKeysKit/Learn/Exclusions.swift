@@ -3,24 +3,17 @@ import Foundation
 /// What PhraseLearner never learns from: password managers, and phrases holding a card number or an OTP.
 public enum Exclusions {
     /// Apps never learned from, by default.
-    public static let defaultBundleIDs: Set<String> = [
+    public static let defaultBundleIDs: Set<String> = Set([
         "com.1password.1password",
         "com.agilebits.onepassword7",
         "com.bitwarden.desktop",
         "com.apple.keychainaccess",
         "com.apple.Passwords",
         "org.keepassxc.keepassxc",
-        // Terminals: sudo, ssh and git ask for passwords there without Secure Input or a secure text field.
-        "com.apple.Terminal",
-        "com.googlecode.iterm2",
-        "dev.warp.Warp-Stable",
-        "com.mitchellh.ghostty",
-        "org.alacritty",
-        "net.kovidgoyal.kitty",
-        "com.github.wez.wezterm",
-        "co.zeit.hyper",
-        "org.tabby",
-    ]
+    ])
+    // Terminals: sudo, ssh and git ask for passwords there without Secure Input or a secure text field. The one
+    // list `CodeApps` keeps (task 4 review minor 8).
+    .union(CodeApps.terminals)
 
     /// A word shaped like a password or key: at least 6 characters (sentence punctuation at its ends aside) mixing
     /// letters with digits ("hunter2hunter2", "Matkhau2024"), or using a symbol people put in passwords

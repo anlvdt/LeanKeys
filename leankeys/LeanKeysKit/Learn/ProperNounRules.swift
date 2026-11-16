@@ -44,7 +44,11 @@ public struct ProperNounData: Decodable {
         guard let url = Bundle.module.url(forResource: "ProperNouns", withExtension: "json"),
               let data = try? Data(contentsOf: url),
               let file = try? JSONDecoder().decode(ProperNounData.self, from: data)
-        else { return ProperNounData() }
+        else {
+            // A debug build stops here, so a broken resource never ships as silently-off capitalisation.
+            assertionFailure("ProperNouns.json is missing or unreadable")
+            return ProperNounData()
+        }
         return file
     }()
 }

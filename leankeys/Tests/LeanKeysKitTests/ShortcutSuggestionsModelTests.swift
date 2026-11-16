@@ -306,6 +306,76 @@ final class ShortcutSuggestionsModelTests: XCTestCase {
         XCTAssertEqual(store.erased, 1)
     }
 
+    // MARK: The AX secure-field read stays off the key thread (audit item 4)
+
+    /// A model whose learner queue holds its work until `drain`, with a probe for Notes and a counted AX check.
+    private final class KeyPath {
+        var pending: [() -> Void] = []
+        var axReads = 0
+        var secure = false
+        var probe = LearnContextProbe(bundleID: "com.apple.Notes", pid: 2, secureInput: false, now: Date())
+        func drain() { while !pending.isEmpty { pending.removeFirst()() } }
+    }
+
+    private func keyPathModel(_ path: KeyPath) -> ShortcutSuggestionsModel {
+        let model = makeModel(onLearnerQueue: { path.pending.append($0) })
+        model.setEnabled(true)
+        model.confirmConsent()
+        path.drain()
+        model.contextProbe = { path.probe }
+        model.secureField = { _ in
+            path.axReads += 1
+            return path.secure
+        }
+        return model
+    }
+
+    func testPhraseCommittedReadsSecureFieldOnTheLearnerQueueOnly() {
+        let path = KeyPath()
+        let model = keyPathModel(path)
+        for _ in 0..<3 { model.phraseCommitted(CommittedPhrase(text: "0912 345 678")) }
+        XCTAssertEqual(path.axReads, 0, "the key path reads no AX")
+        XCTAssertEqual(path.pending.count, 3)
+        path.drain()
+        XCTAssertEqual(path.axReads, 3)
+        XCTAssertEqual(model.suggestionCount, 1)
+    }
+
+    func testSecureFieldOnTheLearnerQueueDropsThePhrase() {
+        let path = KeyPath()
+        path.secure = true
+        let model = keyPathModel(path)
+        for _ in 0..<3 { model.phraseCommitted(CommittedPhrase(text: "0912 345 678")) }
+        path.drain()
+        XCTAssertEqual(path.axReads, 3)
+        XCTAssertEqual(model.suggestionCount, 0)
+        path.secure = false
+        for _ in 0..<3 { model.phraseCommitted(CommittedPhrase(text: "0912 345 678")) }
+        path.drain()
+        XCTAssertEqual(model.suggestionCount, 1, "nothing was counted while the field was secure")
+    }
+
+    /// Secure Input, excluded apps and LeanKeys itself are decided on the key thread: nothing is queued.
+    func testExclusionsDecidedBeforeQueueing() {
+        let path = KeyPath()
+        let model = keyPathModel(path)
+        model.ownBundleID = "io.github.anlvdt.leankeys"
+        model.addExcludedApp("com.example.secret")
+        path.drain()
+        for probe in [
+            LearnContextProbe(bundleID: "com.apple.Notes", pid: 2, secureInput: true, now: Date()),
+            LearnContextProbe(bundleID: "com.1password.1password", pid: 2, secureInput: false, now: Date()),
+            LearnContextProbe(bundleID: "com.example.secret", pid: 2, secureInput: false, now: Date()),
+            LearnContextProbe(bundleID: "io.github.anlvdt.leankeys", pid: 2, secureInput: false, now: Date()),
+            LearnContextProbe(bundleID: nil, pid: nil, secureInput: false, now: Date()),
+        ] {
+            path.probe = probe
+            model.phraseCommitted(CommittedPhrase(text: "0912 345 678"))
+        }
+        XCTAssertTrue(path.pending.isEmpty)
+        XCTAssertEqual(path.axReads, 0)
+    }
+
     func testSuggestionLine() {
         XCTAssertNil(StatusPopoverModel.suggestionLine(count: 0))
         XCTAssertEqual(StatusPopoverModel.suggestionLine(count: 2), "Có 2 gợi ý gõ tắt")

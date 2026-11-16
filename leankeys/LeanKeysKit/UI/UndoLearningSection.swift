@@ -184,9 +184,9 @@ extension UndoLearning {
         for name in names {
             learnedNames.observe(word: name.word, previous: name.previous)
         }
-        return UndoLearning(book: book, defaults: defaults, context: {
-            LearnContext(bundleID: nil, secureInput: false, secureField: false, now: Date())
-        }, names: learnedNames)
+        return UndoLearning(book: book, defaults: defaults, probe: {
+            LearnContextProbe(bundleID: nil, pid: nil, secureInput: false, now: Date())
+        }, secureField: { _ in false }, names: learnedNames)
     }
 }
 

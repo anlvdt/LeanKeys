@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Measures 4D auto-capitalisation (spec 17.1) on correctly cased corpora.
 
-Each line is lowercased and retyped word by word; after every word the rules run on what is on screen so far,
-exactly as ProperNounRules does. The result is compared with the original casing, skipping sentence-initial words:
+Each line is lowercased and retyped word by word; after every word the rules run on what is on screen so far, as
+ProperNounRules does, except that the context is the whole line (README, "Known approximation"). The result is compared with the original casing, skipping sentence-initial words:
   TP  capitalised and capitalised in the original
-  FP  capitalised but lowercase in the original (all-caps originals such as FOMO count here too)
+  FP  capitalised but lowercase in the original
+All-caps words (FOMO) are retyped as written, not lowercased, and not counted when the output leaves them so.
   missed  capitalised in the original but not by the rules
 Then the negatives corpus (ordinary sentences, tools/capbench/negatives.txt) is retyped as written, sentence-initial
 capitals included, with the fixed rules: any word the rules change there is an FP.
@@ -39,7 +40,7 @@ def load(path):
     places = {tuple(key(w) for w in p.split()) for p in d["places"] + d["singleWords"]}
     not_after = {" ".join(key(w) for w in p.split()): n(ws) for p, ws in d["placeNotAfter"].items()}
     given_not_after = {key(w): n(ws) for w, ws in d["givenNameNotAfter"].items()}
-    return dict(places=places, longest=max(len(k) for k in places), ambiguous=n(d["ambiguousPlaces"]),
+    return dict(places=places, longest=max((len(k) for k in places), default=0), ambiguous=n(d["ambiguousPlaces"]),
                 cues=n(d["placeCues"]), not_after=not_after, given_not_after=given_not_after, surnames=n(d["surnames"]), sure=n(d["sureSurnames"]),
                 middle=n(d["middleNames"]), given=n(d["givenNames"]), titles=n(d["titles"]))
 
@@ -49,9 +50,33 @@ def cap(w):
     return w[:1].upper() + w[1:] if w == w.lower() else w
 
 
+def all_caps(w):
+    """At least 2 letters, every letter a capital (`FOMO`, `HCM`, `COVID19`)."""
+    letters = [c for c in w if c.isalpha()]
+    return len(letters) >= 2 and all(c.isupper() for c in letters)
+
+
 def touchable(w):
     """As ProperNounRules.isTouchable: all lowercase, or capitalised (`iPhone`, `FOMO` are never touched)."""
     return w == w.lower() or (w[:1].isupper() and w[1:] == w[1:].lower())
+
+
+OPENING_QUOTES = set("“‘«")
+
+
+TOKEN = re.compile(r"\w+|[^\w\s]")
+
+
+def starts_sentence(text, m):
+    """As AutoCapitalizer.startsSentence, for the punctuation token `m` in `text`: after `:` or an opening quote the
+    next word's capital is sentence case. A straight quote opens when the raw character before it (a space
+    included) is no letter or digit, or it starts the line: `nói "Mai` opens, `"ok" mai` closes."""
+    t = m.group()
+    if t == ":" or t in OPENING_QUOTES:
+        return True
+    if t in "\"'":
+        return m.start() == 0 or not text[m.start() - 1].isalnum()
+    return False
 
 
 def run(lines, D, learned=None, show=0, label="", as_typed=False):
@@ -63,16 +88,20 @@ def run(lines, D, learned=None, show=0, label="", as_typed=False):
     tp = fp = fn = 0
     ex = collections.Counter(); exfn = collections.Counter()
     for line in lines:
-        toks = re.findall(r"\w+|[^\w\s]", unicodedata.normalize("NFC", line))
+        text = unicodedata.normalize("NFC", line)
         out = []; orig = []
         phrase_first = None  # index of the phrase's first word: its capital is sentence case, not a name cue
-        for t in toks:
+        for m in TOKEN.finditer(text):
+            t = m.group()
             if not t[0].isalnum():
-                out.append(t); orig.append(t)
-                if t in ".!?":
+                # The phrase restarts at . ! ?; a sentence restarts after : or an opening quote (final re-review N2).
+                if t in ".!?" or starts_sentence(text, m):
                     phrase_first = None
+                out.append(t); orig.append(t)
                 continue
-            low = t.lower(); out.append(t if as_typed else low); orig.append(t); kw = key(low)
+            # All-caps words (`FOMO`, `HCM`) are retyped as written: people type them so, and the app never
+            # touches them. Single letters are lowercased like the rest ("I", "A" at a line start).
+            low = t.lower(); out.append(t if as_typed or all_caps(t) else low); orig.append(t); kw = key(low)
             i = len(out) - 1
             if phrase_first is None:
                 phrase_first = i
@@ -134,6 +163,8 @@ def run(lines, D, learned=None, show=0, label="", as_typed=False):
                 continue
             if st:
                 st = False; continue
+            if all_caps(b) and a == b:
+                continue  # retyped as written and left alone: neither right nor wrong
             A = a[:1].isupper(); B = b[:1].isupper() and not b.isupper()
             if A and B: tp += 1
             elif A and not B: fp += 1; ex[b] += 1
@@ -153,10 +184,16 @@ def learn(lines, titles):
     """The learned-name simulation (spec 17.1.3): words capitalised mid-sentence at least twice."""
     title = collections.Counter(); capd = collections.Counter(); lower = set(); form = {}
     for l in lines:
-        toks = re.findall(r"\w+|[.!?]", unicodedata.normalize("NFC", l)); st = True; prev = None
-        for t in toks:
+        text = unicodedata.normalize("NFC", l); st = True; prev = None
+        for m in TOKEN.finditer(text):
+            t = m.group()
             if t in ".!?":
                 st = True; prev = None; continue
+            if not t[0].isalnum():
+                # After `:` or an opening quote a capital is sentence case: not learned (final re-review N2).
+                if starts_sentence(text, m):
+                    st = True
+                continue
             if t.islower():
                 lower.add(t)
             if not st and t[:1].isupper() and not t.isupper() and len(t) > 1:

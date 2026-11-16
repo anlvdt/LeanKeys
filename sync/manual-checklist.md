@@ -55,7 +55,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | D1 | 4D · Tự viết hoa tên riêng | Vikey, tiếng Việt, Notes: gõ `tooi owr haf nooij ` ra "tôi ở Hà Nội". | — | [ ] |
 | D2 | 4D · Tự viết hoa tên riêng | Vikey, Notes: gõ `nguyeenx vawn an ` ra "Nguyễn Văn An". | — | [ ] |
 | D3 | 4D · Tên tự học | Vikey, Notes: gõ `anh Hufng ` (tự gõ chữ H hoa) ở hai câu khác nhau, rồi gõ `anh hufng ` (chữ thường): ra "anh Hùng". Cài đặt → Nâng cao → "Tên đã học" có dòng "Hùng". | — | [ ] |
-| D4 | 4D · Hoàn tác viết hoa | Vikey, Notes: gõ `owr haf nooij ` (LeanKeys viết thành "ở Hà Nội"), bấm ⌫ ngay: trả lại chữ thường "ở hà nội". | — | [ ] |
+| D4 | 4D · Hoàn tác viết hoa | Vikey, Notes: gõ `owr haf nooij ` (LeanKeys viết thành "ở Hà Nội"), bấm ⌫ ngay: trả lại chữ thường "ở hà nội". Rồi Cài đặt → Nâng cao → "Từ đã học" có dòng "hà nội (viết hoa)" sau "ở"; bấm xoá dòng đó (để D1 vẫn đạt ở lần thử sau). | — | [ ] |
 | D5 | 4D · Ký tự gõ dính khi Enter | Vikey, Notes: gõ "xong." rồi bấm `\` và Enter gần như cùng lúc: dòng kết thúc ở "xong.", không có `\`. | — | [ ] |
 | D6 | 4D · Ký tự gõ dính khi Enter | Vikey, Terminal: gõ `\` rồi Enter: `\` vẫn được giữ. | — | [ ] |
 

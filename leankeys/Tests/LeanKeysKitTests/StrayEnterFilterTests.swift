@@ -336,11 +336,13 @@ final class StrayEnterFilterTests: XCTestCase {
         router.clear()
         field = RouterField(router)
         field.type("xong ")
-        field.press(bracket)
+        field.press(quote)
         let typed = String(field.text)
+        // A `'` really ends the line (in Telex `]` would have typed ư and skipped the pair rule; task 4 minor 3).
+        XCTAssertEqual(typed, "xong '")
         clock += 0.040
         field.press(enter)
-        XCTAssertEqual(String(field.text), typed + "\n", "kept")
+        XCTAssertEqual(String(field.text), typed + "\n", "kept: the pair rule needs the whole line")
 
         clock += 1
         router.clear()
@@ -366,9 +368,23 @@ final class StrayEnterFilterTests: XCTestCase {
         next.type("xong")
         next.press(backslash)
         clock += 0.010
-        guard case .handled(let result) = router.intercept(keyCode: enter, caps: false, ctrl: false, shift: false,
-                                                           option: true) else { return XCTFail("Vikey decides") }
-        XCTAssertNotEqual(result?.0, 1, "⌥+Return deletes nothing")
+        next.press(enter, option: true)
+        XCTAssertEqual(String(next.text), "xong\\\n", "⌥+Return keeps the \\ (task 4 minor 4)")
+    }
+
+    /// Task 4 minor 5: `\`, then a cursor move, then Enter within the window: the line is no longer the one the `\`
+    /// ended, so nothing is deleted.
+    func testRouterCursorMoveBetweenStrayAndEnter() {
+        let router = makeRouter()
+        let field = freshLine(router)
+        field.type("xong")
+        field.press(backslash)
+        clock += 0.020
+        field.press(123)  // ←
+        clock += 0.020
+        guard case .handled(let edit) = field.press(enter) else { return XCTFail("Vikey decides") }
+        XCTAssertNotEqual(edit?.0, 1, "nothing deleted")
+        XCTAssertEqual(String(field.text), "xong\\\n")
     }
 
     func testRouterSwitchAndExcludedApp() {
@@ -425,15 +441,19 @@ private final class RouterField {
     }
 
     @discardableResult
-    func press(_ keyCode: UInt16, shift: Bool = false) -> InterceptResult {
-        let result = router.intercept(keyCode: keyCode, caps: shift, ctrl: false, shift: shift)
+    func press(_ keyCode: UInt16, shift: Bool = false, option: Bool = false) -> InterceptResult {
+        let result = router.intercept(keyCode: keyCode, caps: shift, ctrl: false, shift: shift, option: option)
         guard case .handled(let edit) = result else { XCTFail("Vikey is the active engine"); return result }
         if let (deleteCount, inserted, consumed) = edit {
             text.removeLast(min(deleteCount, text.count))
             text.append(contentsOf: inserted)
             if consumed { return result }
         }
-        if let c = VikeyEngine.typedCharacter(keyCode: keyCode, shift: shift, caps: shift) { text.append(c) }
+        if keyCode == 36 || keyCode == 76 {
+            text.append("\n")
+        } else if let c = VikeyEngine.typedCharacter(keyCode: keyCode, shift: shift, caps: shift) {
+            text.append(c)
+        }
         return result
     }
 }
