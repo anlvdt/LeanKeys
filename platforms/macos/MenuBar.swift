@@ -132,17 +132,17 @@ class MenuBarController: NSObject, NSWindowDelegate {
         menu.addItem(.separator())
 
         // Settings
-        let settings = NSMenuItem(title: "Cài đặt...", action: #selector(showSettings), keyEquivalent: "")
+        let settings = NSMenuItem(title: "Cài đặt…", action: #selector(showSettings), keyEquivalent: "") // LEANKEYS-HOOK: copy
         settings.target = self
         menu.addItem(settings)
 
         // About
-        let about = NSMenuItem(title: "Giới thiệu", action: #selector(showAbout), keyEquivalent: "")
+        let about = NSMenuItem(title: "Về \(AppMetadata.name)", action: #selector(showAbout), keyEquivalent: "") // LEANKEYS-HOOK: copy
         about.target = self
         menu.addItem(about)
 
         // Update
-        updateMenuItem = NSMenuItem(title: "Kiểm tra cập nhật...", action: #selector(handleUpdateAction), keyEquivalent: "")
+        updateMenuItem = NSMenuItem(title: "Kiểm tra cập nhật…", action: #selector(handleUpdateAction), keyEquivalent: "") // LEANKEYS-HOOK: copy
         updateMenuItem.target = self
         menu.addItem(updateMenuItem)
         menu.addItem(.separator())
@@ -170,11 +170,11 @@ class MenuBarController: NSObject, NSWindowDelegate {
     private var statusSubtitle: String {
         if appState.shouldShowSecureInputWarning {
             if let holder = appState.secureInputHolderName {
-                return "Tạm dừng · Secure Input (\(holder))"
+                return "Tạm dừng · \(holder) đang chặn gõ tiếng Việt" // LEANKEYS-HOOK: copy
             }
-            return "Tạm dừng · Secure Input"
+            return "Tạm dừng · Một ô mật khẩu đang chặn gõ" // LEANKEYS-HOOK: copy
         }
-        let mode = appState.isEnabled ? appState.currentMethod.name : "Đã tắt"
+        let mode = appState.isEnabled ? appState.currentMethod.name : "English" // LEANKEYS-HOOK: copy
         return "\(mode) · \(appState.toggleShortcut.displayParts.joined())"
     }
 
@@ -256,11 +256,11 @@ class MenuBarController: NSObject, NSWindowDelegate {
     private func syncUpdateMenuItem() {
         let mgr = UpdateManager.shared
         let title = if mgr.isReadyToInstall {
-            "⟳ Khởi động lại để cập nhật (\(mgr.pendingVersion))"
+            "Cài bản mới \(mgr.pendingVersion) và mở lại" // LEANKEYS-HOOK: copy
         } else if mgr.isChecking {
-            "Đang kiểm tra cập nhật..."
+            "Đang kiểm tra cập nhật…" // LEANKEYS-HOOK: copy
         } else {
-            "Kiểm tra cập nhật..."
+            "Kiểm tra cập nhật…" // LEANKEYS-HOOK: copy
         }
         updateMenuItem.title = title
         // Also sync the main menu bar item (tag 999)
@@ -323,6 +323,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
             if isSecureInputBlocked {
                 MenuBarIconAnimator.prepare(button) // LEANKEYS-HOOK: menubar-popover
                 button.image = secureInputIcon
+                button.setAccessibilityLabel(StatusItemAccessibility.label(blocked: true, iconText: "")) // LEANKEYS-HOOK: copy
             } else {
                 let observer = InputSourceObserver.shared
                 let text: String = if observer.isAllowedInputSource {
@@ -334,6 +335,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
                 }
                 MenuBarIconAnimator.prepare(button) // LEANKEYS-HOOK: menubar-popover
                 button.image = createStatusIcon(text: text)
+                button.setAccessibilityLabel(StatusItemAccessibility.label(blocked: false, iconText: text)) // LEANKEYS-HOOK: copy
             }
             // LEANKEYS-HOOK-BEGIN: menubar-popover
             // Vikey can switch language while the popover is open; re-read so its segmented control follows.
@@ -359,7 +361,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
 
         if let symbol = NSImage(
             systemSymbolName: "lock.fill",
-            accessibilityDescription: "Secure Input"
+            accessibilityDescription: "Tạm dừng gõ tiếng Việt" // LEANKEYS-HOOK: copy
         )?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .bold)) {
             let symbolSize = symbol.size
             let symbolRect = NSRect(
@@ -576,7 +578,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
             controller.view.wantsLayer = true
             controller.view.layer?.backgroundColor = .clear
             let window = NSWindow(contentViewController: controller)
-            window.title = "\(AppMetadata.name) - Cài đặt"
+            window.title = "Cài đặt \(AppMetadata.name)" // LEANKEYS-HOOK: copy
             window.styleMask = NSWindow.StyleMask([.titled, .closable, .miniaturizable, .fullSizeContentView])
             window.standardWindowButton(.zoomButton)?.isHidden = true
             window.setContentSize(NSSize(width: 700, height: 480))
@@ -641,7 +643,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
 
         // Settings
         let settingsItem = NSMenuItem(
-            title: "Cài đặt...",
+            title: "Cài đặt…", // LEANKEYS-HOOK: copy
             action: #selector(showSettings),
             keyEquivalent: ""
         )

@@ -45,4 +45,13 @@ final class StatusCardTests: XCTestCase {
         XCTAssertEqual(StatusPopoverView.methodPickerTitle, "Kiểu gõ")
         XCTAssertEqual(StatusPopoverView.quitLabel, "Thoát LeanKeys")
     }
+
+    func testStatusItemAccessibilityLabel() {
+        // Copy audit J3: the drawn V/E icon has no description of its own.
+        XCTAssertEqual(StatusItemAccessibility.label(blocked: false, iconText: "V"), "LeanKeys: Tiếng Việt")
+        XCTAssertEqual(StatusItemAccessibility.label(blocked: false, iconText: "E"), "LeanKeys: English")
+        XCTAssertEqual(StatusItemAccessibility.label(blocked: false, iconText: "あ"), "LeanKeys: bàn phím khác")
+        XCTAssertEqual(StatusItemAccessibility.label(blocked: true, iconText: ""),
+                       "LeanKeys: tạm dừng, một ô mật khẩu đang chặn gõ tiếng Việt")
+    }
 }

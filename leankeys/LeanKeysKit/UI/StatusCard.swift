@@ -118,3 +118,16 @@ struct WarningLine: View {
         .accessibilityLabel(Text(Self.accessibilityText(for: line)))
     }
 }
+
+/// VoiceOver name of the menu-bar status item, whose V/E icon is drawn as an image with no description.
+public enum StatusItemAccessibility {
+    /// `iconText` is what the icon shows: "V", "E", or another input source's character.
+    public static func label(blocked: Bool, iconText: String) -> String {
+        if blocked { return "LeanKeys: tạm dừng, một ô mật khẩu đang chặn gõ tiếng Việt" }
+        switch iconText {
+        case "V": return "LeanKeys: Tiếng Việt"
+        case "E": return "LeanKeys: English"
+        default: return "LeanKeys: bàn phím khác"
+        }
+    }
+}

@@ -899,16 +899,16 @@ enum SecureInputPresentation {
     /// user knows which app to leave or quit; falls back to generic guidance otherwise.
     static func warningMessage(holderName: String?) -> String {
         if let name = holderName {
-            return "\(name) đang giữ macOS Secure Input. Rời ô mật khẩu hoặc thoát ứng dụng đó; Gõ Nhanh sẽ tự hoạt động lại."
+            return "\(name) đang giữ macOS Secure Input. Rời ô mật khẩu hoặc thoát ứng dụng đó; \(AppMetadata.name) sẽ tự hoạt động lại." // LEANKEYS-HOOK: copy
         }
-        return "macOS Secure Input đang chặn bộ gõ. Rời ô mật khẩu hoặc ứng dụng đang giữ Secure Input; Gõ Nhanh sẽ tự hoạt động lại."
+        return "macOS Secure Input đang chặn bộ gõ. Rời ô mật khẩu hoặc ứng dụng đang giữ Secure Input; \(AppMetadata.name) sẽ tự hoạt động lại." // LEANKEYS-HOOK: copy
     }
 
     static func tooltip(holderName: String?) -> String {
         if let name = holderName {
-            return "Gõ Nhanh đang tạm dừng vì \(name) giữ macOS Secure Input"
+            return "\(AppMetadata.name) tạm dừng gõ tiếng Việt vì \(name) đang bật Secure Input (ô mật khẩu)" // LEANKEYS-HOOK: copy
         }
-        return "Gõ Nhanh đang tạm dừng vì macOS Secure Input"
+        return "\(AppMetadata.name) tạm dừng gõ tiếng Việt vì một ô mật khẩu đang bật Secure Input" // LEANKEYS-HOOK: copy
     }
 }
 
@@ -1197,11 +1197,11 @@ class KeyboardHookManager {
     private func showAccessibilityAlert() {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Cần quyền Accessibility"
-            alert.informativeText = "Gõ Nhanh cần quyền Accessibility để gõ tiếng Việt.\n\n1. Mở System Settings > Privacy & Security > Accessibility\n2. Bật Gõ Nhanh\n3. Khởi động lại app"
+            alert.messageText = "\(AppMetadata.name) cần quyền Trợ năng" // LEANKEYS-HOOK: copy
+            alert.informativeText = "Để gõ tiếng Việt, \(AppMetadata.name) cần quyền Trợ năng.\n\n1. Mở Cài đặt hệ thống › Quyền riêng tư & Bảo mật › Trợ năng\n2. Bật công tắc cạnh \(AppMetadata.name)\n3. Mở lại \(AppMetadata.name)" // LEANKEYS-HOOK: copy
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Mở System Settings")
-            alert.addButton(withTitle: "Hủy")
+            alert.addButton(withTitle: "Mở Cài đặt hệ thống") // LEANKEYS-HOOK: copy
+            alert.addButton(withTitle: "Huỷ") // LEANKEYS-HOOK: copy
             if alert.runModal() == .alertFirstButtonReturn {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
             }
