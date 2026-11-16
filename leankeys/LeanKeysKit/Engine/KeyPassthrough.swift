@@ -40,6 +40,12 @@ public enum KeyPassthrough {
         "com.parallels.desktop.console",   // Parallels Desktop
         "com.utmapp.UTM",                  // UTM
         "org.virtualbox.app.VirtualBoxVM", // VirtualBox
+        // Security audit LOW-4.
+        "com.deskin.client",               // DeskIn
+        "com.citrix.receiver.icaviewer.mac", // Citrix Workspace session viewer
+        "com.citrix.receiver.nomas",       // Citrix Workspace
+        "com.vmware.horizon",              // VMware Horizon Client
+        "com.lemonmojo.RoyalTSX.App",      // Royal TSX
     ]
 
     /// Password managers, and the macOS dialogs that ask for a user name and password (authorization prompts, the

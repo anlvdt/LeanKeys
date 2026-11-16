@@ -153,4 +153,13 @@ final class KeyPassthroughTests: XCTestCase {
             XCTAssertNil(KeyPassthrough.reason(bundleID: id, focused: nil), id)
         }
     }
+
+    // MARK: Security audit LOW-4
+
+    func testMoreRemoteAppsPassThrough() {
+        for id in ["com.deskin.client", "com.citrix.receiver.icaviewer.mac", "com.citrix.receiver.nomas",
+                   "com.vmware.horizon", "com.lemonmojo.RoyalTSX.App"] {
+            XCTAssertEqual(KeyPassthrough.reason(bundleID: id, focused: nil), "remote", id)
+        }
+    }
 }
