@@ -11,8 +11,8 @@ private let macKey: [Character: UInt16] = [
     "n": 45, "o": 31, "p": 35, "q": 12, "r": 15, "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7, "y": 16, "z": 6,
     " ": 49, ",": 43, ".": 47, "⌫": 51, "\n": 36, "/": 44, "-": 27,
 ]
-/// Symbols typed with Shift: Shift+2, Shift+3, Shift+` (US layout).
-private let shiftedMacKey: [Character: UInt16] = ["@": 19, "#": 20, "~": 50]
+/// Symbols typed with Shift: Shift+2, Shift+3, Shift+`, Shift+-, Shift+', Shift+; (US layout).
+private let shiftedMacKey: [Character: UInt16] = ["@": 19, "#": 20, "~": 50, "_": 27, "\"": 39, ":": 41]
 
 /// A text field fed by `router.intercept`, applying each result the way the macOS key handler does: the key itself
 /// is typed when the result is nil, or when it is not consumed (Return and punctuation after an edit).
@@ -293,6 +293,42 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(router).type("xem #tiki "), "xem #tiki ")
         XCTAssertEqual(line(router).type("xem @tiki "), "xem @tiki ")
         XCTAssertEqual(line(router).type("ten-tiki "), "ten-tiki ")
+    }
+
+    /// Final re-review N1: the first word of a multi-word phrase glued to a symbol is never capitalised, so the
+    /// phrase is left as typed; an opening quote is no glue.
+    func testGluedFirstWordOfPhraseStaysAsTyped() {
+        let router = makeRouter()
+        XCTAssertEqual(line(router).type("cd ~/haf nooij "), "cd ~/hà nội ")
+        XCTAssertEqual(line(router).type("xem /haf nooij "), "xem /hà nội ")
+        XCTAssertEqual(line(router).type("xem #haf nooij "), "xem #hà nội ")
+        XCTAssertEqual(line(router).type("ten_haf nooij "), "ten_hà nội ")
+        XCTAssertEqual(line(router).type("ten-haf nooij "), "ten-hà nội ")
+        XCTAssertEqual(line(router).type("gui @nguyeenx vawn "), "gui @nguyễn văn ")
+        XCTAssertEqual(line(router).type("gui @nguyeenx vawn an "), "gui @nguyễn văn an ")
+        // Controls: the same phrases with a space, or after an opening quote.
+        XCTAssertEqual(line(router).type("xem haf nooij "), "xem Hà Nội ")
+        XCTAssertEqual(line(router).type("xem \"haf nooij "), "xem \"Hà Nội ")
+        XCTAssertEqual(line(router).type("gui nguyeenx vawn "), "gui Nguyễn Văn ")
+    }
+
+    /// Final re-review N2: a capital right after `:` or an opening quote is sentence case, like a phrase start
+    /// (ruling R11(a) extended): it is no name cue, and it is not learned.
+    func testCapitalAfterColonOrQuoteIsSentenceCase() {
+        let names = permissiveNames()
+        let router = makeRouter(names: names)
+        XCTAssertEqual(line(router).type("Anh nois: \"Mai anh qua "), "Anh nói: \"Mai anh qua ")
+        XCTAssertEqual(line(router).type("Em ghi chus: Luwowng taam laf "), "Em ghi chú: Lương tâm là ")
+        XCTAssertEqual(line(router).type("Em ghi chus:Luwowng taam laf "), "Em ghi chú:Lương tâm là ")
+        // Control: a capital mid-phrase is still a name cue.
+        XCTAssertEqual(line(router).type("xin chaof Mai anh "), "xin chào Mai Anh ")
+        // Not learned after ':' either.
+        line(router).type("ghi chus: Shopee ")
+        line(router).type("ghi chus: Shopee ")
+        XCTAssertTrue(names.names.isEmpty, "a capital after ':' is sentence case")
+        line(router).type("mua Shopee ")
+        line(router).type("mua Shopee ")
+        XCTAssertEqual(names.names.map(\.form), ["Shopee"], "control")
     }
 
     func testSwitchOff() {

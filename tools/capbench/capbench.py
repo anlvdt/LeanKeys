@@ -54,6 +54,22 @@ def touchable(w):
     return w == w.lower() or (w[:1].isupper() and w[1:] == w[1:].lower())
 
 
+OPENING_QUOTES = set("“‘«")
+
+
+def starts_sentence(out):
+    """As AutoCapitalizer.startsSentence: after `:` or an opening quote (`"`/`'` not right after a word), the next
+    word's capital is sentence case. `out` holds the tokens so far."""
+    if not out:
+        return True
+    mark = out[-1]
+    if mark == ":" or mark in OPENING_QUOTES:
+        return True
+    if mark in "\"'":
+        return len(out) < 2 or not out[-2][0].isalnum()
+    return False
+
+
 def run(lines, D, learned=None, show=0, label="", as_typed=False):
     """as_typed: retype each word as written (the negatives) instead of lowercased; then every word the rules
     change is an FP, sentence-initial words included."""
@@ -68,9 +84,10 @@ def run(lines, D, learned=None, show=0, label="", as_typed=False):
         phrase_first = None  # index of the phrase's first word: its capital is sentence case, not a name cue
         for t in toks:
             if not t[0].isalnum():
-                out.append(t); orig.append(t)
-                if t in ".!?":
+                # The phrase restarts at . ! ?; a sentence restarts after : or an opening quote (final re-review N2).
+                if t in ".!?" or starts_sentence(out + [t]):
                     phrase_first = None
+                out.append(t); orig.append(t)
                 continue
             low = t.lower(); out.append(t if as_typed else low); orig.append(t); kw = key(low)
             i = len(out) - 1
@@ -153,10 +170,17 @@ def learn(lines, titles):
     """The learned-name simulation (spec 17.1.3): words capitalised mid-sentence at least twice."""
     title = collections.Counter(); capd = collections.Counter(); lower = set(); form = {}
     for l in lines:
-        toks = re.findall(r"\w+|[.!?]", unicodedata.normalize("NFC", l)); st = True; prev = None
+        toks = re.findall(r"\w+|[^\w\s]", unicodedata.normalize("NFC", l)); st = True; prev = None
+        seen = []
         for t in toks:
+            seen.append(t)
             if t in ".!?":
                 st = True; prev = None; continue
+            if not t[0].isalnum():
+                # After `:` or an opening quote a capital is sentence case: not learned (final re-review N2).
+                if starts_sentence(seen):
+                    st = True
+                continue
             if t.islower():
                 lower.add(t)
             if not st and t[:1].isupper() and not t.isupper() and len(t) > 1:

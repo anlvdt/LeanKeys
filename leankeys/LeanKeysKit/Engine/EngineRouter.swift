@@ -206,7 +206,9 @@ public final class EngineRouter {
         let phraseText: String
         /// The phrase's word before `word`, lowercased.
         let previous: String?
-        let atPhraseStart: Bool
+        /// The word starts the phrase or a sentence inside it (after `:` or an opening quote): its capital is
+        /// sentence case (ruling R11(a), final re-review N2).
+        let atSentenceStart: Bool
         let userCapital: Bool
     }
 
@@ -217,15 +219,17 @@ public final class EngineRouter {
         guard capitalizer != nil else { return nil }
         let word = mirror.currentWord
         guard !word.isEmpty, !mirror.currentWordFollowsBreak, let phraseText = mirror.phraseText else { return nil }
+        let atSentenceStart = mirror.atPhraseStart
+            || AutoCapitalizer.startsSentence(after: phraseText.dropLast(word.count))
         return CommittedWordContext(word: word, phraseText: phraseText,
                                     previous: mirror.phraseWords.dropLast().last?.lowercased(),
-                                    atPhraseStart: mirror.atPhraseStart, userCapital: wordStartsWithUserCapital)
+                                    atSentenceStart: atSentenceStart, userCapital: wordStartsWithUserCapital)
     }
 
     /// Spec 17.1.3: a word the user typed with a capital, mid-phrase, goes to the learned names. Words LeanKeys
     /// wrote (capitalisation, gõ tắt, Vikey's edits) never start with the user's capital key, so they never count.
     private func learnName(_ committed: CommittedWordContext) {
-        guard committed.userCapital, !committed.atPhraseStart, committed.word.first?.isUppercase == true else { return }
+        guard committed.userCapital, !committed.atSentenceStart, committed.word.first?.isUppercase == true else { return }
         undoLearning?.userCapitalized(committed.word, previous: committed.previous)
     }
 
