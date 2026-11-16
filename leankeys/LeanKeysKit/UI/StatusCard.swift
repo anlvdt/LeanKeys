@@ -30,12 +30,22 @@ public extension StatusSnapshot {
         return autoSwitchOn ? "Tự chuyển Việt/Anh: Bật" : "Tự chuyển Việt/Anh: Tạm dừng"
     }
 
+    /// Tooltip of the auto-switch line: why it is paused and how to resume (`EngineRouter.setEnabled(explicit:)`).
+    var autoSwitchHelp: String {
+        autoSwitchOn
+            ? "LeanKeys tự chuyển Việt/Anh theo từ bạn gõ."
+            : "Bạn đã tự chọn English nên LeanKeys tạm không tự chuyển. Chọn Tiếng Việt để bật lại."
+    }
+
     /// nil when nothing blocks Vietnamese typing.
     var warningLine: String? {
         guard blocked else { return nil }
         if let blockingApp { return "⚠︎ \(blockingApp) đang chặn gõ tiếng Việt" }
-        return "⚠︎ Một app đang chặn gõ tiếng Việt"
+        return "⚠︎ Một ứng dụng đang chặn gõ tiếng Việt"
     }
+
+    /// Tooltip of the warning line: what blocks typing and what to do about it.
+    static let warningHelp = "Một ô mật khẩu đang bật Secure Input. Rời ô đó hoặc thoát ứng dụng đang giữ nó; LeanKeys sẽ tự gõ lại được."
 }
 
 /// Language title, then the auto-switch line, then the warning line in orange when present.
@@ -56,10 +66,10 @@ public struct StatusCard: View {
                     .foregroundStyle(Color(NSColor.secondaryLabelColor))
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .help(autoSwitchLine)
+                    .help(snapshot.autoSwitchHelp)
             }
             if let warningLine = snapshot.warningLine {
-                WarningLine(warningLine)
+                WarningLine(warningLine, help: StatusSnapshot.warningHelp)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,18 +78,27 @@ public struct StatusCard: View {
 
 /// One-line warning: an orange triangle, then the text in label color (contrast 4.5:1 or better on window backgrounds).
 /// The `⚠︎ ` glyph in the string is dropped at render time, because the symbol replaces it; the copy itself is unchanged.
+/// VoiceOver reads it as one element, "Cảnh báo: …", since the triangle itself is hidden.
 struct WarningLine: View {
     static let glyphPrefix = "⚠︎ "
 
     private let line: String
+    private let help: String
 
-    init(_ line: String) {
+    /// `help` is the tooltip; it defaults to the line itself.
+    init(_ line: String, help: String? = nil) {
         self.line = line
+        self.help = help ?? line
     }
 
     /// The text drawn next to the triangle symbol.
     static func displayText(for line: String) -> String {
         line.hasPrefix(glyphPrefix) ? String(line.dropFirst(glyphPrefix.count)) : line
+    }
+
+    /// What VoiceOver reads for the line.
+    static func accessibilityText(for line: String) -> String {
+        "Cảnh báo: " + displayText(for: line)
     }
 
     var body: some View {
@@ -94,6 +113,21 @@ struct WarningLine: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
-        .help(line)
+        .help(help)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(Self.accessibilityText(for: line)))
+    }
+}
+
+/// VoiceOver name of the menu-bar status item, whose V/E icon is drawn as an image with no description.
+public enum StatusItemAccessibility {
+    /// `iconText` is what the icon shows: "V", "E", or another input source's character.
+    public static func label(blocked: Bool, iconText: String) -> String {
+        if blocked { return "LeanKeys: tạm dừng, một ô mật khẩu đang chặn gõ tiếng Việt" }
+        switch iconText {
+        case "V": return "LeanKeys: Tiếng Việt"
+        case "E": return "LeanKeys: English"
+        default: return "LeanKeys: bàn phím khác"
+        }
     }
 }

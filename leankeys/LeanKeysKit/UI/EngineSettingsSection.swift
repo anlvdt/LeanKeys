@@ -2,10 +2,10 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Backs the "Engine gõ" picker: writes the choice to the router and says why Vikey is not typing, if it isn't.
+/// Backs the "Lõi gõ" picker: writes the choice to the router and says why Vikey is not typing, if it isn't.
 public final class EngineSettingsModel: ObservableObject {
     static let vniReason = "Vikey không hỗ trợ VNI — đang dùng Gõ Nhanh"
-    static let initFailedReason = "Không khởi động được engine Vikey — đang dùng Gõ Nhanh"
+    static let initFailedReason = "Không khởi động được lõi gõ Vikey — đang dùng Gõ Nhanh"
 
     private let router: EngineRouter
     private let onEngineChanged: () -> Void
@@ -54,17 +54,17 @@ public final class EngineSettingsModel: ObservableObject {
     }
 }
 
-/// The "Engine gõ" card on the Advanced page, collapsed by default: LeanKeys picks the engine itself ("Tự động" is
+/// The "Lõi gõ" card on the Advanced page, collapsed by default: LeanKeys picks the engine itself ("Tự động" is
 /// Vikey, falling back to Gõ Nhanh for VNI or when Vikey cannot start), so most users never open it.
 /// Mirrors Gõ Nhanh's CardBackground, which lives in the app target.
 public struct EngineSettingsSection: View {
-    static let title = "Engine gõ"
+    static let title = "Lõi gõ"
     static let automaticLabel = "Tự động (khuyên dùng)"
     static let goNhanhOnlyLabel = "Chỉ dùng Gõ Nhanh"
     /// Spec §3.5: one line on screen; the list of hidden Gõ Nhanh-only settings is in `vikeyNoteDetail`.
     static let vikeyNote = "Ở chế độ Tự động, các mục chỉ dành cho Gõ Nhanh được ẩn."
     /// Tooltip (ⓘ) for `vikeyNote`.
-    static let vikeyNoteDetail = "Các mục chỉ dành cho Gõ Nhanh: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]."
+    static let vikeyNoteDetail = "Ẩn ở chế độ Tự động vì chỉ Gõ Nhanh có: Gõ W thành Ư, Gõ [ ] thành Ơ Ư, Tự khôi phục tiếng Anh, Tự viết hoa đầu câu, Trả từ đang gõ về phím gốc. Chọn kiểu gõ VNI thì LeanKeys tự dùng Gõ Nhanh."
 
     @StateObject private var model: EngineSettingsModel
     @State private var isExpanded = false
@@ -77,7 +77,7 @@ public struct EngineSettingsSection: View {
     public var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
-                Picker("", selection: $model.selected) {
+                Picker(Self.title, selection: $model.selected) {
                     Text(Self.automaticLabel).font(.system(size: 13)).tag(EngineKind.vikey)
                     Text(Self.goNhanhOnlyLabel).font(.system(size: 13)).tag(EngineKind.gonhanh)
                 }

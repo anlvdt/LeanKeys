@@ -534,9 +534,28 @@ final class UndoLearningTests: XCTestCase {
     func testCapitalizationRuleDisplayText() {
         let date = Date(timeIntervalSince1970: 0)
         XCTAssertEqual(UndoLearningSection.displayText(UndoRule(text: "cap:hà nội", previous: "", count: 1,
-                                                                lastUsed: date)), "hà nội (viết hoa)")
+                                                                lastUsed: date)), "hà nội (giữ chữ thường)")
         XCTAssertEqual(UndoLearningSection.displayText(UndoRule(text: "its", previous: "about", count: 1,
                                                                 lastUsed: date)), "its")
+    }
+
+    func testCardCopy() {
+        // Copy audit C2–C6: titles start with a word (VoiceOver), say what they fix, and the lists say how they fill.
+        XCTAssertEqual(UndoLearningSection.doubleKeyFixTitle, "Sửa lỗi bấm đúp phím dấu")
+        XCTAssertEqual(UndoLearningSection.learningTitle, "Nhớ từ bạn giữ nguyên")
+        XCTAssertEqual(UndoLearningSection.strayEnterTitle, #"Bỏ phím \ ] ' lỡ bấm cùng Enter"#)
+        XCTAssertEqual(UndoLearningSection.listTitle, "Từ giữ nguyên")
+        XCTAssertEqual(UndoLearningSection.namesTitle, "Tên đã học")
+        for subtitle in [UndoLearningSection.doubleKeyFixSubtitle, UndoLearningSection.learningSubtitle,
+                         UndoLearningSection.autoCapitalizeSubtitle, UndoLearningSection.strayEnterSubtitle] {
+            XCTAssertFalse(subtitle.contains("\n"), subtitle)
+        }
+        for title in [UndoLearningSection.doubleKeyFixTitle, UndoLearningSection.learningTitle,
+                      UndoLearningSection.autoCapitalizeTitle, UndoLearningSection.strayEnterTitle] {
+            XCTAssertTrue(title.first?.isLetter == true, title)
+        }
+        XCTAssertTrue(UndoLearningSection.emptyText.contains("⌫⌫"))
+        XCTAssertFalse(UndoLearningSection.removeAllConfirmMessage.isEmpty)
     }
 
     func testCapitalizeAndStrayEnterDefaultOnAndPersist() {

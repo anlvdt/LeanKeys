@@ -380,4 +380,14 @@ final class ShortcutSuggestionsModelTests: XCTestCase {
         XCTAssertNil(StatusPopoverModel.suggestionLine(count: 0))
         XCTAssertEqual(StatusPopoverModel.suggestionLine(count: 2), "Có 2 gợi ý gõ tắt")
     }
+
+    func testTriggerCopyUsesOneTerm() {
+        // Copy audit E1–E3: the trigger is "từ viết tắt" everywhere, never "tên tắt".
+        XCTAssertEqual(ShortcutSuggestionsModel.takenMessage, "Từ viết tắt này đã có trong Bảng gõ tắt")
+        XCTAssertEqual(ShortcutSuggestionsModel.invalidMessage, "Từ viết tắt không được để trống hoặc chứa dấu cách")
+        XCTAssertEqual(ShortcutSuggestionsView.triggerFieldLabel, "Từ viết tắt")
+        XCTAssertEqual(ShortcutSuggestionsView.triggerHelp("sdt"), "Gõ “sdt” rồi dấu cách để chèn nội dung này")
+        XCTAssertEqual(ShortcutSuggestionsView.triggerAccessibilityLabel("sdt"), "Từ viết tắt sdt")
+        XCTAssertEqual(ShortcutSuggestionsView.addHelp, "Thêm vào Bảng gõ tắt")
+    }
 }

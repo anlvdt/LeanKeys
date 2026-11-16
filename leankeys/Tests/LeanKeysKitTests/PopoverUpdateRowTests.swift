@@ -29,7 +29,7 @@ final class PopoverUpdateRowTests: XCTestCase {
         XCTAssertEqual(PopoverUpdateRow.line(.downloading(progress: 0.425)), "Đang tải bản mới… 42%")
         let installing = phase(.readyToInstall, requested: true)
         XCTAssertEqual(installing, .installing)
-        XCTAssertEqual(PopoverUpdateRow.line(installing), "Đang cài, LeanKeys sẽ tự mở lại")
+        XCTAssertEqual(PopoverUpdateRow.line(installing), "Đang cài — LeanKeys sẽ tự mở lại")
         XCTAssertNil(PopoverUpdateRow.tapAction(installing), "no second click during the install")
     }
 
@@ -66,11 +66,11 @@ final class PopoverUpdateRowTests: XCTestCase {
         // UpdateChecker's English text is never shown.
         let network = phase(.error("Network error: The Internet connection appears to be offline."))
         XCTAssertEqual(network, .failed(.network))
-        XCTAssertEqual(PopoverUpdateRow.line(network), "Không kết nối được, thử lại sau")
+        XCTAssertEqual(PopoverUpdateRow.line(network), "Không kiểm tra được, thử lại sau")
         XCTAssertEqual(phase(.error("Server error: 403")), .failed(.network))
         XCTAssertEqual(phase(.error("Tải về thất bại")), .failed(.download))
         XCTAssertEqual(phase(.error("Không thể lưu bản cập nhật")), .failed(.download))
-        XCTAssertEqual(PopoverUpdateRow.line(.failed(.download)), "Tải bản mới thất bại")
+        XCTAssertEqual(PopoverUpdateRow.line(.failed(.download)), "Không tải được bản mới")
         XCTAssertEqual(phase(.error(PopoverUpdateRow.Failure.installMessage)), .failed(.install))
         XCTAssertEqual(PopoverUpdateRow.line(.failed(.install)), "Không cài được bản mới")
         for failure in [PopoverUpdateRow.Failure.network, .download, .install] {
@@ -87,5 +87,13 @@ final class PopoverUpdateRowTests: XCTestCase {
             XCTAssertLessThanOrEqual(line?.count ?? 99, 34, "\(p)")
             XCTAssertFalse(line?.contains("\n") ?? true)
         }
+    }
+
+    func testErrorWindowTitleSaysWhatFailed() {
+        XCTAssertEqual(PopoverUpdateRow.Failure.from(message: "Tải về thất bại").title, "Không tải được bản mới")
+        XCTAssertEqual(PopoverUpdateRow.Failure.from(message: "Không thể lưu bản cập nhật").title, "Không tải được bản mới")
+        XCTAssertEqual(PopoverUpdateRow.Failure.from(message: "Máy chủ cập nhật đang bận (mã 503). Thử lại sau ít phút.").title,
+                       "Không kiểm tra được cập nhật")
+        XCTAssertEqual(PopoverUpdateRow.Failure.from(message: PopoverUpdateRow.Failure.installMessage).title, "Không cài được bản mới")
     }
 }

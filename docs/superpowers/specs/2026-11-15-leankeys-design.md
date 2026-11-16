@@ -108,7 +108,7 @@ Mọi chỗ sửa trong file gốc phải có chú thích `// LEANKEYS-HOOK: <t�
 ### 3.5 Quy tắc khi chọn engine
 
 - Mặc định dùng engine **Vikey** (đổi ngày 2026-11-15, xem mục 13). Gõ Nhanh chọn được trong Cài đặt, và là engine dự phòng khi Vikey lỗi hoặc khi dùng VNI.
-- Kiểu gõ VNI chỉ chạy với engine Gõ Nhanh. Khi chọn engine Vikey, mục VNI bị khoá và có ghi chú giải thích.
+- Kiểu gõ VNI chỉ chạy với Gõ Nhanh: chọn VNI thì LeanKeys tự dùng Gõ Nhanh và ghi chú lý do dưới mục Lõi gõ.
 - Khi dùng engine Vikey, "tự khôi phục từ tiếng Anh" của Gõ Nhanh bị ẩn hoặc tắt, vì Vikey có cơ chế tự chuyển riêng.
 - Các cài đặt chung (dấu kiểu mới, viết hoa đầu câu…) được chuyển cho engine nào có hỗ trợ. Engine không hỗ trợ thì mục đó bị làm mờ.
 
@@ -151,7 +151,7 @@ Mỗi giai đoạn có kế hoạch triển khai riêng. Spec này đủ để l
 6. Chạy `check-divergence.sh`. Nếu file gốc bị sửa ngoài các điểm đã đăng ký thì báo lỗi.
 7. **Theo dõi phần chuyển tay:** so sánh diff của các file nguồn đã chuyển tay (danh sách trong `sync/ported.txt`) giữa tag cũ và tag mới của Vikey và OpenKey. Có thay đổi thì đưa diff vào báo cáo.
 8. Chạy test theo mục 7.1, bước 1 đến 4.
-9. **Tất cả đạt:** merge nhánh sync vào `main` (fast-forward hoặc merge commit), tăng phiên bản, build DMG ký ad-hoc vào `dist/`, cập nhật `state.json`, rồi gửi thông báo "Bản LeanKeys x.y sẵn sàng — chạy release.sh để đăng".
+9. **Tất cả đạt:** merge nhánh sync vào `main` (fast-forward hoặc merge commit), tăng phiên bản, build DMG ký ad-hoc vào `dist/`, cập nhật `state.json`, rồi gửi thông báo "Bản LeanKeys x.y sẵn sàng — chạy zsh sync/release.sh để đăng".
 10. **Có lỗi:** giữ nguyên nhánh sync để xem lại, `main` không đổi, gửi thông báo kèm đường dẫn báo cáo.
 
 `sync.sh` không push và không phát hành.
@@ -160,7 +160,7 @@ Mỗi giai đoạn có kế hoạch triển khai riêng. Spec này đủ để l
 
 1. Kiểm tra `gh auth status` và remote GitHub công khai `LeanKeys`. Repo được tạo ở lần phát hành đầu tiên.
 2. Mở DMG, kiểm tra app khởi chạy được. In danh sách thử tay (mục 7.2) và chờ xác nhận.
-3. `git push` nhánh `main` cùng tag `vX.Y`, rồi `gh release create` kèm DMG và ghi chú. Ghi chú tự sinh, gồm phiên bản engine gốc và changelog tóm tắt.
+3. `git push` nhánh `main` cùng tag `vX.Y`, rồi `gh release create` kèm DMG và ghi chú. Ghi chú tự sinh: một dòng hướng dẫn cài cho người dùng, phiên bản lõi gõ gốc ("Lõi gõ: …"), rồi "Thay đổi kỹ thuật" (các commit).
 4. Nếu lỗi giữa chừng thì xoá release nháp và tag vừa tạo.
 
 ## 6. Phát hành và tự cập nhật
@@ -193,7 +193,7 @@ Từ mục 15 (2026-11-15): app được ký bằng một chứng chỉ tự c�
    - **Chung:** `vieejt`→`việt`, `truowfng`→`trường`, Backspace, ESC.
    - **Vikey:** `treen`→`trên`, `more` giữ nguyên, undo ⌫⌫.
    - **Gõ Nhanh:** `push`+Space giữ `push`.
-   - **Router:** đổi engine giữa chừng không làm hỏng ô nhập. VNI bị khoá khi dùng Vikey.
+   - **Router:** đổi engine giữa chừng không làm hỏng ô nhập. Chọn VNI khi đang dùng Vikey thì router chuyển sang Gõ Nhanh.
 4. `check-divergence.sh` và `xcodebuild` bản Release.
 5. GĐ3: test bảng mã và chuyển mã, đối chiếu với bảng của OpenKey.
 
@@ -228,17 +228,18 @@ Với cả hai engine, thử trên Chrome (thanh địa chỉ và ô nhập), Sp
 
 Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ chạy trên iOS/Android. LeanKeys chỉ học ý tưởng của nó, không dùng code và không tự cập nhật theo nó. Các tính năng chỉ có ý nghĩa trên màn hình cảm ứng (vẽ dấu, vuốt để gõ, giao diện bàn phím) nằm ngoài phạm vi. GĐ4 gồm ba kế hoạch riêng, làm theo thứ tự **4C (mục 12) → 4B → 4A**. 4C đứng đầu vì gõ trộn Việt/Anh là ưu tiên số một.
 
-### 11.1 4B: Tự đề xuất gõ tắt từ nội dung lặp lại
+### 11.1 4B: Gợi ý gõ tắt từ nội dung lặp lại
 
 **Hành vi**
 - LeanKeys đếm các cụm đã gõ xong: câu, cụm từ, địa chỉ, số điện thoại, mã số thuế, email, tên riêng. Một cụm kết thúc ở dấu câu, Enter, hoặc khi con trỏ đổi chỗ.
 - **Ngưỡng đề xuất** (mặc định, chỉnh được trong Cài đặt): cụm lặp lại ≥ 3 lần trong 30 ngày và dài ≥ 8 ký tự.
-- Khi có đề xuất, menu bar hiện "Có N gợi ý gõ tắt". Màn duyệt có ba nút cho từng mục: **Thêm**, **Sửa tên tắt**, **Bỏ qua**. Mục đã bỏ qua được nhớ và không đề xuất lại. Không có gì được thêm khi người dùng chưa bấm Thêm.
+- Khi có đề xuất, menu bar hiện "Có N gợi ý gõ tắt". Màn duyệt có ba nút cho từng mục: **Thêm** (vào Bảng gõ tắt), **Sửa** (đổi từ viết tắt), **Bỏ qua**. Ô từ viết tắt có tooltip "Gõ “sdt” rồi dấu cách để chèn nội dung này". Sửa sai thì báo `Từ viết tắt này đã có trong Bảng gõ tắt` hoặc `Từ viết tắt không được để trống hoặc chứa dấu cách`. Mục đã bỏ qua được nhớ và không đề xuất lại. Không có gì được thêm khi người dùng chưa bấm Thêm.
 - Gõ tắt được ghi vào danh sách gõ tắt có sẵn của Gõ Nhanh, nên chạy với cả hai engine.
+- Trên giao diện, tính năng chỉ có một tên: công tắc ở Chung, thẻ ở Nâng cao và dòng trên ô nổi đều gọi là `Gợi ý gõ tắt`.
 
-**Tự đặt tên tắt**
+**Tự đặt từ viết tắt**
 
-| Loại nội dung | Nhận dạng | Tên tắt |
+| Loại nội dung | Nhận dạng | Từ viết tắt |
 |---|---|---|
 | Số điện thoại | `0` + 9 số, hoặc `+84` + 9 số; chấp nhận dấu cách, `.`, `-` | `sdt` |
 | Mã số thuế | 10 số, hoặc 10 số + `-` + 3 số | `mst` |
@@ -247,13 +248,13 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 | Câu / cụm khác | — | chữ cái đầu mỗi từ, bỏ dấu, viết thường (ví dụ "Cảm ơn anh chị đã quan tâm" → `caqt`) |
 
 - Nếu tên đã có thì thêm số: `sdt2`, `sdt3`…
-- Tên tắt trùng một từ tiếng Việt hoặc tiếng Anh có thật thì bị loại, rồi thử tên kế tiếp. Việc kiểm tra dùng điểm từ của engine Vikey (`vAutoSwitchWordScore`).
+- Từ viết tắt trùng một từ tiếng Việt hoặc tiếng Anh có thật thì bị loại, rồi thử tên kế tiếp. Việc kiểm tra dùng điểm từ của engine Vikey (`vAutoSwitchWordScore`).
 
 **Bảo mật**
 - Mặc định tắt. Lần đầu bật có màn giải thích tính năng làm gì.
 - Chỉ xử lý và lưu trên máy, không gửi đi đâu.
 - Cụm chưa đạt ngưỡng chỉ được lưu dưới dạng HMAC-SHA256 (khoá ngẫu nhiên giữ trong Keychain) kèm số lần và các ngày gặp. Chữ thật chỉ được giữ khi cụm đạt ngưỡng, và chỉ để hiện trong màn duyệt.
-- File dữ liệu được mã hoá bằng khoá trong Keychain. Có nút "Xoá toàn bộ dữ liệu đã học". Mục đã Thêm hay Bỏ qua thì xoá chữ thật khỏi bộ đếm.
+- File dữ liệu được mã hoá bằng khoá trong Keychain. Có nút "Xoá dữ liệu gợi ý gõ tắt" (chỉ xoá dữ liệu của 4B; Bảng gõ tắt, "Từ giữ nguyên" và "Tên đã học" vẫn còn). Mục đã Thêm hay Bỏ qua thì xoá chữ thật khỏi bộ đếm.
 - Không bao giờ học từ:
   - Secure Input và ô mật khẩu (AX subrole `AXSecureTextField`);
   - chuỗi 13–19 số đạt kiểm tra Luhn (số thẻ);
@@ -273,7 +274,7 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 - Riêng phím Tab và ⌥1–⌥3 của 4A được xử lý trong `EngineRouter.intercept`, qua điểm `engine-dispatch` đã có.
 
 ### 11.4 Test
-- **4B, test đơn vị:** nhận dạng từng loại (có các ví dụ sai: số thẻ, OTP, chuỗi ngắn), sinh tên tắt và cách tránh trùng, ngưỡng và cửa sổ 30 ngày, và kiểm tra rằng chữ thật không xuất hiện trong file lưu trước khi cụm đạt ngưỡng.
+- **4B, test đơn vị:** nhận dạng từng loại (có các ví dụ sai: số thẻ, OTP, chuỗi ngắn), sinh từ viết tắt và cách tránh trùng, ngưỡng và cửa sổ 30 ngày, và kiểm tra rằng chữ thật không xuất hiện trong file lưu trước khi cụm đạt ngưỡng.
 - **4A:** xếp hạng gợi ý, Tab chèn đúng phần còn thiếu, ẩn ô khi con trỏ đổi chỗ.
 - **Thử tay:** địa chỉ hay SĐT gõ 3 lần thì có đề xuất, Thêm xong gõ `sdt` bung ra đúng; ô mật khẩu không bị học.
 
@@ -336,16 +337,17 @@ Viết ngày 2026-11-15, viết lại ngày 2026-11-16 sau khi đo. Người dù
 ### 12.3 Cài đặt và bảo mật
 - **Bật sẵn, không có bước cài đặt.** Cả 12.1 và 12.2 đều bật mặc định.
 - **Trang Nâng cao có thẻ "Tự sửa và tự học" gồm:**
-  - công tắc "⌫ sửa phím gõ đúp";
-  - công tắc "Tự học từ hoàn tác";
-  - danh sách "Từ đã học" (chữ, từ đứng trước nếu có, số lần), mỗi mục có nút xoá;
-  - nút "Xoá tất cả".
+  - công tắc "Sửa lỗi bấm đúp phím dấu", dòng phụ "Bấm ⌫ ngay sau khi lỡ bấm đúp: hocjj⌫ → học";
+  - công tắc "Nhớ từ bạn giữ nguyên", dòng phụ "Bấm ⌫⌫ ngay sau khi một từ bị tự đổi: lần sau giữ nguyên";
+  - danh sách "Từ giữ nguyên" (chữ, từ đứng trước nếu có, số lần), mỗi mục có nút xoá; khi trống ghi "Chưa có. Bấm ⌫⌫ ngay sau khi một từ bị tự đổi để thêm.";
+  - nút "Xoá tất cả", hỏi lại kèm dòng "Mọi từ giữ nguyên và tên đã học sẽ bị xoá. Không hoàn tác được.".
+- Mỗi dòng phụ chỉ một dòng (mục 14.3), đủ chữ trong tooltip.
 - **Lưu trữ.** Chỉ lưu những chữ người dùng đã hoàn tác, không lưu văn bản khác.
   - File `~/Library/Application Support/LeanKeys/undo-rules.bin`, quyền 0600, mã hoá AES-GCM bằng khoá trong login Keychain.
   - Dùng lại `KeychainEncryptedFileStore` của 4B với tên file và mục Keychain riêng.
   - Không gửi đi đâu.
 - **Giới hạn 5.000 luật.** Khi đầy, bỏ luật lâu không dùng nhất (LRU).
-- **Không học trong:** Secure Input, ô mật khẩu, và các app trong danh sách loại trừ của 4B. Luật đã học vẫn được áp dụng ở mọi nơi engine chạy.
+- **Không học trong:** Secure Input, ô mật khẩu, và các ứng dụng trong danh sách "Không học khi gõ trong" của 4B (tooltip của danh sách nói nó áp dụng cho cả 4B, 4C và 4D). Luật đã học vẫn được áp dụng ở mọi nơi engine chạy.
 - **(sửa 2026-11-16, đánh giá toàn ứng dụng) Không hỏi AX trên luồng phím.** Trên luồng phím (event tap) chỉ đọc những gì không cần hỏi app khác: bundle ID và pid của app đang dùng (`NSWorkspace`), `IsSecureEventInputEnabled()`, thời điểm. Secure Input và app bị loại trừ được quyết ngay ở đó, trước khi đưa gì vào hàng đợi. Việc hỏi ô đang có con trỏ có phải ô mật khẩu không (AX, tối đa 2 × 25 ms) chạy trên hàng đợi nền ghi việc học (hàng đợi ghi của 4C và tên tự học, hàng đợi của 4B); ô mật khẩu, lỗi hay hết giờ thì bỏ lần học đó như trước. Chữ gõ chuyển sang hàng đợi chỉ nằm trong bộ nhớ. Kiểm tra từ điển của tên tự học vẫn chạy trên luồng phím (ruling R4). Ô được hỏi là ô đang có con trỏ lúc hàng đợi chạy, vài ms sau phím: chuyển rất nhanh từ ô mật khẩu sang ô thường trước lúc đó thì ô thường được hỏi; Secure Input (đọc trên luồng phím) vẫn là lớp chặn chính.
 
 ### 12.4 Test
@@ -389,7 +391,7 @@ Thêm ngày 2026-11-15. **Mục tiêu:** người dùng chỉ cần mở máy v�
 | Cảnh báo app đang chặn gõ (Secure Input) | Bật (có sẵn). Với engine Vikey, cảnh báo hiện cả khi đang ở chế độ Anh, vì engine vẫn chạy |
 | Tự học từ hoàn tác (4C) | Bật sẵn |
 | Gợi ý từ (4A) | Bật sẵn, Esc để ẩn |
-| Đề xuất gõ tắt (4B) | Hỏi một lần duy nhất ở màn chào. Bật rồi thì mỗi đề xuất chỉ cần một cú bấm "Thêm" |
+| Gợi ý gõ tắt (4B) | Hỏi một lần duy nhất ở màn chào. Bật rồi thì mỗi đề xuất chỉ cần một cú bấm "Thêm" |
 
 ### 13.3 Màn chào
 Chỉ **một màn**: nút cấp quyền Accessibility, cộng một công tắc cho 4B. Không có lựa chọn engine, kiểu gõ hay phím tắt ở lần đầu; những thứ đó nằm trong Cài đặt cho ai cần.
@@ -421,10 +423,10 @@ Thêm ngày 2026-11-15, người dùng đã duyệt cả ba phương án A, B, C
 ### 14.1 Ô nổi trên menu bar (thay menu thả xuống)
 - Bấm trái icon LeanKeys mở một `NSPopover` viết bằng SwiftUI, rộng khoảng 280 pt. Nội dung từ trên xuống:
   1. **Trạng thái:** một nút gạt lớn hai nấc `Tiếng Việt` / `English`, đổi ngay khi bấm (tương đương phím tắt bật/tắt). Bên dưới là một dòng nhỏ: `Tự chuyển Việt/Anh: Bật` (hoặc `Tạm dừng` khi người dùng đã tự tắt).
-  2. **Cảnh báo** (chỉ khi có): `⚠︎ <Tên app> đang chặn gõ tiếng Việt`, lấy từ `SecureInputHolder` có sẵn.
+  2. **Cảnh báo** (chỉ khi có): `⚠︎ <Tên app> đang chặn gõ tiếng Việt` (không biết tên thì `⚠︎ Một ứng dụng đang chặn gõ tiếng Việt`), lấy từ `SecureInputHolder` có sẵn. Tooltip nói cách gỡ; VoiceOver đọc "Cảnh báo: …".
   3. **Kiểu gõ:** menu thả xuống `Telex` / `VNI`.
   4. **Cập nhật** (chỉ khi có bản mới sẵn sàng): nút `Cài bản mới` (chạy bộ cài an toàn).
-  5. Hàng cuối: `Cài đặt…` · `Thoát`.
+  5. Hàng cuối: `Cài đặt…` · `Thoát LeanKeys`.
 - Bấm phải, hoặc Option + bấm, mở menu cũ của Gõ Nhanh, để không mất chức năng nào.
 - Ô nổi tự đóng khi bấm ra ngoài (`.transient`).
 
@@ -433,14 +435,15 @@ Thêm ngày 2026-11-15, người dùng đã duyệt cả ba phương án A, B, C
 - Nếu người dùng bật "Giảm chuyển động" (`accessibilityDisplayShouldReduceMotion`) thì không có hiệu ứng.
 
 ### 14.3 Cửa sổ Cài đặt: thanh bên bốn trang
-- **Thanh bên:** logo 48 pt cạnh tên "LeanKeys" và phiên bản trên cùng một hàng; bên dưới là `Chung` · `Phím tắt` · `Nâng cao` · `Giới thiệu`, mỗi mục có biểu tượng SF Symbol.
+- **Thanh bên:** logo 48 pt cạnh tên "LeanKeys" trên cùng một hàng; dưới đó là nhãn cập nhật, nơi duy nhất hiện phiên bản (`v1.2 · Mới nhất`; "Mới nhất" chỉ sau một lần kiểm tra báo vậy, chưa kiểm tra thì `Kiểm tra cập nhật`). Nhãn là một nút: dùng được bằng bàn phím và VoiceOver. Bên dưới là `Chung` · `Phím tắt` · `Nâng cao` · `Giới thiệu`, mỗi mục có biểu tượng SF Symbol.
 - **Chung:**
   - Thẻ trạng thái giống phần đầu của ô nổi: trạng thái, dòng tự chuyển, cảnh báo nếu có.
-  - Công tắc `Bộ gõ tiếng Việt`, chữ đậm hơn các mục khác.
+  - Công tắc `Gõ tiếng Việt` (dòng phụ "Tắt là gõ English, như chọn English trên menu bar"), chữ đậm hơn các mục khác.
   - `Kiểu gõ`.
   - Các mục chỉ dành cho Gõ Nhanh (`Gõ W thành Ư`, `Gõ [ ] thành Ơ Ư`, `Tự khôi phục tiếng Anh`, `Tự viết hoa đầu câu`) **chỉ hiện khi** engine là "Chỉ dùng Gõ Nhanh". Ở chế độ "Tự động", chúng không xuất hiện.
-- **Phím tắt:** các dòng phím tắt bật/tắt hiện có của Gõ Nhanh, chuyển nguyên sang trang này.
-- **Nâng cao:** thẻ thu gọn `Engine gõ` (mục 13), rồi các phần hiệu năng, tương thích và tuỳ chỉnh theo app hiện có của Gõ Nhanh.
+- **Phím tắt:** các dòng phím tắt hiện có của Gõ Nhanh, chuyển sang trang này, gọi là `Chuyển Việt/Anh` và `Phím tắt chuyển Việt/Anh thứ hai`. Phím tắt khôi phục của Gõ Nhanh có tên `Trả từ đang gõ về phím gốc` (không gọi là "Hoàn tác", từ đó dành cho ⌫⌫ của 4C) và, như các mục chỉ dành cho Gõ Nhanh, chỉ hiện khi engine là "Chỉ dùng Gõ Nhanh": Vikey coi Esc là phím ngắt từ, không khôi phục. Hàng nào bấm được (phím tắt, Bảng gõ tắt) là nút: dùng được bằng bàn phím và VoiceOver; mọi công tắc, ô chọn và nút chỉ có biểu tượng đều có tên cho VoiceOver.
+- **Nâng cao:** thẻ thu gọn `Lõi gõ` (mục 13; trên giao diện, engine gọi là "lõi gõ"), rồi `Gợi ý gõ tắt`, `Tự sửa và tự học`, tuỳ chỉnh theo ứng dụng; các phần ít dùng và kỹ thuật (hiệu năng, tương thích, nhật ký gỡ lỗi) nằm cuối.
+  - Mọi mục hiện trên trang này đều có tác dụng: Gõ Nhanh chỉ áp dụng tuỳ chỉnh theo ứng dụng, "Mở lại LeanKeys khi đóng Cài đặt" và "Không theo dõi ô tìm kiếm Spotlight/Raycast" khi bật "cài đặt nâng cao", công tắc mà LeanKeys ẩn; vì thế LeanKeys luôn áp dụng chúng (`SettingsLayout.advancedSettingsApply`, rà soát chữ I2). Tuỳ chỉnh theo ứng dụng ghi `Tiếng Việt: Theo cài đặt chung / Luôn bật / Luôn tắt`, `Độ trễ`, `Cách gửi phím`.
 - **Giới thiệu:** giữ như hiện tại, có ghi công.
 - **Ghi chú trên giao diện tối đa một dòng.** Giải thích dài hơn nằm trong tooltip của biểu tượng ⓘ. Không đưa chữ kỹ thuật như "giai đoạn 4" ra giao diện.
 - **Màu:** chữ phụ phải đạt tương phản ≥ 4.5:1 ở cả chế độ sáng và tối; dùng màu hệ thống `secondaryLabelColor`, không dùng xám tự chọn.
@@ -512,12 +515,12 @@ Thay mục 4 của §14.1 bằng một hàng luôn hiện, nằm dưới `Kiểu
 | Chưa kiểm tra | nút `Kiểm tra cập nhật` | kiểm tra |
 | Đang kiểm tra | vòng quay + `Đang kiểm tra cập nhật…` | — |
 | Đang tải | thanh tiến độ + `Đang tải bản mới… 42%` | — |
-| Đang cài | vòng quay + `Đang cài, LeanKeys sẽ tự mở lại` | — |
+| Đang cài | vòng quay + `Đang cài — LeanKeys sẽ tự mở lại` | — |
 | Đã tải sẵn (tải ngầm) | nút `Cài bản mới` | cài |
 | Mới nhất | `Bạn đang dùng bản mới nhất` | — |
 | Lỗi | một dòng ngắn + nút `Thử lại` | kiểm tra lại |
 
-- Lỗi kiểm tra: `Không kết nối được, thử lại sau`; lỗi tải: `Tải bản mới thất bại`; bộ cài từ chối: `Không cài được bản mới`. Không hiện chữ lỗi kỹ thuật (tiếng Anh) của `UpdateChecker`.
+- Lỗi kiểm tra: `Không kiểm tra được, thử lại sau`; lỗi tải: `Không tải được bản mới`; bộ cài từ chối: `Không cài được bản mới`. Không hiện chữ lỗi kỹ thuật (tiếng Anh) của `UpdateChecker`. Cửa sổ cập nhật cũ của Gõ Nhanh cũng không: `UpdateChecker` báo lỗi bằng câu tiếng Việt có hướng xử lý, và tiêu đề trang lỗi nói đúng bước hỏng (kiểm tra, tải hay cài).
 - Đóng ô nổi thì `Mới nhất` và `Lỗi` trở về `Chưa kiểm tra`.
 
 ### 16.3 Luồng
@@ -577,7 +580,7 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 
 **17.1.4 Hoàn tác.** Nếu người dùng bấm ⌫ ngay sau một lần tự viết hoa (phím đầu tiên sau phím ngắt):
 - Chữ trở lại đúng như đã gõ, chỉ mất phím ngắt, giống 4C.
-- LeanKeys lưu luật "không viết hoa cụm này sau từ đứng trước này" vào sổ luật của 4C (`UndoRuleBook`, chữ có tiền tố `cap:` để không lẫn với luật 4C). Luật có từ đứng trước được dùng ngay sau 1 lần hoàn tác, luật không có từ đứng trước sau 2 lần, như 4C. Từ đứng trước có dạng mật khẩu (`Exclusions.looksLikeSecret`) thì không được lưu làm ngữ cảnh, chỉ tăng luật không có từ đứng trước (ruling R14). Danh sách "Từ đã học" hiện luật này với nhãn "(viết hoa)".
+- LeanKeys lưu luật "không viết hoa cụm này sau từ đứng trước này" vào sổ luật của 4C (`UndoRuleBook`, chữ có tiền tố `cap:` để không lẫn với luật 4C). Luật có từ đứng trước được dùng ngay sau 1 lần hoàn tác, luật không có từ đứng trước sau 2 lần, như 4C. Từ đứng trước có dạng mật khẩu (`Exclusions.looksLikeSecret`) thì không được lưu làm ngữ cảnh, chỉ tăng luật không có từ đứng trước (ruling R14). Danh sách "Từ giữ nguyên" hiện luật này với nhãn "(giữ chữ thường)": LeanKeys giữ cụm đó chữ thường.
 - Tên tự học bị hoàn tác 2 lần ở bất kỳ đâu thì bị xoá khỏi danh sách tên.
 
 ### 17.2 Bỏ ký tự gõ dính khi Enter
@@ -594,8 +597,8 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 
 ### 17.3 Cài đặt
 Thẻ "Tự sửa và tự học" (mục 12.3) có thêm:
-- hai công tắc `Tự viết hoa tên riêng` và `Bỏ ký tự gõ dính khi Enter`, bật sẵn; khoá UserDefaults là `LeanKeys.autoCapitalize` và `LeanKeys.strayEnter`;
-- danh sách `Tên đã học` (dạng chữ, số lần, nút xoá); nút "Xoá tất cả" của thẻ xoá cả danh sách này.
+- hai công tắc `Tự viết hoa tên riêng` (dòng phụ "Tên người, địa danh: Hà Nội, Nguyễn Văn An") và `Bỏ phím \ ] ' lỡ bấm cùng Enter` (dòng phụ "Không áp dụng trong Terminal và trình soạn code"), bật sẵn; khoá UserDefaults là `LeanKeys.autoCapitalize` và `LeanKeys.strayEnter`. Tên công tắc thứ hai đổi từ `Bỏ ký tự gõ dính khi Enter` theo ruling R19 (rà soát chữ trên giao diện);
+- danh sách `Tên đã học` (dạng chữ, số lần, nút xoá); khi trống ghi "Chưa có. Tên bạn tự viết hoa từ hai lần sẽ hiện ở đây."; nút "Xoá tất cả" của thẻ xoá cả danh sách này.
 
 ### 17.4 Test
 - **Đơn vị:**

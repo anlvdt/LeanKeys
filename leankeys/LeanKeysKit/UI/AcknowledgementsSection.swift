@@ -3,6 +3,9 @@ import SwiftUI
 
 /// LeanKeys' block on Gõ Nhanh's About page: the engine versions and a credit line per source project.
 public struct AcknowledgementsSection: View {
+    static let licenseLine = "\(LeanBranding.name) phát hành theo giấy phép \(LeanAcknowledgements.leanKeysLicense) · "
+    static let creditsLink = "Xem ghi công"
+
     public init() {}
 
     public var body: some View {
@@ -18,13 +21,17 @@ public struct AcknowledgementsSection: View {
                         Text(credit.name)
                     }
                     Text("· \(credit.authors) · \(credit.license)")
-                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                        .foregroundColor(Color(NSColor.secondaryLabelColor))
                 }
                 .font(.system(size: 11))
             }
             if let url = URL(string: LeanBranding.repository + "/blob/main/ACKNOWLEDGEMENTS.md") {
-                Link("\(LeanBranding.name) phát hành theo \(LeanAcknowledgements.leanKeysLicense) · Xem ghi công", destination: url)
-                    .font(.system(size: 11))
+                // Only "Xem ghi công" is the link; the licence sentence is plain text.
+                HStack(spacing: 0) {
+                    Text(Self.licenseLine)
+                    Link(Self.creditsLink, destination: url)
+                }
+                .font(.system(size: 11))
             }
         }
         .multilineTextAlignment(.center)

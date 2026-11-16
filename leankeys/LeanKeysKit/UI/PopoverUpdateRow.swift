@@ -31,6 +31,15 @@ public enum PopoverUpdateRow {
             default: return .network
             }
         }
+
+        /// Title of the legacy update window's error page: what failed, not always "the check" (copy audit K2).
+        public var title: String {
+            switch self {
+            case .network: return "Không kiểm tra được cập nhật"
+            case .download: return "Không tải được bản mới"
+            case .install: return Self.installMessage
+            }
+        }
     }
 
     public enum Phase: Equatable {
@@ -77,10 +86,10 @@ public enum PopoverUpdateRow {
         case let .downloading(progress):
             guard let progress else { return "Đang tải bản mới…" }
             return "Đang tải bản mới… \(Int((progress * 100).rounded(.down)))%"
-        case .installing: return "Đang cài, LeanKeys sẽ tự mở lại"
+        case .installing: return "Đang cài — LeanKeys sẽ tự mở lại"
         case .upToDate: return "Bạn đang dùng bản mới nhất"
-        case .failed(.network): return "Không kết nối được, thử lại sau"
-        case .failed(.download): return "Tải bản mới thất bại"
+        case .failed(.network): return "Không kiểm tra được, thử lại sau"
+        case .failed(.download): return "Không tải được bản mới"
         case .failed(.install): return Failure.installMessage
         }
     }

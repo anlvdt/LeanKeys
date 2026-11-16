@@ -899,16 +899,16 @@ enum SecureInputPresentation {
     /// user knows which app to leave or quit; falls back to generic guidance otherwise.
     static func warningMessage(holderName: String?) -> String {
         if let name = holderName {
-            return "\(name) đang giữ macOS Secure Input. Rời ô mật khẩu hoặc thoát ứng dụng đó; Gõ Nhanh sẽ tự hoạt động lại."
+            return "\(name) đang giữ macOS Secure Input. Rời ô mật khẩu hoặc thoát ứng dụng đó; \(AppMetadata.name) sẽ tự hoạt động lại." // LEANKEYS-HOOK: copy
         }
-        return "macOS Secure Input đang chặn bộ gõ. Rời ô mật khẩu hoặc ứng dụng đang giữ Secure Input; Gõ Nhanh sẽ tự hoạt động lại."
+        return "macOS Secure Input đang chặn bộ gõ. Rời ô mật khẩu hoặc ứng dụng đang giữ Secure Input; \(AppMetadata.name) sẽ tự hoạt động lại." // LEANKEYS-HOOK: copy
     }
 
     static func tooltip(holderName: String?) -> String {
         if let name = holderName {
-            return "Gõ Nhanh đang tạm dừng vì \(name) giữ macOS Secure Input"
+            return "\(AppMetadata.name) tạm dừng gõ tiếng Việt vì \(name) đang bật Secure Input (ô mật khẩu)" // LEANKEYS-HOOK: copy
         }
-        return "Gõ Nhanh đang tạm dừng vì macOS Secure Input"
+        return "\(AppMetadata.name) tạm dừng gõ tiếng Việt vì một ô mật khẩu đang bật Secure Input" // LEANKEYS-HOOK: copy
     }
 }
 
@@ -1197,11 +1197,11 @@ class KeyboardHookManager {
     private func showAccessibilityAlert() {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Cần quyền Accessibility"
-            alert.informativeText = "Gõ Nhanh cần quyền Accessibility để gõ tiếng Việt.\n\n1. Mở System Settings > Privacy & Security > Accessibility\n2. Bật Gõ Nhanh\n3. Khởi động lại app"
+            alert.messageText = "\(AppMetadata.name) cần quyền Trợ năng" // LEANKEYS-HOOK: copy
+            alert.informativeText = "Để gõ tiếng Việt, \(AppMetadata.name) cần quyền Trợ năng.\n\n1. Mở Cài đặt hệ thống › Quyền riêng tư & Bảo mật › Trợ năng\n2. Bật công tắc cạnh \(AppMetadata.name)\n3. Mở lại \(AppMetadata.name)" // LEANKEYS-HOOK: copy
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Mở System Settings")
-            alert.addButton(withTitle: "Hủy")
+            alert.addButton(withTitle: "Mở Cài đặt hệ thống") // LEANKEYS-HOOK: copy
+            alert.addButton(withTitle: "Huỷ") // LEANKEYS-HOOK: copy
             if alert.runModal() == .alertFirstButtonReturn {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
             }
@@ -1553,6 +1553,7 @@ private func keyboardCallback(
         if let peak = modifierChord.modifiersChanged(to: flags.intersection(kModifierMask)) {
             // Chord completed cleanly - evaluate against the peak modifiers held.
             if AppState.shared.restoreShortcutEnabled,
+               SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active), // LEANKEYS-HOOK: copy (row hidden under Vikey, so the shortcut is off too)
                currentRestoreShortcut.isModifierOnly,
                currentRestoreShortcut.matchesModifierOnly(flags: peak)
             {
@@ -1631,7 +1632,7 @@ private func keyboardCallback(
     // Issue #149: Restore shortcut - restore raw ASCII if enabled
     // Issue #157: Pass key through after restore so it still functions normally (Tab inserts tab, ESC closes dialog)
     // Issue #303: Only pass through special keys (ESC, Tab, etc.), not letter/number keys with modifiers (Shift-Z, Option-Z)
-    if AppState.shared.restoreShortcutEnabled && matchesRestoreShortcut(keyCode: keyCode, flags: flags) {
+    if AppState.shared.restoreShortcutEnabled && SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active) && matchesRestoreShortcut(keyCode: keyCode, flags: flags) { // LEANKEYS-HOOK: copy
         triggerRestoreShortcut(flags: flags, proxy: proxy)
         // Only pass through special keys that should still function after restore
         // (ESC closes dialogs, Tab moves focus, Enter submits, etc.)
@@ -2327,7 +2328,7 @@ class PerAppModeManager {
     /// Called by FocusChangeObserver when a special panel app (Spotlight, Raycast) becomes active.
     /// This is event-driven and happens BEFORE any keystroke, fixing the race condition.
     func handleSpecialPanelAppActivated(_ bundleId: String) {
-        guard !(AppState.shared.advancedMode && AppState.shared.disablePanelDetection) else { return }
+        guard !(SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode) && AppState.shared.disablePanelDetection) else { return } // LEANKEYS-HOOK: copy (copy audit I2)
         spotlightChecked = true // Mark as checked (AXObserver detected it)
         handleAppSwitch(bundleId)
     }
@@ -2338,7 +2339,7 @@ class PerAppModeManager {
         // Reset to previous app - this ensures next panel open will trigger handleAppSwitch
         currentBundleId = previousApp
         spotlightChecked = false
-        DetectionCache.activeProfile = AppState.shared.advancedMode ? AppState.shared.perAppProfiles[previousApp] : nil
+        DetectionCache.activeProfile = SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode) ? AppState.shared.perAppProfiles[previousApp] : nil // LEANKEYS-HOOK: copy
         // Same order as handleAppSwitch: profile first, then per-app mode
         AppState.shared.applyPerAppProfile(bundleId: previousApp)
         restorePerAppMode(for: previousApp)
@@ -2351,7 +2352,7 @@ class PerAppModeManager {
 
     func checkSpotlightOnce() {
         // Skip if panel detection is disabled (advanced setting)
-        guard !(AppState.shared.advancedMode && AppState.shared.disablePanelDetection) else { return }
+        guard !(SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode) && AppState.shared.disablePanelDetection) else { return } // LEANKEYS-HOOK: copy (copy audit I2)
         // Skip if already checked in this session
         guard !spotlightChecked else { return }
         spotlightChecked = true
@@ -2399,7 +2400,7 @@ class PerAppModeManager {
         clearDetectionCache() // Clear injection method cache on app switch
 
         // Snapshot per-app profile for keystroke hot path (thread-safe read)
-        DetectionCache.activeProfile = AppState.shared.advancedMode ? AppState.shared.perAppProfiles[bundleId] : nil
+        DetectionCache.activeProfile = SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode) ? AppState.shared.perAppProfiles[bundleId] : nil // LEANKEYS-HOOK: copy
 
         // Update auto-capitalize state for new app (handles per-app exclusion)
         AppState.shared.updateAutoCapitalizeEngine()
@@ -2422,7 +2423,7 @@ class PerAppModeManager {
     /// Restore per-app mode for a bundle ID and update UI
     private func restorePerAppMode(for bundleId: String) {
         // Skip if per-app profile has disabled GN — applyPerAppProfile handles it
-        if AppState.shared.advancedMode,
+        if SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode), // LEANKEYS-HOOK: copy
            let profile = AppState.shared.perAppProfiles[bundleId],
            profile.enabledState == -1
         {
