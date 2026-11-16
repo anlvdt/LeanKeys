@@ -280,7 +280,7 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 
 Viết ngày 2026-11-15, viết lại ngày 2026-11-16 sau khi đo. Người dùng muốn hướng tối ưu cho người Việt và không cần hỏi lại. Họ phàn nàn: "gõ tiếng Việt mà sai là nó chuyển sang tiếng Anh, rồi phải mất công chuyển lại hoặc xoá hết gõ lại".
 
-**Đo trước khi thiết kế** (bản dựng thử trên engine Vikey thật; kho `chat_messages` 1.869 tin, 20.676 từ). Mỗi chế độ chèn lỗi vào 30% số từ tiếng Việt, hoặc 50% số từ tiếng Anh cho các chế độ tiếng Anh; người gõ sửa lỗi bằng ⌫ như người thật:
+**Đo trước khi thiết kế** (bản dựng thử trên engine Vikey thật; kho `chat_messages` 1.869 tin, 20.676 từ). Mỗi chế độ chèn lỗi vào 50% số từ tiếng Việt, hoặc 50% số từ tiếng Anh cho các chế độ tiếng Anh; người gõ sửa lỗi bằng ⌫ như người thật:
 
 | Lỗi rồi sửa bằng ⌫ | Vikey hiện tại | Có sửa ⌫ (12.1) | Từ hỏng thêm / từ được sửa |
 |---|---|---|---|
