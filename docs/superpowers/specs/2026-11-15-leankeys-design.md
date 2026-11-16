@@ -18,7 +18,7 @@ LeanKeys phải **tự nhận thay đổi mới từ các repo gốc** với ít
 
 ### Tiêu chí thành công
 
-1. Gõ Telex/VNI ổn định trên mọi app mà Gõ Nhanh đang hỗ trợ, gồm thanh địa chỉ Chrome, Spotlight, Arc, IDE và Terminal.
+1. Gõ Telex/VNI ổn định trên mọi app mà Gõ Nhanh đang hỗ trợ, gồm thanh địa chỉ Chrome, Spotlight, Arc, IDE và Terminal (Terminal bỏ từ 2026-11-17: phím đi thẳng, mục 18).
 2. Chọn được engine Gõ Nhanh hoặc engine Vikey trong Cài đặt. Đổi engine không cần khởi động lại app.
 3. Mỗi ngày, job đồng bộ kéo release mới nhất của Gõ Nhanh và Vikey, chạy toàn bộ test, rồi build sẵn bản phát hành. Có xung đột hay test hỏng thì báo, không phát hành.
 4. Phát hành công khai đúng GPL-3 và ghi công đủ ba tác giả gốc.
@@ -622,6 +622,7 @@ Thêm ngày 2026-11-16 theo yêu cầu người dùng. Áp dụng cho cả hai e
   - Gõ Nhanh đã làm việc này cho RustDesk, AnyDesk và TeamViewer.
   - LeanKeys thêm: MacViewer (tương thích UltraViewer), Windows App / Microsoft Remote Desktop, Parsec, RealVNC Viewer, Jump Desktop, Screens, Screen Sharing của Apple, Splashtop, NoMachine, VMware Fusion, Parallels Desktop, UTM, VirtualBox.
   - Danh sách nằm trong `KeyPassthrough.remoteBundleIDs`.
+- **Terminal (2026-11-17, ruling R22, theo yêu cầu người dùng).** Mọi phím đi thẳng trong mọi app terminal (`CodeApps.terminals`: Terminal, iTerm2, Warp, Ghostty, Alacritty, kitty, WezTerm, Hyper, Tabby…): không bỏ dấu, không gõ tắt, không viết hoa, không học. Dấu nhắc `sudo`, `ssh`, `passwd`, `git` nhận mật khẩu ở đó mà không có ô bảo mật, còn lệnh thì không phải tiếng Việt. Cấu hình theo app không bật lại được. Giới hạn: terminal nằm trong trình soạn code (VS Code, Cursor, JetBrains…) vẫn gõ tiếng Việt, vì LeanKeys không phân biệt được nó với phần soạn thảo; ở đó trình soạn code chỉ không bị học (12.3). Muốn chắc chắn khi gõ mật khẩu trong terminal của trình soạn code, chuyển sang English trước.
 - **Trình quản lý mật khẩu và hộp thoại đăng nhập của macOS (2026-11-17, audit bảo mật MEDIUM-3).** Mọi phím đi thẳng ở mọi ô của: 1Password, Bitwarden, KeePassXC, Enpass, LastPass, Proton Pass, Keychain Access, Passwords của Apple (`Exclusions.passwordManagers`), hộp thoại xin quyền quản trị (`com.apple.SecurityAgent`, `SecurityAgentHelper`) và màn đăng nhập (`com.apple.loginwindow`). Ô tên người dùng, khoá TOTP, mã khôi phục ở đó là ô văn bản thường, Telex sẽ đổi chúng. Danh sách: `KeyPassthrough.credentialAppBundleIDs`; app nào cũng không có cách bật lại tiếng Việt (cấu hình theo app không đè được).
 - **Ô đăng nhập và mật khẩu.** Ô được nhận ra khi:
   - đó là ô mật khẩu của hệ thống (`AXSecureTextField`); hoặc
@@ -636,7 +637,8 @@ Thêm ngày 2026-11-16 theo yêu cầu người dùng. Áp dụng cho cả hai e
 - **Thử tay:**
   - gõ `nguyenvana` vào ô Email/Username của một trang đăng nhập trên Safari: giữ nguyên chữ;
   - gõ vào một máy Windows qua MacViewer, TeamViewer hay AnyDesk: chữ do bộ gõ bên Windows xử lý, không bị bỏ dấu hai lần;
-  - mật khẩu gõ ở dấu nhắc `sudo` trong Terminal không xuất hiện trong gợi ý gõ tắt.
+  - mật khẩu gõ ở dấu nhắc `sudo` trong Terminal không xuất hiện trong gợi ý gõ tắt;
+  - trong Terminal, đang bật tiếng Việt, gõ `vieejt` vẫn ra `vieejt`.
 
 ### 18.2 Nhật ký debug không lộ chữ gõ
 

@@ -7,6 +7,9 @@ import Foundation
 /// - **Remote control and virtual machines.** These apps send the physical keys to another computer, which has its
 ///   own input method. Synthetic edits (Backspace + Vietnamese letters) are not forwarded the same way, so typing
 ///   there would be composed twice or garbled.
+/// - **Terminals** (`CodeApps.terminals`, ruling R22): sudo, ssh, passwd and git prompts take passwords there with no
+///   secure field, and commands are not Vietnamese. Code editors keep Vietnamese: their integrated terminals cannot
+///   be told apart from the editor.
 /// - **Password managers and macOS sign-in dialogs** (`credentialAppBundleIDs`): every field there.
 /// - **Sign-in fields.** A user name, email or password must be typed exactly as the keys say. macOS hides real
 ///   password fields behind Secure Input (LeanKeys then never sees the keys), but many sign-in boxes are plain text
@@ -77,9 +80,10 @@ public enum KeyPassthrough {
     /// (`kAXTitleUIElementAttribute` → its `kAXValueAttribute`): native forms put "Mật khẩu:" in a separate static text.
     static let titleLabelKey = "AXTitleUIElement.value"
 
-    /// "remote", "credential-app", "credential", or nil to type normally.
+    /// "remote", "terminal", "credential-app", "credential", or nil to type normally.
     public static func reason(bundleID: String?, focused: AXUIElement?) -> String? {
         if let bundleID, remoteBundleIDs.contains(bundleID) { return "remote" }
+        if let bundleID, CodeApps.terminals.contains(bundleID) { return "terminal" }
         if let bundleID, credentialAppBundleIDs.contains(bundleID) { return "credential-app" }
         guard let focused else { return nil }
         // An error or timeout reads as "not a credential field": typing must not stall or stop on a busy app.

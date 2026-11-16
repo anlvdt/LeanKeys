@@ -138,4 +138,19 @@ final class KeyPassthroughTests: XCTestCase {
         }
         XCTAssertNil(KeyPassthrough.reason(bundleID: "com.apple.TextEdit", focused: nil))
     }
+
+    // MARK: Ruling R22: terminals type no Vietnamese at all
+
+    func testTerminalsPassThroughEditorsDoNot() {
+        for id in CodeApps.terminals {
+            XCTAssertEqual(KeyPassthrough.reason(bundleID: id, focused: nil), "terminal", id)
+        }
+        for id in ["com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "com.mitchellh.ghostty",
+                   "net.kovidgoyal.kitty", "com.github.wez.wezterm"] {
+            XCTAssertEqual(KeyPassthrough.reason(bundleID: id, focused: nil), "terminal", id)
+        }
+        for id in CodeApps.bundleIDs.subtracting(CodeApps.terminals).union(["com.jetbrains.intellij"]) {
+            XCTAssertNil(KeyPassthrough.reason(bundleID: id, focused: nil), id)
+        }
+    }
 }
