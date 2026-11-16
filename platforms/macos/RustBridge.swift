@@ -25,11 +25,11 @@ func axSystemWideBounded() -> AXUIElement {
 
 // MARK: - Debug Logging
 
-/// Debug logging - only active when /tmp/gonhanh_debug.log exists
-/// Enable: touch /tmp/gonhanh_debug.log | Disable: rm /tmp/gonhanh_debug.log
+/// Debug logging - only active when ~/Library/Logs/LeanKeys/debug.log exists (DebugLog: no typed text, no character key codes) // LEANKEYS-HOOK: debug-log
+/// Enable or disable from Advanced settings // LEANKEYS-HOOK: debug-log
 /// PERFORMANCE: isEnabled cached, @autoclosure defers string formatting until needed
 private enum Log {
-    private static let logPath = "/tmp/gonhanh_debug.log"
+    private static let logPath = DebugLog.path // LEANKEYS-HOOK: debug-log
     private static var _enabled: Bool?
     private static var perfTimer: Timer?
     private static var keystrokeCount: UInt64 = 0
@@ -89,7 +89,7 @@ private enum Log {
     }
 
     static func key(_ code: UInt16, _ result: @autoclosure () -> String) {
-        guard isEnabled else { return }; countKey(); write("K:\(code) → \(result())")
+        guard isEnabled else { return }; countKey(); write("K:\(DebugLog.keyLabel(code)) → \(result())") // LEANKEYS-HOOK: debug-log
     }
 
     static func method(_ name: @autoclosure () -> String) {
@@ -1443,7 +1443,7 @@ private func triggerRestoreShortcut(flags: CGEventFlags, proxy: CGEventTapProxy)
     let (method, delays) = detectMethod()
     EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
     if let (bs, chars, _) = RustBridge.processKey(keyCode: UInt16(KeyCode.esc), caps: caps, ctrl: false, shift: shift) {
-        Log.key(UInt16(KeyCode.esc), "restore: bs=\(bs) chars='\(String(chars))'")
+        Log.key(UInt16(KeyCode.esc), "restore: bs=\(bs) chars=\(DebugLog.redact(chars))") // LEANKEYS-HOOK: debug-log
         sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
     }
     RustBridge.clearBuffer()
@@ -1578,10 +1578,10 @@ private func keyboardCallback(
 
     // Log all keystrokes (only when debug enabled - no overhead otherwise)
     if Log.isEnabled {
-        if let char = event.keyboardCharacter() {
-            Log.info("keyDown: code=\(keyCode) char='\(char)'")
+        if event.keyboardCharacter() != nil { // LEANKEYS-HOOK: debug-log
+            Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log
         } else {
-            Log.info("keyDown: code=\(keyCode)")
+            Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log
         }
     }
 
@@ -1614,7 +1614,7 @@ private func keyboardCallback(
         if method == .passthrough { EngineRouter.shared.discardPending(); return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch
 
         if let (bs, chars, keyConsumed) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
-            Log.key(keyCode, "enter: bs=\(bs) chars='\(String(chars))' consumed=\(keyConsumed)")
+            Log.key(keyCode, "enter: bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed)") // LEANKEYS-HOOK: debug-log
             sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
 
             if bs > 0 || !chars.isEmpty {
@@ -1701,7 +1701,7 @@ private func keyboardCallback(
     if keyCode == KeyCode.backspace, !bypassIME {
         // First try Rust engine (handles immediate backspace-after-space)
         if let (bs, chars, _) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
-            Log.key(keyCode, "backspace: bs=\(bs) chars='\(String(chars))'")
+            Log.key(keyCode, "backspace: bs=\(bs) chars=\(DebugLog.redact(chars))") // LEANKEYS-HOOK: debug-log
             sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
             return nil
         }
@@ -1742,7 +1742,7 @@ private func keyboardCallback(
             if let (bs, chars, keyConsumed) = RustBridge.processKey(
                 keyCode: keyCode, caps: caps, ctrl: true, shift: shift, char: char
             ) {
-                Log.key(keyCode, "option: bs=\(bs) chars='\(String(chars))' char='\(char)' consumed=\(keyConsumed)")
+                Log.key(keyCode, "option: bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed)") // LEANKEYS-HOOK: debug-log
                 sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
                 return nil
             }
@@ -1752,7 +1752,7 @@ private func keyboardCallback(
     }
 
     if let (bs, chars, keyConsumed) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
-        Log.key(keyCode, "bs=\(bs) chars='\(String(chars))' consumed=\(keyConsumed)")
+        Log.key(keyCode, "bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed)") // LEANKEYS-HOOK: debug-log
         sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
 
         // Break keys (punctuation, not space): pass through or post synthetically
@@ -2131,7 +2131,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
 
 private func sendReplacement(backspace bs: Int, chars: [Character], method: InjectionMethod, delays: (UInt32, UInt32, UInt32), proxy: CGEventTapProxy) {
     let str = String(chars)
-    Log.info("inject: bs=\(bs) text='\(str)' method=\(method) delays=\(delays)")
+    Log.info("inject: bs=\(bs) text=\(DebugLog.redact(chars)) method=\(method) delays=\(delays)") // LEANKEYS-HOOK: debug-log
 
     // Use TextInjector for synchronized text injection
     TextInjector.shared.injectSync(bs: bs, text: str, method: method, delays: delays, proxy: proxy)

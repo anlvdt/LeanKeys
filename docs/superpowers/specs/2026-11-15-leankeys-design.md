@@ -628,3 +628,17 @@ Thêm ngày 2026-11-16 theo yêu cầu người dùng. Áp dụng cho cả hai e
   - gõ `nguyenvana` vào ô Email/Username của một trang đăng nhập trên Safari: giữ nguyên chữ;
   - gõ vào một máy Windows qua MacViewer, TeamViewer hay AnyDesk: chữ do bộ gõ bên Windows xử lý, không bị bỏ dấu hai lần;
   - mật khẩu gõ ở dấu nhắc `sudo` trong Terminal không xuất hiện trong gợi ý gõ tắt.
+
+### 18.2 Nhật ký debug không lộ chữ gõ
+
+Thêm ngày 2026-11-16 sau đánh giá toàn bộ ứng dụng. Gõ Nhanh gốc ghi nhật ký phím vào `/tmp/gonhanh_debug.log` mỗi khi tệp đó tồn tại, kèm từng ký tự và mã phím. `/tmp` dùng chung cho mọi người dùng và mọi tiến trình, nên bất kỳ chương trình nào trên máy cũng bật được nhật ký và đọc được những gì người dùng gõ, kể cả trong ô đăng nhập dạng văn bản thường, mà không cần quyền Accessibility.
+
+LeanKeys:
+- giữ nhật ký trong `~/Library/Logs/LeanKeys/debug.log` (thư mục 0700, tệp 0600), bật và tắt từ Cài đặt nâng cao như trước (`DebugLog` trong LeanKeysKit);
+- không bao giờ ghi ký tự đã gõ hay văn bản được chèn: chỉ ghi độ dài, dạng `<3>`;
+- không ghi mã phím của phím ký tự (chữ, số, dấu): ghi `char`; chỉ phím điều khiển (Return, Enter, Tab, Space, ⌫, Esc, xoá xuôi, mũi tên, Home, End, Page Up, Page Down) giữ mã;
+- không đụng tới `/tmp/gonhanh_debug.log` có sẵn (có thể là của một bản Gõ Nhanh cài riêng).
+
+Điều còn lại, chấp nhận: nhật ký vẫn cho thấy nhịp gõ và độ dài từ, vì không có chúng nhật ký không còn dùng được để tìm lỗi.
+
+`tests/privacy/test_debug_log.sh` (bước 5 của `.githooks/pre-push`) chặn mọi lần đồng bộ bản gốc đưa lại đường dẫn `/tmp` hay dòng nhật ký ghi chữ gõ. Thử tay: mục K4 trong `sync/manual-checklist.md`.
