@@ -561,12 +561,12 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 **17.1.3 Tên tự học.** LeanKeys đếm các từ người dùng **tự gõ hoa bằng Shift hoặc Caps Lock** ở giữa câu. Từ đầu câu, từ viết hoa toàn bộ, từ một chữ cái, và từ do chính LeanKeys viết hoa đều không tính.
 - **Học "sau từ xưng hô":** từ được gõ hoa ngay sau một từ xưng hô (anh, chị, em, ông, bà, cô, chú, bác, thầy, sếp, dì, cậu) từ 2 lần trở lên. Lần sau, khi từ đó được gõ thường ngay sau một từ xưng hô, nó được viết hoa ("anh hùng" → "anh Hùng").
 - **Học "mọi nơi":** từ được gõ hoa giữa câu từ 2 lần trở lên mà không phải từ tiếng Việt hay tiếng Anh có thật (`lk_vikey_word_score` của cả hai ngôn ngữ đều là `LK_VIKEY_NOT_A_WORD`, xét trên các chữ ASCII của từ). Lần sau, từ đó được viết lại đúng dạng đã học ở mọi nơi ("shopee" → "Shopee", "chatgpt" → "ChatGPT").
-- **Lưu trữ:** trước khi đạt 2 lần chỉ lưu HMAC-SHA256 của từ (khoá HMAC của 4B) kèm số lần. Đạt ngưỡng thì mới lưu dạng chữ. Dữ liệu nằm cùng file với luật 4C (`undo-rules.bin`, mã hoá). Giới hạn 2.000 tên, bỏ tên lâu không dùng nhất (LRU).
+- **Lưu trữ:** trước khi đạt 2 lần chỉ lưu HMAC-SHA256 của từ (khoá HMAC lấy từ Keychain như 4B) kèm số lần. Đạt ngưỡng thì mới lưu dạng chữ. File riêng `~/Library/Application Support/LeanKeys/learned-names.bin` (quyền 0600, AES-GCM, dùng `KeychainEncryptedFileStore` với mục Keychain `io.github.anlvdt.leankeys.names`). Giới hạn 2.000 tên, bỏ tên lâu không dùng nhất (LRU).
 - **Không học** trong Secure Input, ô mật khẩu, và các app bị loại trừ (mục 11.1).
 
 **17.1.4 Hoàn tác.** Nếu người dùng bấm ⌫ ngay sau một lần tự viết hoa (phím đầu tiên sau phím ngắt):
 - Chữ trở lại đúng như đã gõ, chỉ mất phím ngắt, giống 4C.
-- LeanKeys lưu luật "không viết hoa cụm này sau từ đứng trước này". Luật nằm cùng sổ với 4C và hiện trong danh sách "Từ đã học".
+- LeanKeys lưu luật "không viết hoa cụm này sau từ đứng trước này" vào sổ luật của 4C (`UndoRuleBook`, chữ có tiền tố `cap:` để không lẫn với luật 4C). Luật có từ đứng trước được dùng ngay sau 1 lần hoàn tác, luật không có từ đứng trước sau 2 lần, như 4C. Danh sách "Từ đã học" hiện luật này với nhãn "(viết hoa)".
 - Tên tự học bị hoàn tác 2 lần ở bất kỳ đâu thì bị xoá khỏi danh sách tên.
 
 ### 17.2 Bỏ ký tự gõ dính khi Enter
