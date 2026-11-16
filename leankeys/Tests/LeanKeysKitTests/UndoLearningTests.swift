@@ -226,6 +226,71 @@ final class UndoLearningTests: XCTestCase {
         return String(text)
     }
 
+    // MARK: Settings card (spec 17.3)
+
+    /// Fake learned names, memory only: every word counts as a name anywhere.
+    private func fakeNames() -> LearnedNames {
+        LearnedNames(store: nil, hmacKey: nil, titles: [], isDictionaryWord: { _ in false })
+    }
+
+    func testNamesArePublishedAndRemovable() {
+        let names = fakeNames()
+        let learning = UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults,
+                                    context: { [unowned self] in self.context }, names: names)
+        self.learning = learning
+        XCTAssertEqual(learning.names, [])
+        names.observe(word: "Lan", previous: "chị")
+        names.observe(word: "Lan", previous: "chị")
+        settle(learning)
+        XCTAssertEqual(learning.names.map(\.form), ["Lan"])
+        learning.remove(learning.names[0])
+        settle(learning)
+        XCTAssertEqual(learning.names, [])
+        XCTAssertNil(names.name(after: nil, word: "lan"))
+    }
+
+    func testRemoveAllEmptiesRulesAndNames() {
+        let names = fakeNames()
+        let book = UndoRuleBook(store: nil)
+        let learning = UndoLearning(book: book, defaults: defaults, context: { [unowned self] in self.context },
+                                    names: names)
+        self.learning = learning
+        book.record(before: "cap:hà nội", previous: "ở", reverse: false)
+        names.observe(word: "Lan", previous: nil)
+        names.observe(word: "Lan", previous: nil)
+        settle(learning)
+        XCTAssertEqual(learning.rules.count, 1)
+        XCTAssertEqual(learning.names.count, 1)
+        learning.removeAll()
+        settle(learning)
+        XCTAssertEqual(learning.rules, [])
+        XCTAssertEqual(learning.names, [])
+        XCTAssertEqual(book.rules, [])
+        XCTAssertEqual(names.names, [])
+    }
+
+    func testCapitalizationRuleDisplayText() {
+        let date = Date(timeIntervalSince1970: 0)
+        XCTAssertEqual(UndoLearningSection.displayText(UndoRule(text: "cap:hà nội", previous: "", count: 1,
+                                                                lastUsed: date)), "hà nội (viết hoa)")
+        XCTAssertEqual(UndoLearningSection.displayText(UndoRule(text: "its", previous: "about", count: 1,
+                                                                lastUsed: date)), "its")
+    }
+
+    func testCapitalizeAndStrayEnterDefaultOnAndPersist() {
+        let learning = makeLearning()
+        XCTAssertTrue(learning.autoCapitalize)
+        XCTAssertTrue(learning.strayEnter)
+        learning.autoCapitalize = false
+        learning.strayEnter = false
+        XCTAssertEqual(defaults.object(forKey: "LeanKeys.autoCapitalize") as? Bool, false)
+        XCTAssertEqual(defaults.object(forKey: "LeanKeys.strayEnter") as? Bool, false)
+        let reloaded = UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults,
+                                    context: { [unowned self] in self.context })
+        XCTAssertFalse(reloaded.autoCapitalize)
+        XCTAssertFalse(reloaded.strayEnter)
+    }
+
     func testDefaultsOnWhenUnset() {
         let learning = makeLearning()
         XCTAssertTrue(learning.learning)

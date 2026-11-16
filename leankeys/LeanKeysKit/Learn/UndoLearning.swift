@@ -64,6 +64,9 @@ public final class UndoLearning: ObservableObject {
     /// Names learned from the user's own capitals (spec 17.1.3).
     public let learnedNames: LearnedNames
 
+    /// `learnedNames.names` for the settings card (spec 17.3), most recently used first; updated on main.
+    @Published public private(set) var names: [LearnedName]
+
     private let book: UndoRuleBook
     private let defaults: UserDefaults
     private let context: () -> LearnContext
@@ -82,6 +85,7 @@ public final class UndoLearning: ObservableObject {
         self.defaults = defaults
         self.context = context
         learnedNames = names
+        self.names = names.names
         rules = book.rules
         doubleKeyFix = defaults.object(forKey: Self.doubleKeyFixKey) as? Bool ?? true
         learning = defaults.object(forKey: Self.learningKey) as? Bool ?? true
@@ -90,6 +94,10 @@ public final class UndoLearning: ObservableObject {
         book.onChange = { [weak self] in
             guard let self else { return }
             rules = self.book.rules
+        }
+        names.onChange = { [weak self] in
+            guard let self else { return }
+            self.names = self.learnedNames.names
         }
     }
 
@@ -159,12 +167,19 @@ public final class UndoLearning: ObservableObject {
 
     public func remove(_ rule: UndoRule) { book.remove(rule) }
 
-    public func removeAll() { book.removeAll() }
+    public func remove(_ name: LearnedName) { learnedNames.remove(name) }
+
+    /// "Xoá tất cả" (spec 17.3): every rule, capitalisation rules included, and every learned name.
+    public func removeAll() {
+        book.removeAll()
+        learnedNames.removeAll()
+    }
 
     /// Waits for queued records and the saves they started, for tests.
     func flush() {
         recordQueue.sync {}
         book.flush()
+        learnedNames.flush()
     }
 
     private func isExcluded(_ context: LearnContext) -> Bool {

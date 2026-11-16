@@ -5,6 +5,9 @@ import Foundation
 ///
 /// Single-threaded, like the router (the key-handling thread). Nothing typed is logged or kept beyond `last`.
 final class AutoCapitalizer {
+    /// Marks a capitalisation undo in the 4C rule book: `rulePrefix` + the lowercased phrase.
+    static let rulePrefix = "cap:"
+
     /// A capitalisation to make: replace `original` (the last characters before the cursor) with `capitalized`.
     struct Replacement: Equatable {
         /// The affected words with what separates them, as on screen.
@@ -55,7 +58,7 @@ final class AutoCapitalizer {
 
         let first = words.count - capitalization.wordCount
         let affected = Array(words[first...])
-        let rule = "cap:" + affected.joined(separator: " ").lowercased()
+        let rule = Self.rulePrefix + affected.joined(separator: " ").lowercased()
         let previous = first > 0 ? words[first - 1].lowercased() : ""
         guard !keepsLowercase(rule, previous) else { return nil }
 
