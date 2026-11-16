@@ -216,6 +216,48 @@ final class UndoRuleBookTests: XCTestCase {
     }
 }
 
+extension UndoRuleBookTests {
+    // MARK: Security audit MEDIUM-4
+
+    /// A secret-shaped word is never recorded, and is never kept as the context of another.
+    func testSecretShapedWordsAreNotRecorded() {
+        let b = book()
+        b.record(before: "Matkhau2024", previous: "", reverse: false)
+        b.record(before: "Matkhau2024", previous: "", reverse: false)
+        b.record(before: "cos", previous: "P4ssw0rd!", reverse: false)
+        XCTAssertFalse(b.shouldKeep(before: "matkhau2024", previous: "x"))
+        XCTAssertEqual(b.rules.map(\.previous), [])
+        b.record(before: "cos", previous: "P4ssw0rd!", reverse: false)
+        XCTAssertEqual(b.rules.map { [$0.previous, $0.text] }, [["", "cos"]])
+    }
+
+    /// Rules saved before this check are purged when the book loads, and the file is rewritten without them. A
+    /// capitalisation phrase is judged word by word: "cap:hà nội" is no secret.
+    func testSecretShapedRulesArePurgedOnLoad() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let rules = [
+            UndoRule(text: "hunter2hunter2", previous: "", count: 3, lastUsed: date),
+            UndoRule(text: "its", previous: "abc@12345", count: 1, lastUsed: date),
+            UndoRule(text: "its", previous: "about", count: 1, lastUsed: date),
+            UndoRule(text: "cap:hà nội", previous: "ở", count: 1, lastUsed: date),
+            UndoRule(text: "cap:abc@12345 nội", previous: "", count: 2, lastUsed: date),
+        ]
+        let json = try JSONSerialization.data(withJSONObject: [
+            "v": 1, "blocked": ["matkhau2024": 2, "car": 1],
+            "rules": rules.map { ["text": $0.text, "previous": $0.previous, "count": $0.count,
+                                  "lastUsed": $0.lastUsed.timeIntervalSinceReferenceDate] },
+        ])
+        let store = InMemoryStore(json)
+        let b = book(store)
+        XCTAssertEqual(Set(b.rules.map { $0.previous + "|" + $0.text }), ["about|its", "ở|cap:hà nội"])
+        b.flush()
+        XCTAssertEqual(store.saves, 1, "the purge is written back at once")
+        let saved = String(decoding: store.saved ?? Data(), as: UTF8.self)
+        for secret in ["hunter2hunter2", "abc@12345", "matkhau2024"] { XCTAssertFalse(saved.contains(secret), secret) }
+        XCTAssertTrue(saved.contains("car"))
+    }
+}
+
 /// The real store, with a Keychain service used only here. Items are deleted in tearDown.
 final class UndoRuleBookKeychainTests: XCTestCase {
     private var service: String!

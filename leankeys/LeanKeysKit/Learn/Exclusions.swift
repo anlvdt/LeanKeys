@@ -18,9 +18,15 @@ public enum Exclusions {
 
     /// Apps never learned from, by default.
     public static let defaultBundleIDs: Set<String> = passwordManagers
-    // Terminals: sudo, ssh and git ask for passwords there without Secure Input or a secure text field. The one
-    // list `CodeApps` keeps (task 4 review minor 8).
-    .union(CodeApps.terminals)
+    // Terminals and code editors: sudo, ssh and git ask for passwords there without Secure Input or a secure text
+    // field, in an editor's integrated terminal too (security audit MEDIUM-4). The one list `CodeApps` keeps (task 4
+    // review minor 8).
+    .union(CodeApps.bundleIDs)
+
+    /// `defaultBundleIDs`, plus the JetBrains IDEs `CodeApps` matches by prefix.
+    public static func isExcludedByDefault(_ bundleID: String) -> Bool {
+        defaultBundleIDs.contains(bundleID) || CodeApps.contains(bundleID)
+    }
 
     /// A word shaped like a password or key: at least 6 characters (sentence punctuation at its ends aside) mixing
     /// letters with digits ("hunter2hunter2", "Matkhau2024"), or using a symbol people put in passwords

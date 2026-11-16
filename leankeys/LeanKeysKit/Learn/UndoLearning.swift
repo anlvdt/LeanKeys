@@ -249,7 +249,7 @@ public final class UndoLearning: ObservableObject {
     private func isExcluded(_ context: LearnContextProbe) -> Bool {
         if context.secureInput { return true }
         guard let bundleID = context.bundleID else { return false }
-        return Exclusions.defaultBundleIDs.contains(bundleID)
+        return Exclusions.isExcludedByDefault(bundleID)
             || (defaults.stringArray(forKey: ShortcutSuggestionsModel.excludedAppsKey) ?? []).contains(bundleID)
     }
 }

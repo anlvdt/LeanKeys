@@ -97,7 +97,7 @@ final class PhraseLearnerTests: XCTestCase {
         observe(text, times: 3, ctx(secureInput: true))
         observe(text, times: 3, ctx(secureField: true))
         for bundle in ["com.1password.1password", "com.bitwarden.desktop", "com.apple.keychainaccess",
-                       "com.apple.Passwords"] {
+                       "com.apple.Passwords", "com.microsoft.VSCode", "com.jetbrains.intellij"] {
             observe(text, times: 3, ctx(bundleID: bundle))
         }
         observe(text, times: 3, ctx(bundleID: nil))
