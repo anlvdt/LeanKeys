@@ -29,6 +29,9 @@ final class ProperNounRulesTests: XCTestCase {
         XCTAssertTrue(data.surnames.contains("quách"))
         XCTAssertFalse(data.placeCues.contains("về"), "ruling R11: \"bàn về hòa bình\"")
         XCTAssertEqual(data.placeNotAfter["nhật bản"], ["cập"])
+        XCTAssertEqual(Set(data.placeCues), ["tỉnh", "thành phố", "tp", "ở", "tại", "quê", "người"],
+                       "ruling R15: strong cues only, no motion verbs")
+        XCTAssertEqual(data.givenNameNotAfter["quốc"], ["vương"])
     }
 
     func testPlaces() {
@@ -120,6 +123,23 @@ final class ProperNounRulesTests: XCTestCase {
         XCTAssertEqual(cap(["gặp", "Quách", "tuấn"]), expect(2, ["Quách", "Tuấn"]), "a capitalised surname still")
     }
 
+    /// Ruling R15: an ambiguous place takes a strong cue only, never a motion verb; "vương quốc" is a common noun.
+    func testStrongCuesAndVuongQuoc() {
+        for verb in ["đến", "đi", "từ", "ra", "vào", "về"] {
+            XCTAssertNil(cap([verb, "hòa", "bình"]), verb)
+            XCTAssertNil(cap(["đi", verb, "thái", "bình"]), verb)
+        }
+        for cue in [["tỉnh"], ["thành", "phố"], ["tp"], ["ở"], ["tại"], ["quê"], ["người"]] {
+            XCTAssertEqual(cap(cue + ["thái", "bình"]), expect(2, ["Thái", "Bình"]), "\(cue)")
+        }
+        // Unambiguous places still follow anything.
+        XCTAssertEqual(cap(["đi", "đến", "hà", "nội"]), expect(2, ["Hà", "Nội"]))
+        XCTAssertNil(cap(["sống", "ở", "Vương", "quốc"]))
+        XCTAssertNil(cap(["sống", "ở", "vương", "quốc"]))
+        XCTAssertNil(cap(["sống", "ở", "Vương", "quốc", "Anh", "hùng"]))
+        XCTAssertEqual(cap(["gặp", "Vương", "an"]), expect(2, ["Vương", "An"]), "other given names still follow")
+    }
+
     /// Ruling R14 (M4): only the last few words are read, so a long run answers as a short one.
     func testLongRunReadsOnlyItsTail() {
         let filler = Array(repeating: "và", count: 300)
@@ -182,7 +202,8 @@ final class AutoCapitalizerSentenceTests: XCTestCase {
             "Thái bình thì ai cũng mong.", "Em vừa cập nhật bản mới.", "Nhớ lưu văn bản nhé.", "Thôi bỏ quách đi.",
             "Anh ấy rất trịnh trọng.", "Phòng dùng đèn huỳnh quang.", "Ông ấy ở hiệp hội an ninh mạng.",
             "Ai cũng muốn một xã hội an toàn.", "Chúng ta bàn về hòa bình.", "Anh ấy là anh hùng.",
-            "Ừ, mai anh qua.",
+            "Ừ, mai anh qua.", "Đi đến hòa bình cần kiên nhẫn.", "Tôi từng sống ở Vương quốc Anh vài năm.",
+            "Họ đi từ vương quốc Anh sang.",
         ] {
             XCTAssertEqual(retype(sentence), sentence)
         }

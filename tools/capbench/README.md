@@ -13,7 +13,7 @@ C=vendor/vikey/Tools/autoswitch/sim/corpus
 python3 tools/capbench/capbench.py $C/chat_messages.txt $C/synthetic_val.txt
 ```
 
-Then `negatives.txt` (55 ordinary sentences with correct casing, including the ones the final review found) is
+Then `negatives.txt` (59 ordinary sentences with correct casing, including the ones the final review found) is
 retyped **as written**, sentence-initial capitals included, with the fixed rules. Any word the rules change there is
 an FP. This catches what the lowercased replay cannot: a sentence-initial capital taken as a name cue
 (`Mai anh đi đâu thế`), and ordinary phrases that hold a list entry (`cập nhật bản mới`, `xã hội an toàn`).
@@ -29,10 +29,11 @@ The script exits 1 when the fixed rules make any wrong capital, on the corpora o
 | --- | --- | --- | --- |
 | Fixed (spec §17.1.1–17.1.2) | 302 | 0 | 1166 |
 | Fixed + learned names (§17.1.3 simulation) | 777 | 2 | 691 |
-| Negatives, fixed rules, retyped as written | – | 0 (39 before ruling R11) | – |
+| Negatives, fixed rules, retyped as written | – | 0 (39 before ruling R11; 5 on the 59 lines before R15) | – |
 
 Ruling R11 (a phrase-initial capital is no name cue, the middle-name rule needs a sure or capitalised surname, only
-`nguyễn` is a sure surname, `về` is no place cue, `placeNotAfter` guards) left the two corpora's numbers unchanged.
+`nguyễn` is a sure surname, `về` is no place cue, `placeNotAfter` guards) and ruling R15 (strong place cues only, no `quốc` given name after `vương`) left the two
+corpora's numbers unchanged.
 
 - The 2 learned-run FPs are `FOMO`, which is all caps in the original. The app never learns all-caps words.
 - `Tết` is not in the list. The corpus writes `tết` in lowercase 11 times, so adding it gave FP 11. It is left out per spec §17.1.1.

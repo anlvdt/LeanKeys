@@ -15,13 +15,17 @@ public struct ProperNounData: Decodable {
     public let sureSurnames: [String]
     public let middleNames: [String]
     public let givenNames: [String]
+    /// Given names that are not capitalised right after one of these words, which make them a common noun
+    /// ("vương quốc", a kingdom). Keys are lowercase given names.
+    public let givenNameNotAfter: [String: [String]]
     /// Forms of address; learned names (§17.1.3) may be tied to them.
     public let titles: [String]
     public let singleWords: [String]
 
     public init(places: [String] = [], ambiguousPlaces: [String] = [], placeCues: [String] = [],
                 placeNotAfter: [String: [String]] = [:], surnames: [String] = [], sureSurnames: [String] = [], middleNames: [String] = [],
-                givenNames: [String] = [], titles: [String] = [], singleWords: [String] = []) {
+                givenNames: [String] = [], givenNameNotAfter: [String: [String]] = [:], titles: [String] = [],
+                singleWords: [String] = []) {
         self.places = places
         self.ambiguousPlaces = ambiguousPlaces
         self.placeCues = placeCues
@@ -30,6 +34,7 @@ public struct ProperNounData: Decodable {
         self.sureSurnames = sureSurnames
         self.middleNames = middleNames
         self.givenNames = givenNames
+        self.givenNameNotAfter = givenNameNotAfter
         self.titles = titles
         self.singleWords = singleWords
     }
@@ -73,6 +78,7 @@ public struct ProperNounRules {
     private let sureSurnames: Set<String>
     private let middleNames: Set<String>
     private let givenNames: Set<String>
+    private let givenNotAfter: [String: Set<String>]
     private let learned: LearnedNameLookup?
 
     public init(data: ProperNounData = .bundled, learned: LearnedNameLookup? = nil) {
@@ -87,6 +93,8 @@ public struct ProperNounRules {
         sureSurnames = Set(data.sureSurnames.map(Self.key))
         middleNames = Set(data.middleNames.map(Self.key))
         givenNames = Set(data.givenNames.map(Self.key))
+        givenNotAfter = Dictionary(data.givenNameNotAfter.map { (Self.key($0.key), Set($0.value.map(Self.key))) },
+                                   uniquingKeysWith: { $0.union($1) })
         self.learned = learned
     }
 
@@ -147,6 +155,8 @@ public struct ProperNounRules {
         let p1 = i >= 1 ? out[i - 1] : nil
         let p1Key = i >= 1 ? keys[i - 1] : nil
         let p2Key = i >= 2 ? keys[i - 2] : nil
+        // Not a given name where the word before makes a common noun of it ("vương quốc", a kingdom).
+        let isGivenName = givenNames.contains(word) && givenNotAfter[word]?.contains(p1Key ?? "") != true
         // A capital on screen that marks a name: not the phrase's first word's, which is sentence case ("Mai anh đi
         // đâu"), unless that word is a sure surname.
         func marked(_ k: Int) -> Bool {
@@ -159,10 +169,10 @@ public struct ProperNounRules {
             out[i - 1] = Self.capitalized(out[i - 1]); out[i] = Self.capitalized(out[i]); first = min(first, i - 1)
         } else if let p1Key, let p2Key, marked(i - 1), middleNames.contains(p1Key), surnames.contains(p2Key) {
             out[i] = Self.capitalized(out[i]); first = min(first, i)
-        } else if givenNames.contains(word), let p1Key, surnames.contains(p1Key),
+        } else if isGivenName, let p1Key, surnames.contains(p1Key),
                   sureSurnames.contains(p1Key) || marked(i - 1) {
             out[i - 1] = Self.capitalized(out[i - 1]); out[i] = Self.capitalized(out[i]); first = min(first, i - 1)
-        } else if givenNames.contains(word), let p2Key, marked(i - 1), marked(i - 2),
+        } else if isGivenName, let p2Key, marked(i - 1), marked(i - 2),
                   surnames.contains(p2Key) || middleNames.contains(p2Key) {
             out[i] = Self.capitalized(out[i]); first = min(first, i)
         } else if words[i] == words[i].lowercased(),

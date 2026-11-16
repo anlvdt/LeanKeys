@@ -38,8 +38,9 @@ def load(path):
     n = lambda xs: {" ".join(key(w) for w in x.split()) for x in xs}
     places = {tuple(key(w) for w in p.split()) for p in d["places"] + d["singleWords"]}
     not_after = {" ".join(key(w) for w in p.split()): n(ws) for p, ws in d["placeNotAfter"].items()}
+    given_not_after = {key(w): n(ws) for w, ws in d["givenNameNotAfter"].items()}
     return dict(places=places, longest=max(len(k) for k in places), ambiguous=n(d["ambiguousPlaces"]),
-                cues=n(d["placeCues"]), not_after=not_after, surnames=n(d["surnames"]), sure=n(d["sureSurnames"]),
+                cues=n(d["placeCues"]), not_after=not_after, given_not_after=given_not_after, surnames=n(d["surnames"]), sure=n(d["sureSurnames"]),
                 middle=n(d["middleNames"]), given=n(d["givenNames"]), titles=n(d["titles"]))
 
 
@@ -103,6 +104,7 @@ def run(lines, D, learned=None, show=0, label="", as_typed=False):
             # Names.
             p1 = words[-2] if len(words) >= 2 else None
             p2 = words[-3] if len(words) >= 3 else None
+            given = kw in GIVEN and not (p1 is not None and key(out[p1]) in D["given_not_after"].get(kw, ()))
             if kw in SURE:
                 out[i] = cap(out[i])
             elif kw in MIDDLE and p1 is not None and key(out[p1]) in SURNAMES \
@@ -110,10 +112,10 @@ def run(lines, D, learned=None, show=0, label="", as_typed=False):
                 out[i] = cap(out[i]); out[p1] = cap(out[p1])
             elif p2 is not None and upper(p1) and key(out[p1]) in MIDDLE and key(out[p2]) in SURNAMES:
                 out[i] = cap(out[i])
-            elif kw in GIVEN and p1 is not None and key(out[p1]) in SURNAMES \
+            elif given and p1 is not None and key(out[p1]) in SURNAMES \
                     and (key(out[p1]) in SURE or upper(p1)):
                 out[i] = cap(out[i]); out[p1] = cap(out[p1])
-            elif kw in GIVEN and p2 is not None and upper(p1) and upper(p2) and key(out[p2]) in SURNAMES | MIDDLE:
+            elif given and p2 is not None and upper(p1) and upper(p2) and key(out[p2]) in SURNAMES | MIDDLE:
                 out[i] = cap(out[i])
             elif out[i] == low and low in learned.get("title", set()) and p1 is not None and key(out[p1]) in TITLES:
                 out[i] = cap(out[i])
