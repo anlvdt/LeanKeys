@@ -29,11 +29,12 @@ public struct LearnContextProbe: Equatable {
 /// - `probe()`, on the event-tap (main) thread, only while learning is on: the bundle ID and pid from
 ///   `NSWorkspace.frontmostApplication` (cached values, no IPC), `IsSecureEventInputEnabled()` (a cheap system flag)
 ///   and the time. Secure Input and excluded apps are decided from this, before anything is queued.
-/// - `isSecureField(_:)`, on the background queue that records the learning: the focused element's AX subrole. That
-///   is IPC to the app, which may be busy, so each of the two AX calls is capped at `axTimeout` seconds on its own
-///   element (`AXUIElementSetMessagingTimeout` on the system-wide element would change the timeout for every AX call
-///   in the process). Worst case 2 × 25 ms, off the key thread. A timeout or another AX error reads as "secure", so
-///   the observation is dropped rather than learned blind; an element that simply has no subrole is not secure.
+/// - `isSecureField(_:)`, on the background queue that records the learning: the focused element's AX attributes. That
+///   is IPC to the app, which may be busy, so each AX call is capped at `axTimeout` seconds on its own element
+///   (`AXUIElementSetMessagingTimeout` on the system-wide element would change the timeout for every AX call in the
+///   process). Worst case 3 × 25 ms, off the key thread. A timeout or another AX error reads as "secure", so the
+///   observation is dropped rather than learned blind. Sign-in fields typing passes keys through on
+///   (`KeyPassthrough.isCredentialField`) count as secure too.
 ///   The field is the one focused when the queue asks, a few milliseconds after the key.
 enum LearnContextReader {
     static let axTimeout: Float = 0.025
@@ -50,7 +51,8 @@ enum LearnContextReader {
         probe.secureInput || probe.pid.map { isSecureField(pid: $0) } ?? true
     }
 
-    /// True when the focused element is an `AXSecureTextField`, or when that cannot be told in time.
+    /// True when the focused element is a password or sign-in field (`KeyPassthrough.isCredentialField`: the same
+    /// test typing passes keys through on, security audit MEDIUM-2), or when that cannot be told in time.
     static func isSecureField(pid: pid_t) -> Bool {
         let appElement = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(appElement, axTimeout)
@@ -59,12 +61,13 @@ enum LearnContextReader {
         // No focused element (some apps expose none): not a secure field.
         if [.noValue, .attributeUnsupported, .notImplemented].contains(focusResult) { return false }
         guard focusResult == .success, let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return true }
-        let element = focused as! AXUIElement
-        AXUIElementSetMessagingTimeout(element, axTimeout)
-        var subrole: CFTypeRef?
-        let subroleResult = AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &subrole)
-        if [.noValue, .attributeUnsupported, .notImplemented].contains(subroleResult) { return false }
-        guard subroleResult == .success else { return true }
-        return (subrole as? String) == kAXSecureTextFieldSubrole
+        return isExcludedField(attributes: KeyPassthrough.readAttributes(focused as! AXUIElement))
+    }
+
+    /// Learning skips a field whose attributes could not be read (nil: error or timeout, fail closed), a password
+    /// field, and any field typing treats as a sign-in field.
+    static func isExcludedField(attributes: [String: String]?) -> Bool {
+        guard let attributes else { return true }
+        return KeyPassthrough.isCredentialField(attributes: attributes)
     }
 }

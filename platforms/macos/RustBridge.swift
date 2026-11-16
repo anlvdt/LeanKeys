@@ -2397,6 +2397,7 @@ class PerAppModeManager {
         EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch (R20: a phrase is never credited to the app switched to)
         RustBridge.clearBuffer()
         clearDetectionCache() // Clear injection method cache on app switch
+        KeyPassthrough.prepare(NSWorkspace.shared.frontmostApplication) // LEANKEYS-HOOK: engine-dispatch (audit M2: Electron sign-in fields readable)
 
         // Snapshot per-app profile for keystroke hot path (thread-safe read)
         DetectionCache.activeProfile = AppState.shared.advancedMode ? AppState.shared.perAppProfiles[bundleId] : nil

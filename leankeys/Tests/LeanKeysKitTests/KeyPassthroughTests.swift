@@ -5,7 +5,7 @@ import XCTest
 final class KeyPassthroughTests: XCTestCase {
     private func field(_ role: String = "AXTextField", subrole: String? = nil, placeholder: String? = nil,
                        description: String? = nil, title: String? = nil, identifier: String? = nil,
-                       dom: String? = nil) -> [String: String] {
+                       dom: String? = nil, help: String? = nil, label: String? = nil) -> [String: String] {
         var a: [String: String] = [kAXRoleAttribute as String: role]
         a[kAXSubroleAttribute as String] = subrole
         a[kAXPlaceholderValueAttribute as String] = placeholder
@@ -13,6 +13,8 @@ final class KeyPassthroughTests: XCTestCase {
         a[kAXTitleAttribute as String] = title
         a[kAXIdentifierAttribute as String] = identifier
         a["AXDOMIdentifier"] = dom
+        a[kAXHelpAttribute as String] = help
+        a[KeyPassthrough.titleLabelKey] = label
         return a
     }
 
@@ -63,5 +65,64 @@ final class KeyPassthroughTests: XCTestCase {
         XCTAssertFalse(KeyPassthrough.containsWord("shopping", "pin"))
         XCTAssertTrue(KeyPassthrough.containsWord("user_password", "password"))
         XCTAssertTrue(KeyPassthrough.containsWord("đăng nhập bằng email", "đăng nhập"))
+    }
+
+    // MARK: Security audit MEDIUM-2
+
+    func testCamelCaseAndConcatenatedIdentifiersAreCredentials() {
+        let cases: [[String: String]] = [
+            field(identifier: "txtPassword"),
+            field(dom: "passwordInput"),
+            field(identifier: "loginEmail"),
+            field(dom: "userPin"),
+            field(identifier: "otpCode"),
+            field(dom: "identifierId"),              // Google's sign-in box
+            field(identifier: "userpassword"),
+            field(dom: "useremail"),
+            field(identifier: "txt.Username"),
+        ]
+        for a in cases { XCTAssertTrue(KeyPassthrough.isCredentialField(attributes: a), "\(a)") }
+    }
+
+    func testMoreWordsAreCredentials() {
+        let labels = ["Tên người dùng", "Ten nguoi dung", "Mã xác thực", "Xác thực", "Mã xác minh", "Mã bảo mật",
+                      "Mật mã", "Mã kích hoạt", "Verification code", "Verify", "Security code", "2FA", "Authenticator",
+                      "Token", "Passphrase", "Secret", "CVV", "CVC", "Số điện thoại", "So dien thoai", "SĐT", "SDT",
+                      "Phone", "Mobile number"]
+        for label in labels {
+            XCTAssertTrue(KeyPassthrough.isCredentialField(attributes: field(placeholder: label)), label)
+        }
+    }
+
+    func testDecomposedLabelMatches() {
+        let nfd = "Mật khẩu".decomposedStringWithCanonicalMapping
+        XCTAssertTrue(KeyPassthrough.isCredentialField(attributes: field(placeholder: nfd)))
+    }
+
+    func testHelpAndLinkedLabelAreRead() {
+        XCTAssertTrue(KeyPassthrough.isCredentialField(attributes: field(help: "Enter your password")))
+        XCTAssertTrue(KeyPassthrough.isCredentialField(attributes: field(label: "Tên người dùng:")))
+        XCTAssertFalse(KeyPassthrough.isCredentialField(attributes: field(label: "Ghi chú")))
+    }
+
+    func testOrdinaryIdentifiersTypeNormally() {
+        let cases: [[String: String]] = [
+            field(identifier: "shippingAddress"),     // "pin" only inside a word
+            field(dom: "searchField"),
+            field(identifier: "messageInput"),
+            field(dom: "hotpotMenu"),                 // "otp" only inside a word
+            field(placeholder: "Tokenize text"),
+            field(identifier: "composeBody"),
+        ]
+        for a in cases { XCTAssertFalse(KeyPassthrough.isCredentialField(attributes: a), "\(a)") }
+    }
+
+    func testLearningSkipsCredentialFieldsAndUnreadableOnes() {
+        XCTAssertTrue(LearnContextReader.isExcludedField(attributes: nil))      // timeout or AX error
+        XCTAssertTrue(LearnContextReader.isExcludedField(attributes: field(subrole: "AXSecureTextField")))
+        XCTAssertTrue(LearnContextReader.isExcludedField(attributes: field(placeholder: "Email")))
+        XCTAssertTrue(LearnContextReader.isExcludedField(attributes: field(placeholder: "Số điện thoại")))
+        XCTAssertFalse(LearnContextReader.isExcludedField(attributes: field(placeholder: "Nhập tin nhắn")))
+        XCTAssertFalse(LearnContextReader.isExcludedField(attributes: [:]))     // no attributes: an ordinary element
     }
 }
