@@ -540,7 +540,7 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 
 **Thời điểm.** Khi một từ được chốt bằng phím cách hoặc dấu câu, LeanKeys xét các từ vừa gõ trong `TextMirror` (cùng cụm, không vượt qua dấu câu). Nếu khớp một quy tắc, LeanKeys thay các từ đó bằng dạng viết hoa: xoá N ký tự rồi gõ lại, phím ngắt vẫn đi như thường. Gõ tắt (4B) vẫn được xét trước.
 
-**Không viết hoa trong terminal và trình soạn code** (cùng một danh sách app với 17.2, ruling R12): ở đó chữ là lệnh hay mã, phân biệt hoa thường (tên nhánh, đường dẫn, tên biến), và trong terminal lệnh chạy ngay khi Enter nên không kịp ⌫.
+**Không viết hoa trong terminal và trình soạn code** (cùng một danh sách app với 17.2, ruling R12): ở đó chữ là lệnh hay mã, phân biệt hoa thường (tên nhánh, đường dẫn, tên biến), và trong terminal lệnh chạy ngay khi Enter nên không kịp ⌫. Cũng không viết hoa một từ dính với ký hiệu (`an@tiki.vn`, `~/tiki/`, `#tiki`, `ten-tiki`): chỉ xét từ gồm toàn chữ và số (ruling R13).
 
 **17.1.1 Địa danh.** Một cụm 1–4 từ, khớp không phân biệt hoa thường, trong danh sách sau được viết hoa từng âm tiết:
 - 34 tỉnh, thành sau sắp xếp 2025: Hà Nội, Huế, Lai Châu, Điện Biên, Sơn La, Lạng Sơn, Quảng Ninh, Thanh Hóa, Nghệ An, Hà Tĩnh, Cao Bằng, Tuyên Quang, Lào Cai, Thái Nguyên, Phú Thọ, Bắc Ninh, Hưng Yên, Hải Phòng, Ninh Bình, Quảng Trị, Đà Nẵng, Quảng Ngãi, Gia Lai, Khánh Hòa, Lâm Đồng, Đắk Lắk, Hồ Chí Minh, Đồng Nai, Tây Ninh, Cần Thơ, Vĩnh Long, Đồng Tháp, Cà Mau, An Giang.

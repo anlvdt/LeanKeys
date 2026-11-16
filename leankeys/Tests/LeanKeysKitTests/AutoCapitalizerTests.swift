@@ -9,8 +9,10 @@ import VikeyShim
 private let macKey: [Character: UInt16] = [
     "a": 0, "b": 11, "c": 8, "d": 2, "e": 14, "f": 3, "g": 5, "h": 4, "i": 34, "j": 38, "k": 40, "l": 37, "m": 46,
     "n": 45, "o": 31, "p": 35, "q": 12, "r": 15, "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7, "y": 16, "z": 6,
-    " ": 49, ",": 43, ".": 47, "⌫": 51, "\n": 36,
+    " ": 49, ",": 43, ".": 47, "⌫": 51, "\n": 36, "/": 44, "-": 27,
 ]
+/// Symbols typed with Shift: Shift+2, Shift+3, Shift+` (US layout).
+private let shiftedMacKey: [Character: UInt16] = ["@": 19, "#": 20, "~": 50]
 
 /// A text field fed by `router.intercept`, applying each result the way the macOS key handler does: the key itself
 /// is typed when the result is nil, or when it is not consumed (Return and punctuation after an edit).
@@ -24,8 +26,10 @@ private final class Field {
     @discardableResult
     func type(_ keys: String) -> String {
         for ch in keys {
-            guard let code = macKey[Character(ch.lowercased())] else { XCTFail("no mac key for \(ch)"); continue }
-            let upper = ch.isUppercase
+            guard let code = shiftedMacKey[ch] ?? macKey[Character(ch.lowercased())] else {
+                XCTFail("no mac key for \(ch)"); continue
+            }
+            let upper = ch.isUppercase || shiftedMacKey[ch] != nil
             switch router.intercept(keyCode: code, caps: upper, ctrl: false, shift: upper) {
             case .passToGoNhanh:
                 XCTFail("Vikey is the active engine")
@@ -272,6 +276,19 @@ final class AutoCapitalizerTests: XCTestCase {
         frontmost = "com.apple.TextEdit"
         XCTAssertEqual(line(router).type("tooi owr haf nooij "), "tôi ở Hà Nội ")
         XCTAssertEqual(line(router).type("mua tiki "), "mua Tiki ")
+    }
+
+    /// Ruling R13: a word glued to a symbol (an address, a path, a tag) is never capitalised, not even a learned name.
+    func testGluedWordsStayAsTyped() {
+        let router = makeRouter(names: permissiveNames())
+        line(router).type("mua Tiki ")
+        line(router).type("mua Tiki ")
+        XCTAssertEqual(line(router).type("mua tiki "), "mua Tiki ", "control: the name is learned")
+        XCTAssertEqual(line(router).type("an@tiki.vn "), "an@tiki.vn ")
+        XCTAssertEqual(line(router).type("cd ~/tiki/ "), "cd ~/tiki/ ")
+        XCTAssertEqual(line(router).type("xem #tiki "), "xem #tiki ")
+        XCTAssertEqual(line(router).type("xem @tiki "), "xem @tiki ")
+        XCTAssertEqual(line(router).type("ten-tiki "), "ten-tiki ")
     }
 
     func testSwitchOff() {

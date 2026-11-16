@@ -206,7 +206,9 @@ public final class EngineRouter {
         let userCapital: Bool
     }
 
-    /// nil when there is no whole word to commit, or it is glued to punctuation (`gov.vn`, `3.5`, `an@vidu.vn`).
+    /// nil when there is no whole word to commit, or it follows punctuation (`gov.vn`, `3.5`). A word glued to a
+    /// symbol that is no word break (`an@vidu`, `~/src`) is returned whole: learning reads it (`Ê-đê`), while
+    /// `capitalize` skips it.
     private func committedWord() -> CommittedWordContext? {
         guard capitalizer != nil else { return nil }
         let word = mirror.currentWord
@@ -227,7 +229,9 @@ public final class EngineRouter {
     /// Return and punctuation are typed by the key itself after the edit, as in `expandShortcut`.
     private func capitalize(_ committed: CommittedWordContext, keyCode: UInt16, shift: Bool,
                             caps: Bool) -> (Int, [Character], Bool)? {
-        guard committed.phraseText != restoredByUndo,
+        // Only a word of letters and digits: not one glued to a symbol, an address, a path or a tag
+        // (`an@tiki`, `~/tiki`, `#tiki`, `ten-tiki`; ruling R13).
+        guard committed.word.allSatisfy(TextMirror.isWordCharacter), committed.phraseText != restoredByUndo,
               let undoLearning, undoLearning.autoCapitalize, let capitalizer,
               let replacement = capitalizer.replacement(phraseText: committed.phraseText,
                                                         keepsLowercase: undoLearning.keepsLowercase),
