@@ -3,6 +3,7 @@
 Gõ mô phỏng từng câu bằng Telex qua engine thật của cả hai (người dùng **không bấm gì thêm**: không đổi ngôn ngữ, không ESC), rồi đếm số từ ra sai.
 
 ```sh
+cd tools/mixbench   # from the repository root
 P=../../vendor/vikey/Tools/autoswitch/sim
 E=../../vendor/vikey/Engine
 clang++ -std=c++17 -O2 -w -I$E -I$E/platforms -include cstring -o vk vk.cpp $E/Driver.cpp $E/Engine.cpp $E/Vietnamese.cpp $E/SmartSwitchKey.cpp
@@ -20,8 +21,8 @@ Tỉ lệ từ ra sai. Hai kiểu đặt dấu `hoà`/`hòa` đều tính là đ
 | Kho câu | Số từ | Gõ Nhanh (không auto-restore) | Gõ Nhanh (auto-restore) | Vikey (tự chuyển) |
 |---|---|---|---|---|
 | mine.txt (40 câu văn phòng/kỹ thuật, viết riêng) | 437 | 5.26% | 0.46% | **0.23%** |
-| Vikey chat_messages | 20,676 | 9.26% | 1.90% | **0.20%** |
-| Vikey synthetic_val | 87,038 | 11.32% | 3.50% | **0.13%** |
+| Vikey chat_messages | 20.676 | 9.26% | 1.90% | **0.20%** |
+| Vikey synthetic_val | 87.038 | 11.32% | 3.50% | **0.13%** |
 
 - Gõ Nhanh gần như không sai từ tiếng Việt (≤0.05%), nhưng sai 4–7% từ tiếng Anh (thêm dấu vào từ tiếng Anh).
 - Vikey sai 0.1–0.3% ở cả hai phía. Lỗi riêng của nó (12 trên chat, 21 trên synthetic) là các cặp từ trùng nhau giữa tiếng Anh và Telex: `cos/có`, `car/cả`, `sex/sẽ`, `nos/nó`, `its/ít`, `queen/quên`, `moon/môn`. Không có lỗi hệ thống nào kiểu một quy tắc sai.
@@ -40,6 +41,7 @@ Tỉ lệ từ ra sai. Hai kiểu đặt dấu `hoà`/`hòa` đều tính là đ
 - `vk` không đọc được đầu ra của `typo.py` (nó gửi `|` `^` thành phím có Shift và bỏ `` ` ``). Với văn bản sạch, `vk` và `lk --no-fix` cho đầu ra giống hệt từng byte trên cả hai kho.
 
 ```sh
+cd tools/mixbench   # from the repository root
 P=../../vendor/vikey/Tools/autoswitch/sim
 E=../../vendor/vikey/Engine
 S=../../leankeys/VikeyShim
@@ -57,10 +59,10 @@ done; done
 
 Số từ ra sai trên tổng số từ, kèm tỉ lệ sai ở phía bị chèn lỗi (VN hoặc EN). Vikey = `lk --no-fix`, LeanKeys = `lk`.
 
-| Lỗi rồi sửa bằng ⌫ | mine.txt (437 từ): Vikey | mine.txt: LeanKeys | chat_messages (20,676 từ): Vikey | chat_messages: LeanKeys |
+| Lỗi rồi sửa bằng ⌫ | mine.txt (437 từ): Vikey | mine.txt: LeanKeys | chat_messages (20.676 từ): Vikey | chat_messages: LeanKeys |
 |---|---|---|---|---|
 | Không có lỗi | 1 (VN 0.36% · EN 0.00%) | 1 (như cũ) | 41 (VN 0.15% · EN 0.25%) | 41 (như cũ) |
-| `dbl` phím dấu bấm đúp | 58 (VN 21.01%) | **1 (VN 0.36%)** | 2,143 (VN 18.89%) | **95 (VN 0.63%)** |
+| `dbl` phím dấu bấm đúp | 58 (VN 21.01%) | **1 (VN 0.36%)** | 2.143 (VN 18.89%) | **95 (VN 0.63%)** |
 | `extra` chữ thừa | 18 (VN 5.43%) | 18 (VN 5.43%) | 671 (VN 5.76%) | 641 (VN 5.50%) |
 | `mid` sai giữa từ | 15 (VN 5.43%) | 15 (VN 5.43%) | 529 (VN 4.50%) | 529 (VN 4.50%) |
 | `endbl` chữ cuối bấm đúp (EN) | 11 (EN 6.21%) | **5 (EN 2.48%)** | 738 (EN 7.37%) | **461 (EN 4.43%)** |
