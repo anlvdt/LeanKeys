@@ -227,6 +227,8 @@ final class AutoCapitalizerTests: XCTestCase {
         let open = permissiveNames()
         let strict = makeRouter(names: open)
         strict.setShortcuts([("hnn", "Hà Nội")])
+        // Documentation only (plan-mandated; no capital key is pressed, so they cannot fail). The recommitted
+        // "Nội" after ⌫ below is the case that discriminates.
         XCTAssertEqual(line(strict).type("tooi owr haf nooij "), "tôi ở Hà Nội ")
         XCTAssertEqual(line(strict).type("tooi owr haf nooij "), "tôi ở Hà Nội ")
         XCTAssertEqual(line(strict).type("ddi hnn "), "đi Hà Nội ")
@@ -329,6 +331,20 @@ final class AutoCapitalizerTests: XCTestCase {
         line(router).type("mua Shopee ")
         line(router).type("mua Shopee ")
         XCTAssertEqual(names.names.map(\.form), ["Shopee"], "control")
+    }
+
+    /// Task 3 review minor 7: learning reads "the word before" as capitalisation does, not across punctuation, so
+    /// "chị, Lan" does not count as a name after a title.
+    func testLearningPreviousStopsAtPunctuation() {
+        let names = LearnedNames(store: nil, hmacKey: nil, titles: Set(ProperNounData.bundled.titles),
+                                 isDictionaryWord: { _ in true })
+        let router = makeRouter(names: names)
+        line(router).type("chaof chij, Lan ")
+        line(router).type("chaof chij, Lan ")
+        XCTAssertTrue(names.names.isEmpty)
+        line(router).type("chaof chij Lan ")
+        line(router).type("chaof chij Lan ")
+        XCTAssertEqual(names.names.map(\.form), ["Lan"], "control: right after the title")
     }
 
     func testSwitchOff() {

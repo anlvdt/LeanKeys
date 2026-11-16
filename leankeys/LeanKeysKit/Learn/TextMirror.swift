@@ -41,7 +41,7 @@ public final class TextMirror {
     /// Sentence ends, which end the phrase, keep it.
     private var line: [Character] = []
     /// `line` starts at the line's start.
-    private var lineStartKnown = false
+    private var lineStartIsKnown = false
 
     /// Longest line held; past it the oldest half is dropped and the line's start becomes unknown.
     static let lineLimit = 2_000
@@ -50,8 +50,11 @@ public final class TextMirror {
 
     /// The current line before the cursor, as on screen; nil when its start is unknown (see `typedTail`).
     public var lineBeforeCursor: String? {
-        lineStartKnown ? String(line) : nil
+        lineStartIsKnown ? String(line) : nil
     }
+
+    /// `typedTail` starts at the line's start (`lineBeforeCursor != nil`), without building the line.
+    public var lineStartKnown: Bool { lineStartIsKnown }
 
     /// The end of the current line that the mirror saw typed, as on screen: the whole line when its start is known,
     /// else what was typed since the cursor last moved (empty right after). Spec 17.2 reads it.
@@ -174,7 +177,7 @@ public final class TextMirror {
 
     private func forgetLine() {
         line.removeAll()
-        lineStartKnown = false
+        lineStartIsKnown = false
     }
 
     /// Ends the phrase on the same line: the line stays known.
@@ -225,12 +228,12 @@ public final class TextMirror {
     private func trackLine(_ c: Character) {
         if c == "\n" || c == "\r" {
             line.removeAll()
-            lineStartKnown = true
+            lineStartIsKnown = true
         } else {
             line.append(c)
             if line.count > Self.lineLimit {
                 line.removeFirst(line.count / 2)
-                lineStartKnown = false
+                lineStartIsKnown = false
             }
         }
     }
