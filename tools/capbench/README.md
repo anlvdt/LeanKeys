@@ -29,7 +29,7 @@ The script exits 1 when the fixed rules make any wrong capital, on the corpora o
 | Rules | TP | FP | Missed |
 | --- | --- | --- | --- |
 | Fixed (spec §17.1.1–17.1.2) | 302 | 0 | 1166 |
-| Fixed + learned names (§17.1.3 simulation) | 777 | 0 (2 before all-caps words were retyped as written) | 691 |
+| Fixed + learned names (§17.1.3 simulation) | 775 (777 before the `:`/quote rule) | 0 (2 before all-caps words were retyped as written) | 693 |
 | Negatives, fixed rules, retyped as written | – | 0 (39 before ruling R11; 5 on the 59 lines before R15; 2 on the 61 lines before the `:`/quote rule) | – |
 
 Ruling R11 (a phrase-initial capital is no name cue, the middle-name rule needs a sure or capitalised surname, only
@@ -40,7 +40,10 @@ corpora's numbers unchanged.
   lowercasing it. The app never learns or touches all-caps words; the harness now retypes them as written and does
   not count a word it leaves as written.
 - A capital right after `:` or an opening quote is sentence case (final re-review N2): the phrase restarts there,
-  for the rules and for the learned-name simulation. It left the corpora's numbers unchanged.
+  for the rules and for the learned-name simulation. A straight quote opens when the raw character before it (a
+  space included) is no letter or digit, as in `AutoCapitalizer.startsSentence`. Cost (ruling R17, accepted): a
+  capitalised title in quotes mid-sentence is not learned. On the corpora one "anywhere" name is lost (122 → 121),
+  so fixed + learned goes from 777 to 775 true capitals, still with 0 wrong ones; the fixed rules stay at 302/0.
 - `Tết` is not in the list. The corpus writes `tết` in lowercase 11 times, so adding it gave FP 11. It is left out per spec §17.1.1.
 
 ## Known approximation

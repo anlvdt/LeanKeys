@@ -64,16 +64,18 @@ def touchable(w):
 OPENING_QUOTES = set("“‘«")
 
 
-def starts_sentence(out):
-    """As AutoCapitalizer.startsSentence: after `:` or an opening quote (`"`/`'` not right after a word), the next
-    word's capital is sentence case. `out` holds the tokens so far."""
-    if not out:
+TOKEN = re.compile(r"\w+|[^\w\s]")
+
+
+def starts_sentence(text, m):
+    """As AutoCapitalizer.startsSentence, for the punctuation token `m` in `text`: after `:` or an opening quote the
+    next word's capital is sentence case. A straight quote opens when the raw character before it (a space
+    included) is no letter or digit, or it starts the line: `nói "Mai` opens, `"ok" mai` closes."""
+    t = m.group()
+    if t == ":" or t in OPENING_QUOTES:
         return True
-    mark = out[-1]
-    if mark == ":" or mark in OPENING_QUOTES:
-        return True
-    if mark in "\"'":
-        return len(out) < 2 or not out[-2][0].isalnum()
+    if t in "\"'":
+        return m.start() == 0 or not text[m.start() - 1].isalnum()
     return False
 
 
@@ -86,13 +88,14 @@ def run(lines, D, learned=None, show=0, label="", as_typed=False):
     tp = fp = fn = 0
     ex = collections.Counter(); exfn = collections.Counter()
     for line in lines:
-        toks = re.findall(r"\w+|[^\w\s]", unicodedata.normalize("NFC", line))
+        text = unicodedata.normalize("NFC", line)
         out = []; orig = []
         phrase_first = None  # index of the phrase's first word: its capital is sentence case, not a name cue
-        for t in toks:
+        for m in TOKEN.finditer(text):
+            t = m.group()
             if not t[0].isalnum():
                 # The phrase restarts at . ! ?; a sentence restarts after : or an opening quote (final re-review N2).
-                if t in ".!?" or starts_sentence(out + [t]):
+                if t in ".!?" or starts_sentence(text, m):
                     phrase_first = None
                 out.append(t); orig.append(t)
                 continue
@@ -181,15 +184,14 @@ def learn(lines, titles):
     """The learned-name simulation (spec 17.1.3): words capitalised mid-sentence at least twice."""
     title = collections.Counter(); capd = collections.Counter(); lower = set(); form = {}
     for l in lines:
-        toks = re.findall(r"\w+|[^\w\s]", unicodedata.normalize("NFC", l)); st = True; prev = None
-        seen = []
-        for t in toks:
-            seen.append(t)
+        text = unicodedata.normalize("NFC", l); st = True; prev = None
+        for m in TOKEN.finditer(text):
+            t = m.group()
             if t in ".!?":
                 st = True; prev = None; continue
             if not t[0].isalnum():
                 # After `:` or an opening quote a capital is sentence case: not learned (final re-review N2).
-                if starts_sentence(seen):
+                if starts_sentence(text, m):
                     st = True
                 continue
             if t.islower():
