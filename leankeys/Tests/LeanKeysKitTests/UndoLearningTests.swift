@@ -186,13 +186,54 @@ final class UndoLearningTests: XCTestCase {
         XCTAssertEqual(englishLine(learning).type("ban cos "), "ban có ")
     }
 
+    /// The router installs the learner it was given when it builds the real engine, and drains undos after each key.
+    func testRouterInstallsLearnerAndDrainsUndo() {
+        let book = UndoRuleBook(store: nil)
+        let learning = makeLearning(book)
+        let engine = self.engine!
+        let router = EngineRouter(defaults: defaults, makeVikey: { engine }, undoLearning: { learning })
+        router.setEnabled(false)
+        XCTAssertEqual(type("toi thich cos ", through: router), "toi thich có ", "Vikey's own fix (precondition)")
+        XCTAssertEqual(type("toi thich cos ⌫⌫", through: router), "toi thich cos")
+        XCTAssertNil(engine.takeUndo(), "the router drained the undo")
+        settle(learning)
+        XCTAssertEqual(book.rules.map { [$0.previous, $0.text] }, [["thich", "cos"]])
+        // The installed filter now keeps the word.
+        XCTAssertEqual(type("toi thich cos ", through: router), "toi thich cos ")
+    }
+
+    /// Types `keys` on a fresh English line through `router.intercept`, applying each result the way the macOS key
+    /// handler does; returns the screen.
+    private func type(_ keys: String, through router: EngineRouter) -> String {
+        router.setEnabled(false)
+        router.clear()
+        var text: [Character] = []
+        for ch in keys {
+            guard let code = macKey[ch] else { XCTFail("no mac key for \(ch)"); continue }
+            let own: Character? = ch == "⌫" ? nil : ch
+            switch router.intercept(keyCode: code, caps: false, ctrl: false, shift: false) {
+            case .passToGoNhanh:
+                XCTFail("Vikey is the active engine")
+            case .handled(let result):
+                if let (deleteCount, inserted, consumed) = result {
+                    text.removeLast(min(deleteCount, text.count))
+                    text.append(contentsOf: inserted)
+                    if consumed { continue }
+                }
+                if let own { text.append(own) } else if !text.isEmpty { text.removeLast() }
+            }
+        }
+        return String(text)
+    }
+
     func testDefaultsOnWhenUnset() {
         let learning = makeLearning()
         XCTAssertTrue(learning.learning)
         XCTAssertTrue(learning.doubleKeyFix)
         learning.learning = false
         learning.doubleKeyFix = false
-        let reloaded = UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults, context: { self.context })
+        let reloaded = UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults,
+                                    context: { [unowned self] in self.context })
         XCTAssertFalse(reloaded.learning)
         XCTAssertFalse(reloaded.doubleKeyFix)
     }

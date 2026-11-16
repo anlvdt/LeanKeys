@@ -73,7 +73,7 @@ final class VikeyEngineTests: XCTestCase {
         // Options are process-wide: put back the defaults for the next test.
         engine?.setAutoSwitch(true)
         engine?.setModernTone(true)
-        // A router on the real engine installs UndoLearning.shared's fix filter (the user's own rules): unregister it.
+        // A router on the real engine installs its (memory-only) undo learner's fix filter: unregister it.
         lk_vikey_set_fix_filter(nil)
         engine?.setVietnamese(true)
         engine?.resetContext()
@@ -94,7 +94,9 @@ final class VikeyEngineTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let engine = self.engine!
-        let router = EngineRouter(defaults: defaults, makeVikey: { engine })
+        let router = EngineRouter(defaults: defaults, makeVikey: { engine },
+                                  undoLearning: { UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults,
+                                                               context: { LearnContext(bundleID: nil, secureInput: true, secureField: true, now: Date()) }) })
         router.setEnabled(false)
         engine.resetContext()
         XCTAssertEqual(Field(engine).type("vieejt "), "việt ")
@@ -107,7 +109,9 @@ final class VikeyEngineTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let engine = self.engine!
-        let router = EngineRouter(defaults: defaults, makeVikey: { engine })
+        let router = EngineRouter(defaults: defaults, makeVikey: { engine },
+                                  undoLearning: { UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults,
+                                                               context: { LearnContext(bundleID: nil, secureInput: true, secureField: true, now: Date()) }) })
         router.setEnabled(false, explicit: true)
         engine.resetContext()
         XCTAssertEqual(Field(engine).type("vieejt "), "vieejt ")

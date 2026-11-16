@@ -25,9 +25,11 @@ public final class EngineRouter {
 
     private let settings: LeanSettings
     private let makeVikey: () -> TypingEngine?
+    private let makeUndoLearning: () -> UndoLearning
     private var vikey: TypingEngine?
-    /// `vikey` when it is the real engine: undo learning (spec 12.2) drains its undo events.
+    /// `vikey` when it is the real engine, with the undo learner (spec 12.2) that drains its undo events.
     private var vikeyEngine: VikeyEngine?
+    private var undoLearning: UndoLearning?
     private var vikeyAttempted = false
     private var method = 0
     private var vietnamese = true
@@ -47,10 +49,14 @@ public final class EngineRouter {
     /// Whether Vikey's automatic switch is on (see `setEnabled`).
     public var autoSwitchOn: Bool { autoSwitch }
 
-    /// `makeVikey` runs at most once, the first time Vikey is needed.
-    public init(defaults: UserDefaults = .standard, makeVikey: @escaping () -> TypingEngine? = { VikeyEngine() }) {
+    /// `makeVikey` runs at most once, the first time Vikey is needed. `undoLearning` runs at most once too, and only
+    /// when that engine is the real `VikeyEngine`: the default (`UndoLearning.shared`, which opens the saved rules)
+    /// is never built for a stub engine or a router that never uses Vikey.
+    public init(defaults: UserDefaults = .standard, makeVikey: @escaping () -> TypingEngine? = { VikeyEngine() },
+                undoLearning: @escaping () -> UndoLearning = { UndoLearning.shared }) {
         settings = LeanSettings(defaults: defaults)
         self.makeVikey = makeVikey
+        makeUndoLearning = undoLearning
         refresh()
     }
 
@@ -85,7 +91,7 @@ public final class EngineRouter {
             return .handled(result)
         }
         let processed = vikey.process(keyCode: keyCode, caps: caps, shift: shift)
-        if let vikeyEngine { UndoLearning.shared.afterPress(engine: vikeyEngine) }
+        if let vikeyEngine { undoLearning?.afterPress(engine: vikeyEngine) }
         guard let edit = processed else {
             observe(keyCode: keyCode, shift: shift, caps: caps, result: nil)
             return .handled(nil)
@@ -231,7 +237,8 @@ public final class EngineRouter {
             vikey = makeVikey()
             if let engine = vikey as? VikeyEngine {
                 vikeyEngine = engine
-                UndoLearning.shared.install()
+                undoLearning = makeUndoLearning()
+                undoLearning?.install()
             }
             vikey?.setVietnamese(vietnamese)
             vikey?.setAutoSwitch(autoSwitch)
