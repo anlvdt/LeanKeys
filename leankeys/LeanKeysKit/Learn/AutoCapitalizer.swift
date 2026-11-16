@@ -51,19 +51,22 @@ final class AutoCapitalizer {
         let runStart = phraseText.lastIndex(where: { !TextMirror.isWordCharacter($0) && $0 != " " })
             .map { phraseText.index(after: $0) } ?? phraseText.startIndex
         let run = phraseText[runStart...]
-        let ranges = Self.wordRanges(in: run)
-        let words = ranges.map { String(run[$0]) }
         let before = phraseText[..<runStart]
-        let firstWordStartsPhrase = Self.startsSentence(after: before)
+        var ranges = Self.wordRanges(in: run)
+        // The run's first word glued to a symbol (`~/hà nội`, `@nguyễn văn`, `#ở hòa bình`) is part of a path,
+        // address or tag: the rules never see it, so it is neither changed (final re-review N1) nor a cue or title
+        // for the words after it (review M4). Ruling R13 checks the committed word itself.
+        let glued = run.first.map(TextMirror.isWordCharacter) == true
+            && before.last.map { !Self.opensText.contains($0) } == true
+        if glued { ranges.removeFirst() }
+        guard !ranges.isEmpty else { return nil }
+        let words = ranges.map { String(run[$0]) }
+        let firstWordStartsPhrase = !glued && Self.startsSentence(after: before)
         guard let capitalization = rules.capitalization(for: words, firstWordStartsPhrase: firstWordStartsPhrase),
               capitalization.wordCount > 0, capitalization.wordCount <= words.count,
               capitalization.words.count == capitalization.wordCount else { return nil }
 
         let first = words.count - capitalization.wordCount
-        // The run's first word glued to a symbol (`~/hà nội`, `@nguyễn văn`) is part of a path, address or tag: a
-        // phrase that would change it is left as typed (final re-review N1; ruling R13 checks only the last word).
-        if first == 0, run.first.map(TextMirror.isWordCharacter) == true, let glue = before.last,
-           !Self.opensText.contains(glue) { return nil }
         let affected = Array(words[first...])
         let rule = Self.rulePrefix + affected.joined(separator: " ").lowercased()
         let previous = first > 0 ? words[first - 1].lowercased() : ""

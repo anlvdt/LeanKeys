@@ -308,6 +308,12 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(router).type("ten-haf nooij "), "ten-hà nội ")
         XCTAssertEqual(line(router).type("gui @nguyeenx vawn "), "gui @nguyễn văn ")
         XCTAssertEqual(line(router).type("gui @nguyeenx vawn an "), "gui @nguyễn văn an ")
+        // Review M4: a glued cue word does not enable the words after it ("hòa bình" needs a cue such as "ở").
+        XCTAssertEqual(line(router).type("cd ~/owr hoaf binhf "), "cd ~/ở hoà bình ")
+        XCTAssertEqual(line(router).type("xem #owr hoaf binhf "), "xem #ở hoà bình ")
+        XCTAssertEqual(line(router).type("xem owr hoaf binhf "), "xem ở Hoà Bình ", "control: the cue, unglued")
+        // A place that needs no cue is still capitalised when its own words are separate.
+        XCTAssertEqual(line(router).type("cd ~/owr haf nooij "), "cd ~/ở Hà Nội ")
         // Controls: the same phrases with a space, or after an opening quote.
         XCTAssertEqual(line(router).type("xem haf nooij "), "xem Hà Nội ")
         XCTAssertEqual(line(router).type("xem \"haf nooij "), "xem \"Hà Nội ")
@@ -315,15 +321,20 @@ final class AutoCapitalizerTests: XCTestCase {
     }
 
     /// N1 with learned names: a learned name only ever changes the last word, so it never reaches a glued first
-    /// word. The glued word still counts as the title before it (`@anh hùng`): only the separate word changes.
+    /// word, and the glued word is no title or cue for the words after it either (review M4).
     func testGluedWordWithLearnedNames() {
-        let router = makeRouter(names: permissiveNames())
-        line(router).type("mua Tiki ")
-        line(router).type("mua Tiki ")
+        // Every word a dictionary word: "Tiki" and "Hùng" are learned after a title only.
+        let router = makeRouter(names: LearnedNames(store: nil, hmacKey: nil,
+                                                    titles: Set(ProperNounData.bundled.titles),
+                                                    isDictionaryWord: { _ in true }))
+        line(router).type("chij Tiki ")
+        line(router).type("chij Tiki ")
         line(router).type("chaof anh Hufng ")
         line(router).type("chaof anh Hufng ")
-        XCTAssertEqual(line(router).type("xem #shop tiki "), "xem #shop Tiki ")
-        XCTAssertEqual(line(router).type("gui @anh hufng "), "gui @anh Hùng ")
+        XCTAssertEqual(line(router).type("xem #chij tiki "), "xem #chị tiki ", "a glued title enables nothing")
+        XCTAssertEqual(line(router).type("gui @anh hufng "), "gui @anh hùng ")
+        XCTAssertEqual(line(router).type("gui anh hufng "), "gui anh Hùng ", "control: the title, unglued")
+        XCTAssertEqual(line(router).type("xem chij tiki "), "xem chị Tiki ", "control")
         XCTAssertEqual(line(router).type("xem ~/tiki "), "xem ~/tiki ", "R13: the glued word itself")
     }
 
