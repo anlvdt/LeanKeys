@@ -146,7 +146,8 @@ class UpdateChecker {
                     if let name = asset["name"] as? String,
                        name.lowercased().hasSuffix(".dmg"),
                        let urlString = asset["browser_download_url"] as? String,
-                       let url = URL(string: urlString)
+                       let url = URL(string: urlString), // LEANKEYS-HOOK: branding
+                       SafeInstaller.isTrustedDownloadURL(url) // LEANKEYS-HOOK: branding
                     {
                         downloadURL = url
                         break

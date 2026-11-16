@@ -123,4 +123,52 @@ final class SafeInstallerTests: XCTestCase {
     func testStableSignatureNotRequiredByDefault() {
         XCTAssertEqual(verify(checks(signature: .adhoc)), .valid(app), "the legacy one-click path is unchanged")
     }
+
+    // MARK: Security audit MEDIUM-5
+
+    func testRejectsAnUpdateThatIsNotNewer() {
+        func verify(candidate: String?, current: String) -> SafeInstaller.Verdict {
+            var c = checks()
+            c.version = { _ in candidate }
+            return SafeInstaller.verify(mountPoint: mount, appName: "LeanKeys", expectedBundleID: bundleID, checks: c,
+                                        currentVersion: current)
+        }
+        XCTAssertEqual(verify(candidate: "1.3", current: "1.2"), .valid(app))
+        XCTAssertEqual(verify(candidate: "1.10", current: "1.9"), .valid(app))
+        XCTAssertEqual(verify(candidate: "1.2", current: "1.2"), .notNewer(found: "1.2"))
+        XCTAssertEqual(verify(candidate: "1.1", current: "1.2"), .notNewer(found: "1.1"))
+        XCTAssertEqual(verify(candidate: nil, current: "1.2"), .notNewer(found: nil))
+        XCTAssertEqual(verify(candidate: "abc", current: "1.2"), .notNewer(found: "abc"))
+    }
+
+    func testVersionOrder() {
+        XCTAssertTrue(SafeInstaller.isNewer("1.2.1", than: "1.2"))
+        XCTAssertTrue(SafeInstaller.isNewer("v2.0", than: "1.9.9"))
+        XCTAssertFalse(SafeInstaller.isNewer("1.2.0", than: "1.2"))
+        XCTAssertFalse(SafeInstaller.isNewer("", than: "1.2"))
+        XCTAssertFalse(SafeInstaller.isNewer("1.x", than: "1.2"))
+        XCTAssertTrue(SafeInstaller.isNewer("1.3-beta", than: "1.2"), "the Rust checker offers pre-releases too")
+        XCTAssertFalse(SafeInstaller.isNewer("1.2-beta", than: "1.2"))
+    }
+
+    func testOnlyGitHubHTTPSDownloads() {
+        for ok in ["https://github.com/anlvdt/LeanKeys/releases/download/v1.3/LeanKeys-1.3.dmg",
+                   "https://objects.githubusercontent.com/x/LeanKeys.dmg",
+                   "https://release-assets.githubusercontent.com/x/LeanKeys.dmg"] {
+            XCTAssertTrue(SafeInstaller.isTrustedDownloadURL(URL(string: ok)!), ok)
+        }
+        for bad in ["http://github.com/a.dmg", "https://github.com.evil.io/a.dmg", "https://evil.io/github.com/a.dmg",
+                    "file:///tmp/a.dmg", "https://user@evil.io/a.dmg"] {
+            XCTAssertFalse(SafeInstaller.isTrustedDownloadURL(URL(string: bad)!), bad)
+        }
+    }
+
+    func testRestoredUpdatePathMustBeTheCachesFile() {
+        let caches = URL(fileURLWithPath: "/Users/u/Library/Caches")
+        XCTAssertTrue(SafeInstaller.isExpectedUpdatePath("/Users/u/Library/Caches/GoNhanh-update.dmg", caches: caches))
+        XCTAssertFalse(SafeInstaller.isExpectedUpdatePath("/tmp/GoNhanh-update.dmg", caches: caches))
+        XCTAssertFalse(SafeInstaller.isExpectedUpdatePath("/Users/u/Library/Caches/x/../../GoNhanh-update.dmg",
+                                                          caches: caches), "resolved, it is Library/GoNhanh-update.dmg")
+        XCTAssertFalse(SafeInstaller.isExpectedUpdatePath("/Users/u/Library/Caches/evil.dmg", caches: caches))
+    }
 }

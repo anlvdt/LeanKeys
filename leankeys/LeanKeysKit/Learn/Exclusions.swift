@@ -2,18 +2,31 @@ import Foundation
 
 /// What PhraseLearner never learns from: password managers, and phrases holding a card number or an OTP.
 public enum Exclusions {
-    /// Apps never learned from, by default.
-    public static let defaultBundleIDs: Set<String> = Set([
+    /// Password managers. Every key passes straight through there too (`KeyPassthrough`, security audit MEDIUM-3):
+    /// user names, TOTP secrets and recovery codes are plain text fields.
+    public static let passwordManagers: Set<String> = [
         "com.1password.1password",
         "com.agilebits.onepassword7",
         "com.bitwarden.desktop",
         "com.apple.keychainaccess",
         "com.apple.Passwords",
         "org.keepassxc.keepassxc",
-    ])
-    // Terminals: sudo, ssh and git ask for passwords there without Secure Input or a secure text field. The one
-    // list `CodeApps` keeps (task 4 review minor 8).
-    .union(CodeApps.terminals)
+        "in.sinew.Enpass-Desktop",          // Enpass
+        "com.lastpass.lastpassmacdesktop",  // LastPass
+        "me.proton.pass.electron",          // Proton Pass
+    ]
+
+    /// Apps never learned from, by default.
+    public static let defaultBundleIDs: Set<String> = passwordManagers
+    // Terminals and code editors: sudo, ssh and git ask for passwords there without Secure Input or a secure text
+    // field, in an editor's integrated terminal too (security audit MEDIUM-4). The one list `CodeApps` keeps (task 4
+    // review minor 8).
+    .union(CodeApps.bundleIDs)
+
+    /// `defaultBundleIDs`, plus the JetBrains IDEs `CodeApps` matches by prefix.
+    public static func isExcludedByDefault(_ bundleID: String) -> Bool {
+        defaultBundleIDs.contains(bundleID) || CodeApps.contains(bundleID)
+    }
 
     /// A word shaped like a password or key: at least 6 characters (sentence punctuation at its ends aside) mixing
     /// letters with digits ("hunter2hunter2", "Matkhau2024"), or using a symbol people put in passwords

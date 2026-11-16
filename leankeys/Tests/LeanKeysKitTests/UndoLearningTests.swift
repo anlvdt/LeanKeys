@@ -509,12 +509,27 @@ final class UndoLearningTests: XCTestCase {
         XCTAssertTrue(names.names.isEmpty)
     }
 
-    /// Task 4 minor 8: one terminal list. Every terminal the stray-key filter and capitalisation skip is also
-    /// excluded from learning; editors are not (4B and 4C keep learning there).
-    func testOneTerminalList() {
+    /// Task 4 minor 8: one terminal list. Security audit MEDIUM-4: code editors are excluded from learning too
+    /// (their integrated terminals take sudo and ssh passwords), JetBrains IDEs by prefix.
+    func testTerminalsAndEditorsExcludedFromLearning() {
         XCTAssertTrue(Exclusions.defaultBundleIDs.isSuperset(of: CodeApps.terminals))
         XCTAssertTrue(CodeApps.bundleIDs.isSuperset(of: CodeApps.terminals))
-        XCTAssertFalse(Exclusions.defaultBundleIDs.contains("com.microsoft.VSCode"))
+        XCTAssertTrue(Exclusions.defaultBundleIDs.isSuperset(of: CodeApps.bundleIDs))
+        for id in ["com.microsoft.VSCode", "com.apple.dt.Xcode", "com.jetbrains.intellij", "com.jetbrains.pycharm"] {
+            XCTAssertTrue(Exclusions.isExcludedByDefault(id), id)
+        }
+        XCTAssertFalse(Exclusions.isExcludedByDefault("com.apple.TextEdit"))
+    }
+
+    func testNoUndoLearningInCodeEditors() {
+        let book = UndoRuleBook(store: nil)
+        let learning = makeLearning(book)
+        for app in ["com.microsoft.VSCode", "com.jetbrains.intellij"] {
+            context = LearnContext(bundleID: app, secureInput: false, secureField: false, now: Date())
+            XCTAssertEqual(undoCos(learning), "toi thich cos")
+        }
+        settle(learning)
+        XCTAssertTrue(book.rules.isEmpty)
     }
 
     /// The live reader's key-thread half reads no AX: it only fills in what NSWorkspace and the Secure Input flag say.

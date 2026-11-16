@@ -4,8 +4,8 @@ import Foundation
 /// (spec 17.2), and case matters (a branch, a path, an identifier), so nothing is capitalised (spec 17.1, ruling R12).
 /// The one list both features read. JetBrains IDEs match by prefix.
 public enum CodeApps {
-    /// Terminals. `Exclusions.defaultBundleIDs` reads this list too (passwords are typed there without a secure
-    /// field), so the two never drift apart.
+    /// Terminals. `KeyPassthrough` passes every key through there (ruling R22) and `Exclusions.defaultBundleIDs`
+    /// reads the whole list (passwords are typed there without a secure field), so the lists never drift apart.
     public static let terminals: Set<String> = [
         "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "dev.warp.Warp-Preview",
         "com.mitchellh.ghostty", "org.alacritty", "io.alacritty", "net.kovidgoyal.kitty", "com.github.wez.wezterm",

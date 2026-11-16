@@ -388,6 +388,6 @@ final class ShortcutSuggestionsModelTests: XCTestCase {
         XCTAssertEqual(ShortcutSuggestionsView.triggerFieldLabel, "Từ viết tắt")
         XCTAssertEqual(ShortcutSuggestionsView.triggerHelp("sdt"), "Gõ “sdt” rồi dấu cách để chèn nội dung này")
         XCTAssertEqual(ShortcutSuggestionsView.triggerAccessibilityLabel("sdt"), "Từ viết tắt sdt")
-        XCTAssertEqual(ShortcutSuggestionsView.addHelp, "Thêm vào Bảng gõ tắt")
+        XCTAssertEqual(ShortcutSuggestionsView.addHelp, "Thêm vào Bảng gõ tắt. Bảng gõ tắt không được mã hoá như dữ liệu gợi ý.") // security audit LOW-3
     }
 }

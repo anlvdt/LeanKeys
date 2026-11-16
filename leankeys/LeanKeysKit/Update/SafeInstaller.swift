@@ -17,6 +17,9 @@ public enum SafeInstaller {
         case differentIdentity
         /// Popover install only (spec §16.3): the candidate is ad-hoc signed or unsigned.
         case unstableSignature
+        /// The candidate's version is not newer than the running app's (security audit MEDIUM-5): no downgrade, no
+        /// reinstall of the same build.
+        case notNewer(found: String?)
     }
 
     /// Outcome of `prepare`. `rejected` and `unmounted` have already detached the image.
@@ -35,6 +38,10 @@ public enum SafeInstaller {
         public var sameIdentity: (URL) -> Bool
         /// How the candidate is signed (UpdateInstallPolicy.signature(of:)).
         public var signature: (URL) -> UpdateInstallPolicy.SignatureKind
+        /// The candidate's CFBundleShortVersionString.
+        public var version: (URL) -> String? = { url in
+            NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist"))?["CFBundleShortVersionString"] as? String
+        }
 
         public init(appExists: @escaping (URL) -> Bool, bundleIdentifier: @escaping (URL) -> String?,
                     codesignValid: @escaping (URL) -> Bool, sameIdentity: @escaping (URL) -> Bool,
@@ -72,19 +79,64 @@ public enum SafeInstaller {
     /// A nil `expectedBundleID` (nothing to compare against) is a rejection. `requireSameIdentity` (silent installs)
     /// adds the designated-requirement check; `requireStableSignature` (popover installs) rejects an ad-hoc or unsigned
     /// candidate. Both run after codesign.
+    /// `currentVersion` (the running app's), when given, requires a newer candidate.
     public static func verify(mountPoint: URL, appName: String, expectedBundleID: String?, checks: Checks,
-                              requireSameIdentity: Bool = false, requireStableSignature: Bool = false) -> Verdict
+                              requireSameIdentity: Bool = false, requireStableSignature: Bool = false,
+                              currentVersion: String? = nil) -> Verdict
     {
         let app = mountPoint.appendingPathComponent("\(appName).app")
         guard checks.appExists(app) else { return .missingApp }
         let found = checks.bundleIdentifier(app)
         guard let expectedBundleID, found == expectedBundleID else { return .wrongBundleID(found: found) }
         guard checks.codesignValid(app) else { return .codesignFailed }
+        if let currentVersion {
+            let found = checks.version(app)
+            guard let found, isNewer(found, than: currentVersion) else { return .notNewer(found: found) }
+        }
         if requireStableSignature, !UpdateInstallPolicy.installsSilently(signature: checks.signature(app)) {
             return .unstableSignature
         }
         if requireSameIdentity, !checks.sameIdentity(app) { return .differentIdentity }
         return .valid(app)
+    }
+
+    /// Whether `candidate` is a higher dotted version than `current` ("1.10" > "1.9", "1.2.0" == "1.2"). A leading
+    /// "v" and a pre-release suffix ("-beta") are ignored; anything else not made of numbers is never newer.
+    public static func isNewer(_ candidate: String, than current: String) -> Bool {
+        func parts(_ v: String) -> [Int]? {
+            var trimmed = v.hasPrefix("v") ? String(v.dropFirst()) : v
+            if let dash = trimmed.firstIndex(of: "-") { trimmed = String(trimmed[..<dash]) }
+            let numbers = trimmed.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
+            guard !numbers.isEmpty, numbers.allSatisfy({ $0 != nil }) else { return nil }
+            return numbers.map { $0! }
+        }
+        guard let a = parts(candidate), let b = parts(current) else { return false }
+        for i in 0 ..< max(a.count, b.count) {
+            let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
+            if x != y { return x > y }
+        }
+        return false
+    }
+
+    /// Hosts a release asset may come from: GitHub, and the storage it redirects downloads to.
+    static let trustedDownloadHosts: Set<String> = [
+        "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com",
+    ]
+
+    /// Whether an update may be downloaded from `url` (security audit MEDIUM-5): HTTPS to a GitHub host, no user info.
+    public static func isTrustedDownloadURL(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "https", url.user == nil, url.password == nil,
+              let host = url.host?.lowercased() else { return false }
+        return trustedDownloadHosts.contains(host)
+    }
+
+    /// The one place a downloaded update is kept. A pending path restored from the preferences (which any process of
+    /// the same user can write) must be this file, or it is ignored.
+    public static let updateFileName = "GoNhanh-update.dmg"
+
+    public static func isExpectedUpdatePath(_ path: String, caches: URL) -> Bool {
+        let expected = caches.appendingPathComponent(updateFileName).standardizedFileURL.path
+        return URL(fileURLWithPath: path).standardizedFileURL.path == expected
     }
 
     /// A 2xx HTTP response, or a non-HTTP one (nothing to reject). An error page saved as the DMG fails here.
@@ -102,14 +154,16 @@ public enum SafeInstaller {
     /// Mounts `dmg` read-only and verifies it. Blocking (hdiutil, codesign): call off the main thread.
     /// On any failure the image is detached, the reason is logged, and the outcome says which check failed.
     public static func prepare(dmg: URL, appName: String, expectedBundleID: String?, requireSameIdentity: Bool = false,
-                               requireStableSignature: Bool = false, checks: Checks = .live) -> Preparation
+                               requireStableSignature: Bool = false, currentVersion: String? = nil,
+                               checks: Checks = .live) -> Preparation
     {
         guard let mount = mount(dmg) else {
             log("could not mount \(dmg.path)")
             return .unmounted
         }
         let verdict = verify(mountPoint: mount, appName: appName, expectedBundleID: expectedBundleID, checks: checks,
-                             requireSameIdentity: requireSameIdentity, requireStableSignature: requireStableSignature)
+                             requireSameIdentity: requireSameIdentity, requireStableSignature: requireStableSignature,
+                             currentVersion: currentVersion)
         guard case let .valid(app) = verdict else {
             log("rejected update \(dmg.path): \(verdict)")
             detach(mount)

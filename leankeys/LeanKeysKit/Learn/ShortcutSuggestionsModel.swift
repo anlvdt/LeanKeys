@@ -206,7 +206,8 @@ public final class ShortcutSuggestionsModel: ObservableObject {
     func phraseCommitted(_ phrase: CommittedPhrase) {
         guard enabled else { return }
         let probe = contextProbe()
-        guard !probe.secureInput, let bundleID = probe.bundleID, !excludedBundleIDs.contains(bundleID) else { return }
+        guard !probe.secureInput, let bundleID = probe.bundleID, !excludedBundleIDs.contains(bundleID),
+              !Exclusions.isExcludedByDefault(bundleID) else { return }
         let secureField = secureField
         enqueue(phrase, bundleID: bundleID) { secureField(probe) ? nil : probe.context(secureField: false) }
     }

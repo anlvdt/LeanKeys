@@ -66,15 +66,30 @@ public final class UndoRuleBook {
                     persistent = false
                     return
                 }
+                var purged = false
                 for rule in snapshot.rules where !rule.text.isEmpty && rule.count > 0 {
+                    // Saved before the secret check (security audit MEDIUM-4): dropped, and the file rewritten below.
+                    if Self.isSecretShaped(rule.text) || Exclusions.looksLikeSecret(rule.previous) {
+                        purged = true
+                        continue
+                    }
                     entries[Key(previous: rule.previous, text: rule.text)] = rule
                 }
-                blocked = snapshot.blocked.filter { $0.value > 0 }
+                blocked = snapshot.blocked.filter { $0.value > 0 && !Self.isSecretShaped($0.key) }
+                purged = purged || blocked.count != snapshot.blocked.filter { $0.value > 0 }.count
                 evictOverCapacity()
+                if purged { scheduleSave() }
             }
         } catch {
             persistent = false
         }
+    }
+
+    /// A rule text shaped like a password or key (`Exclusions.looksLikeSecret`). A capitalisation rule ("cap:" +
+    /// phrase) is judged word by word, since the space between its words would read as a symbol.
+    static func isSecretShaped(_ text: String) -> Bool {
+        guard text.hasPrefix("cap:") else { return Exclusions.looksLikeSecret(text) }
+        return text.dropFirst(4).split(separator: " ").contains { Exclusions.looksLikeSecret(String($0)) }
     }
 
     /// Called on the main queue after a change.
@@ -84,11 +99,12 @@ public final class UndoRuleBook {
     }
 
     /// One ⌫⌫ undo of Vikey switching `before`, typed after `previous` ("" when none). `reverse` marks the undo of a
-    /// keep this book made.
+    /// keep this book made. A secret-shaped `before` is never recorded, nor a secret-shaped `previous` kept as its
+    /// context (security audit MEDIUM-4: an undo inside a password typed in plain text).
     public func record(before: String, previous: String, reverse: Bool) {
         let text = before.lowercased()
-        guard !text.isEmpty else { return }
-        let previous = previous.lowercased()
+        guard !text.isEmpty, !Self.isSecretShaped(text) else { return }
+        let previous = Exclusions.looksLikeSecret(previous) ? "" : previous.lowercased()
         lock.withLock {
             if reverse {
                 entries = entries.filter { $0.key.text != text }

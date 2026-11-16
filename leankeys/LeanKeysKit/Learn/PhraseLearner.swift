@@ -67,7 +67,8 @@ public final class PhraseLearner {
 
     public func observe(_ phrase: CommittedPhrase, context: LearnContext) {
         guard enabled, !context.secureInput, !context.secureField,
-              let bundleID = context.bundleID, !excludedBundleIDs.contains(bundleID) else { return }
+              let bundleID = context.bundleID, !excludedBundleIDs.contains(bundleID),
+              !Exclusions.isExcludedByDefault(bundleID) else { return }
         let text = PhraseDetector.normalizedDisplay(phrase.text)
         guard !text.isEmpty, !Exclusions.containsSensitiveNumber(text), loadIfNeeded(now: context.now),
               let key = hmacKeyIfNeeded() else { return }

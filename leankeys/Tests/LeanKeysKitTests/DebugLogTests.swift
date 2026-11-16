@@ -35,4 +35,22 @@ final class DebugLogTests: XCTestCase {
         XCTAssertEqual(DebugLog.redact([Character]()), "<0>")
         XCTAssertFalse(DebugLog.redact("secret").contains("secret"))
     }
+
+    // MARK: Security audit LOW-2: the log switches itself off after a day
+
+    func testStaleLogIsRemoved() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("debug.log").path
+        let created = Date(timeIntervalSince1970: 1_800_000_000)
+        FileManager.default.createFile(atPath: file, contents: Data("I: x".utf8),
+                                       attributes: [.creationDate: created])
+
+        XCTAssertTrue(DebugLog.isOnAfterExpiry(path: file, now: created.addingTimeInterval(23 * 3600)))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file))
+        XCTAssertFalse(DebugLog.isOnAfterExpiry(path: file, now: created.addingTimeInterval(25 * 3600)))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file), "a log older than a day is deleted")
+        XCTAssertFalse(DebugLog.isOnAfterExpiry(path: file, now: created))
+    }
 }

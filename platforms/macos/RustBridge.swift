@@ -38,7 +38,7 @@ private enum Log {
         if let cached = _enabled {
             return cached
         }
-        _enabled = FileManager.default.fileExists(atPath: logPath)
+        _enabled = DebugLog.isOnAfterExpiry() // LEANKEYS-HOOK: debug-log
         if _enabled == true {
             startPerfLogging()
         }
@@ -1129,6 +1129,7 @@ class KeyboardHookManager {
                 return
             }
             RustBridge.clearBufferAll() // Clear everything including word history
+            DetectionCache.expire() // LEANKEYS-HOOK: engine-dispatch
             skipWordRestoreAfterClick = true
         }
     }
@@ -1277,6 +1278,7 @@ private var wasControlPressed = false
 /// Returns the word only if cursor is right after a space/punctuation that follows a word
 /// This ensures we only restore when actually entering a word, not when deleting within a word
 private func getWordToRestoreOnBackspace() -> String? {
+    if IsSecureEventInputEnabled() { return nil } // LEANKEYS-HOOK: engine-dispatch (security audit LOW-5: read no field value under Secure Input)
     let systemWide = axSystemWideBounded()
     var focused: CFTypeRef?
 
@@ -1435,18 +1437,20 @@ private func matchesModifierOnlyShortcut(flags: CGEventFlags) -> Bool {
 }
 
 /// Trigger restore shortcut - restore raw ASCII and clear buffer
-private func triggerRestoreShortcut(flags: CGEventFlags, proxy: CGEventTapProxy) {
+@discardableResult private func triggerRestoreShortcut(flags: CGEventFlags, proxy: CGEventTapProxy) -> Bool { // LEANKEYS-HOOK: engine-dispatch (false: keys pass through, nothing restored)
     let shift = flags.contains(.maskShift)
     let caps = shift || flags.contains(.maskAlphaShift)
     // Don't bypass IME for restore shortcut - modifiers are part of the shortcut itself
     // Always pass ctrl=false so engine performs the restore action
     let (method, delays) = detectMethod()
     EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
+    if method == .passthrough { RustBridge.clearBuffer(); return false } // LEANKEYS-HOOK: engine-dispatch (no restore inside a sign-in field or terminal)
     if let (bs, chars, _) = RustBridge.processKey(keyCode: UInt16(KeyCode.esc), caps: caps, ctrl: false, shift: shift) {
         Log.key(UInt16(KeyCode.esc), "restore: bs=\(bs) chars=\(DebugLog.redact(chars))") // LEANKEYS-HOOK: debug-log
         sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
     }
     RustBridge.clearBuffer()
+    return true // LEANKEYS-HOOK: engine-dispatch
 }
 
 private func keyboardCallback(
@@ -1576,15 +1580,7 @@ private func keyboardCallback(
     }
 
     let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
-
-    // Log all keystrokes (only when debug enabled - no overhead otherwise)
-    if Log.isEnabled {
-        if event.keyboardCharacter() != nil { // LEANKEYS-HOOK: debug-log
-            Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log
-        } else {
-            Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log
-        }
-    }
+    defer { if keyCode == UInt16(KeyCode.tab) || keyCode == 0x24 || keyCode == 0x4C { DetectionCache.expire() } } // LEANKEYS-HOOK: engine-dispatch (Tab/Return may move focus to a sign-in field)
 
     // Custom shortcut to toggle Vietnamese (default: Ctrl+Space)
     if matchesToggleShortcut(keyCode: keyCode, flags: flags) {
@@ -1612,7 +1608,8 @@ private func keyboardCallback(
         }
 
         let (method, delays) = detectMethod()
-        if method == .passthrough { EngineRouter.shared.discardPending(); return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch
+        if method == .passthrough { EngineRouter.shared.discardPending(); RustBridge.clearBuffer(); return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch
+        Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log
 
         if let (bs, chars, keyConsumed) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
             Log.key(keyCode, "enter: bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed)") // LEANKEYS-HOOK: debug-log
@@ -1633,7 +1630,7 @@ private func keyboardCallback(
     // Issue #157: Pass key through after restore so it still functions normally (Tab inserts tab, ESC closes dialog)
     // Issue #303: Only pass through special keys (ESC, Tab, etc.), not letter/number keys with modifiers (Shift-Z, Option-Z)
     if AppState.shared.restoreShortcutEnabled && SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active) && matchesRestoreShortcut(keyCode: keyCode, flags: flags) { // LEANKEYS-HOOK: copy
-        triggerRestoreShortcut(flags: flags, proxy: proxy)
+        guard triggerRestoreShortcut(flags: flags, proxy: proxy) else { return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch (pass-through: the key is not swallowed)
         // Only pass through special keys that should still function after restore
         // (ESC closes dialogs, Tab moves focus, Enter submits, etc.)
         // For letter/number keys with modifiers (Shift-Z, Option-Z), consume the event
@@ -1656,8 +1653,10 @@ private func keyboardCallback(
     // These apps handle text input remotely and cannot receive macOS text injection
     if method == .passthrough {
         EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
+        RustBridge.clearBuffer() // LEANKEYS-HOOK: engine-dispatch
         return Unmanaged.passUnretained(event)
     }
+    Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log (after pass-through: nothing logged in a sign-in field)
 
     // Arrow keys with any modifier (Cmd/Option/Shift) that moves cursor - clear buffer
     // Cmd+Arrow: move by line, Option+Arrow: move by word, Shift+Arrow: select
@@ -1832,9 +1831,9 @@ private enum DetectionCache {
 
     static func set(_ method: InjectionMethod, _ delays: (UInt32, UInt32, UInt32), logKey: String) {
         result = (method, delays)
-        timestamp = CFAbsoluteTimeGetCurrent()
+        expiryLock.lock(); timestamp = generation == detectGeneration ? CFAbsoluteTimeGetCurrent() : 0; expiryLock.unlock() // LEANKEYS-HOOK: engine-dispatch (a focus move during this detection: the next key detects again)
         // Only log when method+app combination changes
-        if logKey != lastLoggedKey {
+        if method != .passthrough, logKey != lastLoggedKey { // LEANKEYS-HOOK: debug-log (nothing logged for pass-through)
             lastLoggedKey = logKey
             Log.method(logKey)
         }
@@ -1844,6 +1843,11 @@ private enum DetectionCache {
         result = nil
         timestamp = 0
     }
+    private static let expiryLock = NSLock() // LEANKEYS-HOOK: engine-dispatch
+    private static var generation = 0 // LEANKEYS-HOOK: engine-dispatch (bumped by every focus move)
+    private static var detectGeneration = 0 // LEANKEYS-HOOK: engine-dispatch (the generation a slow detection started in)
+    static func beginDetect() { expiryLock.lock(); detectGeneration = generation; expiryLock.unlock() } // LEANKEYS-HOOK: engine-dispatch
+    static func expire() { expiryLock.lock(); generation &+= 1; timestamp = 0; expiryLock.unlock() } // LEANKEYS-HOOK: engine-dispatch (focus moved: the next key re-detects)
 }
 
 /// Get detected default for a bundleId (method name + delay tuple)
@@ -1895,6 +1899,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
     }
 
     // Slow path: query AX for focused element
+    DetectionCache.beginDetect() // LEANKEYS-HOOK: engine-dispatch
     let systemWide = axSystemWideBounded()
     var focused: CFTypeRef?
     var role: String?
@@ -1965,7 +1970,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
             DetectionCache.set(finalMethod, finalDelays, logKey: logKey)
             return (finalMethod, finalDelays)
         }
-        let logKey = "\(methodName) [\(bundleId)] role=\(role ?? "nil")"
+        let logKey = "\(methodName) [\(bundleId)]" // LEANKEYS-HOOK: debug-log (no role)
         DetectionCache.set(m, d, logKey: logKey); return (m, d)
     }
 
@@ -2212,6 +2217,7 @@ private class FocusChangeObserver {
         // Callback for AX notifications - must be a C function pointer
         let callback: AXObserverCallback = { _, element, notification, _ in
             // Debounce: skip if processed recently (prevents rapid-fire from multiple notifications)
+            DetectionCache.expire() // LEANKEYS-HOOK: engine-dispatch
             let now = CFAbsoluteTimeGetCurrent()
             guard now - FocusChangeObserver.lastProcessedTime > FocusChangeObserver.debounceInterval else { return }
             FocusChangeObserver.lastProcessedTime = now
@@ -2356,6 +2362,7 @@ class PerAppModeManager {
         // Skip if already checked in this session
         guard !spotlightChecked else { return }
         spotlightChecked = true
+        DetectionCache.expire() // LEANKEYS-HOOK: engine-dispatch
 
         // Quick check: is Spotlight the focused element?
         let systemWide = axSystemWideBounded()
@@ -2398,6 +2405,7 @@ class PerAppModeManager {
         EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch (R20: a phrase is never credited to the app switched to)
         RustBridge.clearBuffer()
         clearDetectionCache() // Clear injection method cache on app switch
+        KeyPassthrough.prepare(NSWorkspace.shared.frontmostApplication) // LEANKEYS-HOOK: engine-dispatch (audit M2: Electron sign-in fields readable)
 
         // Snapshot per-app profile for keystroke hot path (thread-safe read)
         DetectionCache.activeProfile = SettingsLayout.advancedSettingsApply(advancedMode: AppState.shared.advancedMode) ? AppState.shared.perAppProfiles[bundleId] : nil // LEANKEYS-HOOK: copy
