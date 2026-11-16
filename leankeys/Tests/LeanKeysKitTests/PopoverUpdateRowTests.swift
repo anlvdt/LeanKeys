@@ -88,4 +88,12 @@ final class PopoverUpdateRowTests: XCTestCase {
             XCTAssertFalse(line?.contains("\n") ?? true)
         }
     }
+
+    func testErrorWindowTitleSaysWhatFailed() {
+        XCTAssertEqual(PopoverUpdateRow.Failure.from(message: "Tải về thất bại").title, "Không tải được bản mới")
+        XCTAssertEqual(PopoverUpdateRow.Failure.from(message: "Không thể lưu bản cập nhật").title, "Không tải được bản mới")
+        XCTAssertEqual(PopoverUpdateRow.Failure.from(message: "Máy chủ cập nhật đang bận (mã 503). Thử lại sau ít phút.").title,
+                       "Không kiểm tra được cập nhật")
+        XCTAssertEqual(PopoverUpdateRow.Failure.from(message: PopoverUpdateRow.Failure.installMessage).title, "Không cài được bản mới")
+    }
 }

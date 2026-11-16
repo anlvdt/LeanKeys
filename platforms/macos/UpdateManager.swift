@@ -310,7 +310,7 @@ struct UpdatePopupView: View {
     private var checkingContent: some View {
         VStack(spacing: 16) {
             appIcon
-            Text("Đang kiểm tra cập nhật...")
+            Text("Đang kiểm tra cập nhật…") // LEANKEYS-HOOK: copy
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
             ProgressView()
@@ -324,7 +324,7 @@ struct UpdatePopupView: View {
     private func availableContent(_ info: UpdateInfo) -> some View {
         VStack(spacing: 0) {
             // Version info
-            Text("\(AppMetadata.name) \(info.version) đã sẵn sàng — bạn đang dùng \(AppMetadata.version)")
+            Text("Có bản mới: \(AppMetadata.name) \(info.version) (bạn đang dùng \(AppMetadata.version))") // LEANKEYS-HOOK: copy
                 .font(.system(size: 11.5))
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -359,7 +359,7 @@ struct UpdatePopupView: View {
     private func downloadingContent(_ progress: Double) -> some View {
         VStack(spacing: 16) {
             appIcon
-            Text("Đang tải cập nhật...")
+            Text("Đang tải bản mới…") // LEANKEYS-HOOK: copy
                 .font(.system(size: 14, weight: .medium))
 
             VStack(spacing: 6) {
@@ -371,7 +371,7 @@ struct UpdatePopupView: View {
             }
 
             Button(action: { manager.dismiss() }) {
-                Text("Ẩn")
+                Text("Ẩn, tải tiếp ở nền") // LEANKEYS-HOOK: copy
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
@@ -391,7 +391,7 @@ struct UpdatePopupView: View {
             Text("Bản cập nhật đã sẵn sàng")
                 .font(.system(size: 15, weight: .semibold))
 
-            Text("Phiên bản \(manager.pendingVersion) đã được tải về.\nKhởi động lại để áp dụng bản cập nhật.")
+            Text("Đã tải \(AppMetadata.name) \(manager.pendingVersion).\nBấm Cài và mở lại để dùng bản mới.") // LEANKEYS-HOOK: copy
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -402,7 +402,7 @@ struct UpdatePopupView: View {
                 Button("Để sau") { manager.dismiss() }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
-                Button("Khởi động lại") { manager.restartToUpdate() }
+                Button("Cài và mở lại") { manager.restartToUpdate() } // LEANKEYS-HOOK: copy
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
             }
@@ -421,7 +421,7 @@ struct UpdatePopupView: View {
             Text("Bạn đang dùng phiên bản mới nhất")
                 .font(.system(size: 14, weight: .medium))
 
-            Text("v\(AppMetadata.version)")
+            Text("Phiên bản \(AppMetadata.version)") // LEANKEYS-HOOK: copy
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
 
@@ -445,7 +445,7 @@ struct UpdatePopupView: View {
                 .font(.system(size: 40))
                 .foregroundColor(.orange)
 
-            Text("Không thể kiểm tra cập nhật")
+            Text(PopoverUpdateRow.Failure.from(message: message).title) // LEANKEYS-HOOK: copy
                 .font(.system(size: 14, weight: .medium))
 
             Text(message)

@@ -39,7 +39,7 @@ class UpdateChecker {
     /// Check for updates asynchronously
     func checkForUpdates(completion: @escaping (UpdateCheckResult) -> Void) {
         guard let url = URL(string: githubAPIURL) else {
-            completion(.error("Invalid API URL"))
+            completion(.error("Không đọc được phản hồi của máy chủ cập nhật. Thử lại sau.")) // LEANKEYS-HOOK: copy
             return
         }
 
@@ -50,28 +50,28 @@ class UpdateChecker {
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let error {
                 DispatchQueue.main.async {
-                    completion(.error("Network error: \(error.localizedDescription)"))
+                    completion(.error("Không kết nối được máy chủ cập nhật. Kiểm tra mạng rồi thử lại.")) // LEANKEYS-HOOK: copy
                 }
                 return
             }
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 DispatchQueue.main.async {
-                    completion(.error("Invalid response"))
+                    completion(.error("Không đọc được phản hồi của máy chủ cập nhật. Thử lại sau.")) // LEANKEYS-HOOK: copy
                 }
                 return
             }
 
             guard httpResponse.statusCode == 200 else {
                 DispatchQueue.main.async {
-                    completion(.error("Server error: \(httpResponse.statusCode)"))
+                    completion(.error("Máy chủ cập nhật đang bận (mã \(httpResponse.statusCode)). Thử lại sau ít phút.")) // LEANKEYS-HOOK: copy
                 }
                 return
             }
 
             guard let data else {
                 DispatchQueue.main.async {
-                    completion(.error("No data received"))
+                    completion(.error("Không đọc được phản hồi của máy chủ cập nhật. Thử lại sau.")) // LEANKEYS-HOOK: copy
                 }
                 return
             }
@@ -85,7 +85,7 @@ class UpdateChecker {
     private func parseResponse(data: Data, completion: @escaping (UpdateCheckResult) -> Void) {
         do {
             guard let releases = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-                DispatchQueue.main.async { completion(.error("Invalid JSON format")) }
+                DispatchQueue.main.async { completion(.error("Không đọc được phản hồi của máy chủ cập nhật. Thử lại sau.")) } // LEANKEYS-HOOK: copy
                 return
             }
 
@@ -155,7 +155,7 @@ class UpdateChecker {
             }
 
             guard let finalDownloadURL = downloadURL else {
-                DispatchQueue.main.async { completion(.error("No DMG found in release")) }
+                DispatchQueue.main.async { completion(.error("Bản mới chưa có tệp cài đặt. Thử lại sau.")) } // LEANKEYS-HOOK: copy
                 return
             }
 
@@ -176,7 +176,7 @@ class UpdateChecker {
 
         } catch {
             DispatchQueue.main.async {
-                completion(.error("JSON parse error: \(error.localizedDescription)"))
+                completion(.error("Không đọc được phản hồi của máy chủ cập nhật. Thử lại sau.")) // LEANKEYS-HOOK: copy
             }
         }
     }

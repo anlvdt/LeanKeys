@@ -26,3 +26,5 @@ copy	platforms/macos/RustBridge.swift
 copy	platforms/macos/MenuBar.swift
 copy	platforms/macos/PerAppConfigModels.swift
 copy	platforms/macos/AppPickerSheet.swift
+copy	platforms/macos/UpdateManager.swift
+copy	platforms/macos/UpdateChecker.swift

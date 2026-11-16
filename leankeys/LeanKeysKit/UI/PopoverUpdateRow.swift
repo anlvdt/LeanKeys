@@ -31,6 +31,15 @@ public enum PopoverUpdateRow {
             default: return .network
             }
         }
+
+        /// Title of the legacy update window's error page: what failed, not always "the check" (copy audit K2).
+        public var title: String {
+            switch self {
+            case .network: return "Không kiểm tra được cập nhật"
+            case .download: return "Không tải được bản mới"
+            case .install: return Self.installMessage
+            }
+        }
     }
 
     public enum Phase: Equatable {

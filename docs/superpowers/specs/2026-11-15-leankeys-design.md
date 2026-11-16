@@ -520,7 +520,7 @@ Thay mục 4 của §14.1 bằng một hàng luôn hiện, nằm dưới `Kiểu
 | Mới nhất | `Bạn đang dùng bản mới nhất` | — |
 | Lỗi | một dòng ngắn + nút `Thử lại` | kiểm tra lại |
 
-- Lỗi kiểm tra: `Lỗi kết nối, hãy kiểm tra mạng`; lỗi tải: `Không tải được bản mới`; bộ cài từ chối: `Không cài được bản mới`. Không hiện chữ lỗi kỹ thuật (tiếng Anh) của `UpdateChecker`.
+- Lỗi kiểm tra: `Lỗi kết nối, hãy kiểm tra mạng`; lỗi tải: `Không tải được bản mới`; bộ cài từ chối: `Không cài được bản mới`. Không hiện chữ lỗi kỹ thuật (tiếng Anh) của `UpdateChecker`. Cửa sổ cập nhật cũ của Gõ Nhanh cũng không: `UpdateChecker` báo lỗi bằng câu tiếng Việt có hướng xử lý, và tiêu đề trang lỗi nói đúng bước hỏng (kiểm tra, tải hay cài).
 - Đóng ô nổi thì `Mới nhất` và `Lỗi` trở về `Chưa kiểm tra`.
 
 ### 16.3 Luồng
