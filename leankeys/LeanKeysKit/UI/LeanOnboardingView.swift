@@ -8,10 +8,10 @@ import SwiftUI
 public struct LeanOnboardingView: View {
     enum Strings {
         static let title = "Chào mừng đến với LeanKeys"
-        static let message = "Chỉ cần cấp quyền Trợ năng một lần, sau đó cứ thế gõ — LeanKeys tự chuyển Việt/Anh cho bạn."
+        static let message = "Bấm nút bên dưới, rồi bật công tắc cạnh LeanKeys trong Cài đặt hệ thống › Trợ năng. Sau đó cứ thế gõ — LeanKeys tự chuyển Việt/Anh cho bạn."
         static let returningTitle = "LeanKeys vừa được cập nhật"
-        static let returningMessage = "macOS cần bạn cấp lại quyền Trợ năng: mở Cài đặt Trợ năng, chọn LeanKeys, bấm nút \u{2212} để xoá, rồi bấm + và thêm lại LeanKeys."
-        static let returningResetMessage = "Bấm nút bên dưới rồi bật lại LeanKeys trong danh sách Trợ năng."
+        static let returningMessage = "macOS cần bạn cấp lại quyền Trợ năng. Bấm nút bên dưới, chọn LeanKeys trong danh sách, bấm \u{2212} để xoá, rồi bấm + và chọn lại LeanKeys trong thư mục Ứng dụng."
+        static let returningResetMessage = "Bấm nút bên dưới, rồi bật lại công tắc cạnh LeanKeys trong danh sách Trợ năng."
         static let openSettings = "Cấp quyền Trợ năng"
         static let done = "Xong! Bạn có thể bắt đầu gõ."
 
