@@ -605,7 +605,8 @@ extension UpdateManager {
     /// Spec §16.3: an update the user asked for from the popover installs at once, without the idle wait.
     private func installWhenIdle() {
         #if DEBUG
-            popoverInstallRequested = false
+            popoverInstallRequested = false // The popover falls back to "Cài bản mới" rather than spin on "Đang cài".
+            NotificationCenter.default.post(name: .updateStateChanged, object: nil)
             return // Ruling R23: a Debug build never updates itself.
         #else
         if popoverInstallRequested, case let .readyToInstall(dmgPath) = state {
