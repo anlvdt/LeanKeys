@@ -936,8 +936,23 @@ struct UpdateBadgeView: View {
     @ObservedObject private var updateManager = UpdateManager.shared
     @State private var hovered = false
     @State private var rotation: Double = 0
+    /// The badge's words after the version. "Mới nhất" only after a check said so. // LEANKEYS-HOOK: copy
+    private var statusText: String { // LEANKEYS-HOOK: copy
+        if updateManager.isChecking { return "Đang kiểm tra…" } // LEANKEYS-HOOK: copy
+        if updateManager.isReadyToInstall { return "Cài bản mới" } // LEANKEYS-HOOK: copy
+        if updateManager.updateAvailable { return "Có bản mới" } // LEANKEYS-HOOK: copy
+        if case .upToDate = updateManager.state { return "Mới nhất" } // LEANKEYS-HOOK: copy
+        return "Kiểm tra cập nhật" // LEANKEYS-HOOK: copy
+    } // LEANKEYS-HOOK: copy
 
     var body: some View {
+        Button { // LEANKEYS-HOOK: copy (a button: keyboard focus, Space, and VoiceOver's button trait)
+            if updateManager.isReadyToInstall { // LEANKEYS-HOOK: copy
+                updateManager.restartToUpdate() // LEANKEYS-HOOK: copy
+            } else { // LEANKEYS-HOOK: copy
+                updateManager.checkForUpdatesManually() // LEANKEYS-HOOK: copy
+            } // LEANKEYS-HOOK: copy
+        } label: { // LEANKEYS-HOOK: copy
         HStack(spacing: 3) {
             Text("v\(AppMetadata.version)")
             if updateManager.isChecking {
@@ -947,23 +962,28 @@ struct UpdateBadgeView: View {
                     .rotationEffect(.degrees(rotation))
                     .onAppear { withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { rotation = 360 } }
                     .onDisappear { rotation = 0 }
-                Text("Kiểm tra")
+                Text(statusText) // LEANKEYS-HOOK: copy
             } else if updateManager.isReadyToInstall {
                 Image(systemName: "arrow.uturn.forward.circle.fill").font(.system(size: 12)).foregroundColor(.orange)
-                Text("Khởi động lại")
+                Text(statusText) // LEANKEYS-HOOK: copy
             } else if updateManager.updateAvailable {
                 Image(systemName: "arrow.down.circle.fill").font(.system(size: 12)).foregroundColor(.blue)
-                Text("Đang tải...")
-            } else {
+                Text(statusText) // LEANKEYS-HOOK: copy
+            } else if case .upToDate = updateManager.state { // LEANKEYS-HOOK: copy
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 12)).foregroundColor(.green)
                 Text("Mới nhất")
+            } else { // LEANKEYS-HOOK: copy
+                Image(systemName: "arrow.clockwise").font(.system(size: 12)) // LEANKEYS-HOOK: copy
+                Text(statusText) // LEANKEYS-HOOK: copy
             }
         }
         .font(.system(size: 11))
-        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+        .foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(Capsule().fill(hovered ? Color(NSColor.controlBackgroundColor).opacity(0.5) : Color.clear))
+        .contentShape(Capsule()) // LEANKEYS-HOOK: copy
+        } // LEANKEYS-HOOK: copy
         .onHover { h in
             hovered = h
             if h {
@@ -972,13 +992,8 @@ struct UpdateBadgeView: View {
                 NSCursor.pop()
             }
         }
-        .onTapGesture {
-            if updateManager.isReadyToInstall {
-                updateManager.restartToUpdate()
-            } else {
-                updateManager.checkForUpdatesManually()
-            }
-        }
+        .buttonStyle(.plain) // LEANKEYS-HOOK: copy
+        .accessibilityLabel(Text("Phiên bản \(AppMetadata.version). \(statusText)")) // LEANKEYS-HOOK: copy
     }
 }
 
@@ -1194,7 +1209,7 @@ struct ShortcutsSheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 4) {
                         Text("Nội dung").font(.system(size: 11)).foregroundColor(.secondary)
-                        Text("(⌥↩ xuống dòng)").font(.system(size: 10)).foregroundColor(Color(NSColor.tertiaryLabelColor))
+                        Text("(⌥↩ xuống dòng)").font(.system(size: 10)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
                     }
                     // Issue #343: TextEditor for multiline replacement (supports newlines)
                     TextEditor(text: $formValue)
@@ -1239,7 +1254,7 @@ struct ShortcutsSheet: View {
             VStack(spacing: 8) {
                 Image(systemName: "text.badge.plus").font(.system(size: 32)).foregroundColor(.secondary)
                 Text("Chưa có từ viết tắt").font(.system(size: 13)).foregroundColor(.secondary)
-                Text("Điền form ở trên để thêm mới").font(.system(size: 11)).foregroundColor(Color(NSColor.tertiaryLabelColor))
+                Text("Điền form ở trên để thêm mới").font(.system(size: 11)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -1381,8 +1396,8 @@ struct AboutPageView: View {
             VStack(spacing: 12) {
                 Image(nsImage: AppMetadata.logo).resizable().frame(width: 80, height: 80)
                 Text(AppMetadata.name).font(.system(size: 20, weight: .bold))
-                Text("Bộ gõ tiếng Việt nhanh và nhẹ").font(.system(size: 13)).foregroundColor(Color(NSColor.secondaryLabelColor))
-                Text("Phiên bản v\(AppMetadata.version)").font(.system(size: 12)).foregroundColor(Color(NSColor.tertiaryLabelColor))
+                Text(AppMetadata.tagline).font(.system(size: 13)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
+                Text("Phiên bản \(AppMetadata.version)").font(.system(size: 12)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
             }
             HStack(spacing: 12) {
                 // LEANKEYS-HOOK: about (Gõ Nhanh's sponsor link removed; Gõ Nhanh is credited in AcknowledgementsSection)

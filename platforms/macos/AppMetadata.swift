@@ -15,7 +15,7 @@ enum AppMetadata {
     }
 
     static let displayName = LeanBranding.name // LEANKEYS-HOOK: branding
-    static let tagline = "Bộ gõ tiếng Việt hiệu suất cao"
+    static let tagline = "Bộ gõ tiếng Việt tự chuyển Việt/Anh" // LEANKEYS-HOOK: copy
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     static let buildNumber = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
 
@@ -33,7 +33,7 @@ enum AppMetadata {
 
     // Legal
     static let copyright = "Copyright © 2025 \(author). All rights reserved."
-    static let license = "GPL-3.0-or-later"
+    static let license = "GPL-3.0" // LEANKEYS-HOOK: copy (one spelling, as in ACKNOWLEDGEMENTS.md and LeanAcknowledgements)
 
     /// Tech
     static let techStack = "Rust + SwiftUI"

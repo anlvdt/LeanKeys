@@ -435,14 +435,14 @@ Thêm ngày 2026-11-15, người dùng đã duyệt cả ba phương án A, B, C
 - Nếu người dùng bật "Giảm chuyển động" (`accessibilityDisplayShouldReduceMotion`) thì không có hiệu ứng.
 
 ### 14.3 Cửa sổ Cài đặt: thanh bên bốn trang
-- **Thanh bên:** logo 48 pt cạnh tên "LeanKeys" và phiên bản trên cùng một hàng; bên dưới là `Chung` · `Phím tắt` · `Nâng cao` · `Giới thiệu`, mỗi mục có biểu tượng SF Symbol.
+- **Thanh bên:** logo 48 pt cạnh tên "LeanKeys" trên cùng một hàng; dưới đó là nhãn cập nhật, nơi duy nhất hiện phiên bản (`v1.2 · Mới nhất`; "Mới nhất" chỉ sau một lần kiểm tra báo vậy, chưa kiểm tra thì `Kiểm tra cập nhật`). Nhãn là một nút: dùng được bằng bàn phím và VoiceOver. Bên dưới là `Chung` · `Phím tắt` · `Nâng cao` · `Giới thiệu`, mỗi mục có biểu tượng SF Symbol.
 - **Chung:**
   - Thẻ trạng thái giống phần đầu của ô nổi: trạng thái, dòng tự chuyển, cảnh báo nếu có.
   - Công tắc `Bộ gõ tiếng Việt`, chữ đậm hơn các mục khác.
   - `Kiểu gõ`.
   - Các mục chỉ dành cho Gõ Nhanh (`Gõ W thành Ư`, `Gõ [ ] thành Ơ Ư`, `Tự khôi phục tiếng Anh`, `Tự viết hoa đầu câu`) **chỉ hiện khi** engine là "Chỉ dùng Gõ Nhanh". Ở chế độ "Tự động", chúng không xuất hiện.
 - **Phím tắt:** các dòng phím tắt bật/tắt hiện có của Gõ Nhanh, chuyển nguyên sang trang này.
-- **Nâng cao:** thẻ thu gọn `Lõi gõ` (mục 13; trên giao diện, engine gọi là "lõi gõ"), rồi các phần hiệu năng, tương thích và tuỳ chỉnh theo app hiện có của Gõ Nhanh.
+- **Nâng cao:** thẻ thu gọn `Lõi gõ` (mục 13; trên giao diện, engine gọi là "lõi gõ"), rồi `Gợi ý gõ tắt`, `Tự sửa và tự học`, tuỳ chỉnh theo ứng dụng; các phần ít dùng và kỹ thuật (hiệu năng, tương thích, nhật ký gỡ lỗi) nằm cuối.
 - **Giới thiệu:** giữ như hiện tại, có ghi công.
 - **Ghi chú trên giao diện tối đa một dòng.** Giải thích dài hơn nằm trong tooltip của biểu tượng ⓘ. Không đưa chữ kỹ thuật như "giai đoạn 4" ra giao diện.
 - **Màu:** chữ phụ phải đạt tương phản ≥ 4.5:1 ở cả chế độ sáng và tối; dùng màu hệ thống `secondaryLabelColor`, không dùng xám tự chọn.

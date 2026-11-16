@@ -12,13 +12,13 @@ struct AdvancedSettingsView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
-                performanceSection
-                compatibilitySection
-                EngineSettingsSection(onEngineChanged: { RustBridge.clearBuffer() }) // LEANKEYS-HOOK: settings-engine
-                LearnSettingsSection(model: .shared, part: .advanced) // LEANKEYS-HOOK: settings-engine
-                UndoLearningSection(model: .shared) // LEANKEYS-HOOK: settings-engine
-                logSection
-                perAppSection
+                EngineSettingsSection(onEngineChanged: { RustBridge.clearBuffer() }) // LEANKEYS-HOOK: settings-engine (first, spec §14.3)
+                LearnSettingsSection(model: .shared, part: .advanced) // LEANKEYS-HOOK: settings-engine (LeanKeys cards first)
+                UndoLearningSection(model: .shared) // LEANKEYS-HOOK: settings-engine (LeanKeys cards first)
+                perAppSection // LEANKEYS-HOOK: copy (rare and technical sections last)
+                performanceSection // LEANKEYS-HOOK: copy
+                compatibilitySection // LEANKEYS-HOOK: copy
+                logSection // LEANKEYS-HOOK: copy
                 Spacer()
             }
         }
@@ -132,8 +132,8 @@ struct PerAppProfileRow: View {
     @State private var resetHovered = false
 
     private let labelWidth: CGFloat = 48
-    private let labelColor = Color(NSColor.tertiaryLabelColor)
-    private let labelFont = Font.system(size: 10)
+    private let labelColor = Color(NSColor.secondaryLabelColor) // LEANKEYS-HOOK: copy (4.5:1 contrast, spec §14.3)
+    private let labelFont = Font.system(size: 11) // LEANKEYS-HOOK: copy
 
     var body: some View {
         VStack(spacing: 10) {
@@ -145,7 +145,7 @@ struct PerAppProfileRow: View {
                         Text(appName).font(.system(size: 12, weight: .medium))
                         if let hint = detectedHint {
                             Text(hint)
-                                .font(.system(size: 9))
+                                .font(.system(size: 11)) // LEANKEYS-HOOK: copy
                                 .foregroundColor(labelColor)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
@@ -154,7 +154,7 @@ struct PerAppProfileRow: View {
                         }
                     }
                     Text(bundleId)
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(.system(size: 11, design: .monospaced)) // LEANKEYS-HOOK: copy
                         .foregroundColor(labelColor)
                         .lineLimit(1).truncationMode(.middle)
                 }
@@ -188,8 +188,8 @@ struct PerAppProfileRow: View {
                         .frame(width: 52, alignment: .trailing)
                 }
                 Text("Tăng nếu bị nuốt chữ · Giảm nếu app phản hồi nhanh")
-                    .font(.system(size: 10))
-                    .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                    .font(.system(size: 11)) // LEANKEYS-HOOK: copy
+                    .foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
                     .padding(.leading, labelWidth + 6)
             }
             .padding(.horizontal, 14)

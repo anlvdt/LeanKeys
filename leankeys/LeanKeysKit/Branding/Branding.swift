@@ -27,7 +27,7 @@ public enum LeanVersions {
         return (file.leankeys, file.gonhanh, file.vikey)
     }
 
-    /// "Gõ Nhanh v1.0.165 · Vikey v1.0.33"
+    /// "Gõ Nhanh v1.0.165 · Vikey v1.0.34" (values come from Versions.json)
     public static var engineLine: String {
         let v = load()
         return "Gõ Nhanh \(v.gonhanh) · Vikey \(v.vikey)"

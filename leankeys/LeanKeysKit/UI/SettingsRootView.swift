@@ -40,10 +40,11 @@ public enum SettingsPage: CaseIterable {
     }
 }
 
-/// Settings window root: a 200 pt sidebar (logo, name, version, badge, page list) beside the selected page.
+/// Settings window root: a 200 pt sidebar (logo, name, update badge with the version, page list) beside the selected page.
 public struct SettingsRootView: View {
     private let logo: NSImage
     private let name: String
+    /// Not drawn: the badge already starts with the version (copy audit G1). Kept so the app's call is unchanged.
     private let version: String
     private let badge: AnyView
     private let pageViews: [SettingsPage: AnyView]
@@ -106,13 +107,9 @@ public struct SettingsRootView: View {
                     Image(nsImage: logo)
                         .resizable()
                         .frame(width: 48, height: 48)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(name)
-                            .font(.system(size: 15, weight: .bold))
-                        Text("v\(version)")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(NSColor.secondaryLabelColor))
-                    }
+                    // The version shows once, in the update badge below (copy audit G1).
+                    Text(name)
+                        .font(.system(size: 15, weight: .bold))
                 }
                 badge
             }
