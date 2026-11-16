@@ -64,7 +64,8 @@ public final class EngineRouter {
     /// `makeVikey` runs at most once, the first time Vikey is needed. `undoLearning` runs at most once too, and only
     /// when that engine is the real `VikeyEngine`: the default (`UndoLearning.shared`, which opens the saved rules)
     /// is never built for a stub engine or a router that never uses Vikey. `now` (seconds, monotonic) and
-    /// `frontmostBundleID` serve the stray-key filter (spec 17.2).
+    /// `frontmostBundleID` serve the stray-key filter (spec 17.2); `frontmostBundleID` also keeps capitals out of
+    /// terminals and code editors (spec 17.1).
     public init(defaults: UserDefaults = .standard, makeVikey: @escaping () -> TypingEngine? = { VikeyEngine() },
                 undoLearning: @escaping () -> UndoLearning = { UndoLearning.shared },
                 now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
@@ -229,7 +230,9 @@ public final class EngineRouter {
         guard committed.phraseText != restoredByUndo,
               let undoLearning, undoLearning.autoCapitalize, let capitalizer,
               let replacement = capitalizer.replacement(phraseText: committed.phraseText,
-                                                        keepsLowercase: undoLearning.keepsLowercase)
+                                                        keepsLowercase: undoLearning.keepsLowercase),
+              // Not in a terminal or code editor (ruling R12). Asked only once a rule fired, not at every Space.
+              !CodeApps.contains(frontmostBundleID())
         else { return nil }
         let isSpace = keyCode == Self.spaceKey
         let result = (replacement.original.count, Array(replacement.capitalized) + (isSpace ? [" "] : []), isSpace)

@@ -126,7 +126,11 @@ final class StrayEnterFilterTests: XCTestCase {
             _ = decide(&filter, enter, at: t0, line: "x", bundle: bundle)
             XCTAssertEqual(decide(&filter, backslash, at: t0 + 0.010, line: "", bundle: bundle), .none, bundle)
         }
-        XCTAssertTrue(StrayEnterFilter.excludedBundleIDs.contains("com.apple.Terminal"))
+        XCTAssertTrue(CodeApps.contains("com.apple.Terminal"))
+        // Ruling R12: one list of terminals and code editors, the learning exclusions' terminals included.
+        for terminal in ["co.zeit.hyper", "org.tabby"] {
+            XCTAssertEqual(enterAfter(backslash, gap: 0.040, line: "x\\", bundle: terminal), .none, terminal)
+        }
         XCTAssertEqual(enterAfter(backslash, gap: 0.040, line: "x\\", bundle: nil), .deleteBeforeEnter)
     }
 

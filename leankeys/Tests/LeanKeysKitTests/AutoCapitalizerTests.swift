@@ -53,6 +53,9 @@ final class AutoCapitalizerTests: XCTestCase {
     private var context = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: false,
                                        now: Date())
     private var learning: UndoLearning?
+    /// The frontmost app the router sees: an ordinary text app unless a test says otherwise (never the real one,
+    /// which is the terminal or editor running the tests).
+    private var frontmost: String? = "com.apple.TextEdit"
 
     override func setUp() {
         super.setUp()
@@ -87,7 +90,8 @@ final class AutoCapitalizerTests: XCTestCase {
                                 names: names ?? UndoLearning.memoryNames())
         learning = made
         let engine = self.engine!
-        return EngineRouter(defaults: defaults, makeVikey: { engine }, undoLearning: { made })
+        return EngineRouter(defaults: defaults, makeVikey: { engine }, undoLearning: { made },
+                            frontmostBundleID: { [unowned self] in self.frontmost })
     }
 
     /// Names in memory whose dictionary check says no word is a dictionary word: every capital the router hands
@@ -252,6 +256,22 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(router).type("ddi tiki ⌫"), "đi tiki")
         XCTAssertTrue(names.names.isEmpty)
         XCTAssertEqual(line(router).type("veef tiki "), "về tiki ")
+    }
+
+    /// Ruling R12: terminals and code editors get no capitals (a command or identifier is case-sensitive).
+    func testNoCapitalisationInCodeApps() {
+        let names = permissiveNames()
+        let router = makeRouter(names: names)
+        line(router).type("mua Tiki ")
+        line(router).type("mua Tiki ")
+        for app in ["com.apple.Terminal", "com.microsoft.VSCode", "co.zeit.hyper", "com.jetbrains.intellij"] {
+            frontmost = app
+            XCTAssertEqual(line(router).type("tooi owr haf nooij "), "tôi ở hà nội ", app)
+            XCTAssertEqual(line(router).type("mua tiki\n"), "mua tiki\n", app)
+        }
+        frontmost = "com.apple.TextEdit"
+        XCTAssertEqual(line(router).type("tooi owr haf nooij "), "tôi ở Hà Nội ")
+        XCTAssertEqual(line(router).type("mua tiki "), "mua Tiki ")
     }
 
     func testSwitchOff() {

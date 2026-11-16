@@ -4,22 +4,12 @@ import Foundation
 /// Enter, its character is deleted and Enter follows; pressed just after Enter, the key is dropped.
 ///
 /// `decide` sees every key on the Vikey path (it remembers the previous one) and answers for this key. It never acts
-/// on a key or an Enter with ⌘, ⌥ or ⌃, in a terminal or code editor, or on a character that closes a pair still
+/// on a key or an Enter with ⌘, ⌥ or ⌃, in a terminal or code editor (`CodeApps`), or on a character that closes a pair still
 /// open on its line. The router skips it while the switch is off. Nothing typed is stored beyond the previous key's
 /// code and time.
 public struct StrayEnterFilter {
     /// The longest gap between the two key presses, inclusive.
     public static let window: TimeInterval = 0.100
-
-    /// Terminals and code editors, where `\` before Enter is meant (spec 17.2). JetBrains IDEs match by prefix.
-    public static let excludedBundleIDs: Set<String> = [
-        "com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "dev.warp.Warp-Preview",
-        "com.mitchellh.ghostty", "org.alacritty", "io.alacritty", "net.kovidgoyal.kitty", "com.github.wez.wezterm",
-        "com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.todesktop.230313mzl4w4u92", "com.todesktop.cursor",
-        "com.exafunction.windsurf", "dev.zed.Zed", "dev.zed.Zed-Preview", "com.apple.dt.Xcode", "com.sublimetext.4",
-        "com.sublimetext.3", "com.panic.Nova", "com.barebones.bbedit", "com.google.android.studio",
-    ]
-    static let excludedBundlePrefix = "com.jetbrains."
 
     public enum Decision: Equatable { case none, deleteBeforeEnter, dropKey }
 
@@ -54,7 +44,7 @@ public struct StrayEnterFilter {
         let before = previous
         previous = Press(keyCode: keyCode, shift: shift, modified: otherModifiers, time: time)
         guard !otherModifiers, let before, !before.modified, Self.isWithinWindow(time - before.time),
-              !Self.isExcluded(bundleID) else { return .none }
+              !CodeApps.contains(bundleID) else { return .none }
         if Self.enterKeys.contains(keyCode) {
             guard let pair = Self.adjacentKeys[before.keyCode] else { return .none }
             let stray = before.shift ? pair.shifted : pair.plain
@@ -68,11 +58,6 @@ public struct StrayEnterFilter {
         }
         if Self.adjacentKeys[keyCode] != nil, Self.enterKeys.contains(before.keyCode) { return .dropKey }
         return .none
-    }
-
-    static func isExcluded(_ bundleID: String?) -> Bool {
-        guard let bundleID else { return false }
-        return excludedBundleIDs.contains(bundleID) || bundleID.hasPrefix(excludedBundlePrefix)
     }
 
     /// Within `window`, allowing for floating-point error in the subtraction (1000.8 - 1000.7 is not 0.1).
