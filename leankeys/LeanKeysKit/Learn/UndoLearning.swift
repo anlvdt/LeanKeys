@@ -81,7 +81,9 @@ public final class UndoLearning: ObservableObject {
     private let onRecordQueue: (@escaping () -> Void) -> Void
     /// Bumped by "Xoá tất cả": a record queued under an older generation drops itself (ruling R17).
     private var generation = 0
-    private let generationLock = NSLock()
+    /// Guards `generation`, and is held while work is queued with it (re-review Minor 1). Recursive: an inline
+    /// record queue (tests) runs the work, which reads the generation, while it is held.
+    private let generationLock = NSRecursiveLock()
 
     /// The instance the C filter asks. Set by `install()`; read on the key-handling thread, which also installs.
     fileprivate static var installed: UndoLearning?
@@ -159,11 +161,7 @@ public final class UndoLearning: ObservableObject {
         // On the queue, after any sighting of the name already there (review M1). It only removes data: no
         // secure-field check.
         if let learnedName {
-            let generation = currentGeneration()
-            onRecordQueue { [weak self, learnedNames] in
-                guard self?.currentGeneration() == generation else { return }
-                learnedNames.undone(word: learnedName)
-            }
+            onRecordQueueUnlessCleared { [learnedNames] in learnedNames.undone(word: learnedName) }
         }
         guard learning, let probe = includedProbe() else { return }
         // A secret-shaped word before the phrase is never kept as its context (ruling R14).
@@ -192,10 +190,22 @@ public final class UndoLearning: ObservableObject {
     /// or "Xoá tất cả" came after it was queued.
     private func record(_ probe: LearnContextProbe, _ work: @escaping () -> Void) {
         let secureField = secureField
-        let generation = currentGeneration()
-        onRecordQueue { [weak self] in
-            guard self?.currentGeneration() == generation, !secureField(probe) else { return }
+        onRecordQueueUnlessCleared {
+            guard !secureField(probe) else { return }
             work()
+        }
+    }
+
+    /// Runs `work` on the record queue unless "Xoá tất cả" came after it was queued. The generation is read and the
+    /// work queued in one critical section, as `removeAll` bumps it and queues its clear: work that holds the new
+    /// generation is always queued behind that clear, so the clear never wipes it (re-review Minor 1).
+    private func onRecordQueueUnlessCleared(_ work: @escaping () -> Void) {
+        generationLock.withLock {
+            let generation = generation
+            onRecordQueue { [weak self] in
+                guard self?.currentGeneration() == generation else { return }
+                work()
+            }
         }
     }
 
@@ -213,14 +223,18 @@ public final class UndoLearning: ObservableObject {
 
     /// "Xoá tất cả" (spec 17.3): every rule, capitalisation rules included, and every learned name. Cleared now,
     /// so the list empties at once, and again on the record queue behind any work already there; that work drops
-    /// itself as well (ruling R17), so nothing queued before brings a rule or a hidden count back.
+    /// itself as well (ruling R17), so nothing queued before brings a rule or a hidden count back. The bump and the
+    /// queued clear happen together, after the clear here, so work queued after the bump is never cleared
+    /// (re-review Minor 1).
     public func removeAll() {
-        generationLock.withLock { generation += 1 }
         book.removeAll()
         learnedNames.removeAll()
-        onRecordQueue { [book, learnedNames] in
-            book.removeAll()
-            learnedNames.removeAll()
+        generationLock.withLock {
+            generation += 1
+            onRecordQueue { [book, learnedNames] in
+                book.removeAll()
+                learnedNames.removeAll()
+            }
         }
     }
 

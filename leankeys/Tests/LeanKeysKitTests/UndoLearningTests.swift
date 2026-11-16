@@ -443,6 +443,39 @@ final class UndoLearningTests: XCTestCase {
         XCTAssertEqual(names.names.map(\.form), ["Lazada"])
     }
 
+    /// Re-review Minor 1: a record that reads the generation "Xoá tất cả" bumped to is queued behind the queued
+    /// clear, so the clear never wipes it. The record is made on another thread at the moment the clear is being
+    /// queued, the one point where it could slip in ahead of it.
+    func testRecordAfterRemoveAllSurvivesTheQueuedClear() {
+        let lock = NSLock()
+        var work: [() -> Void] = []
+        var removing = false
+        let other = DispatchGroup()
+        var made: UndoLearning?
+        let book = UndoRuleBook(store: nil)
+        let learning = UndoLearning(book: book, defaults: defaults, probe: { [unowned self] in context.probe },
+                                    secureField: { _ in false }, names: fakeNames(), onRecordQueue: { closure in
+            let clearing: Bool = lock.withLock { defer { removing = false }; return removing }
+            if clearing, let made {
+                // The clear is being queued: another thread makes a record now, and gets up to 200 ms to queue it
+                // first. Under the fix it waits for the bump and the clear to be queued together, and times out.
+                DispatchQueue.global().async(group: other) {
+                    made.capitalizationUndone("cap:huế", previous: "ở", learnedName: nil)
+                }
+                _ = other.wait(timeout: .now() + 0.2)
+            }
+            lock.withLock { work.append(closure) }
+        })
+        made = learning
+        self.learning = learning
+        lock.withLock { removing = true }
+        learning.removeAll()
+        other.wait()
+        let queued = lock.withLock { work }
+        queued.forEach { $0() }
+        XCTAssertEqual(book.rules.map(\.text), ["cap:huế"], "the record made after the bump survived the clear")
+    }
+
     /// Review M1: the undo of a learned name goes through the same queue as its sightings, so a sighting queued
     /// before the second undo cannot re-create a hidden count for a name the user just rejected.
     func testNameUndoIsOrderedWithItsSightings() {
