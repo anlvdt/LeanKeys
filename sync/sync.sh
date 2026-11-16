@@ -19,7 +19,8 @@
 #
 # Exit: 0 nothing new, or synced (with --skip-build) / build ready in
 #       dist/LeanKeys-<ver>.dmg with <ver> in dist/READY
-#       1 other error (fetch failed, missing branch)
+#       1 other error (fetch failed, missing branch), or bad usage (unknown argument; 2 is taken by a merge
+#         conflict here, unlike build.sh and check-divergence.sh)
 #       2 merge conflict (sync branch deleted, main unchanged)
 #       3 divergence, test or build failure, or main could not be
 #         fast-forwarded (sync branch kept, main unchanged)
@@ -436,7 +437,7 @@ main() {
     print -r -- "$ver" > "$repo/dist/READY"
     say ""
     say "Bản LeanKeys $ver sẵn sàng: dist/LeanKeys-$ver.dmg. Chạy release.sh để đăng."
-    notify "Bản LeanKeys $ver sẵn sàng — chạy release.sh để đăng"
+    notify "Bản LeanKeys $ver sẵn sàng — chạy zsh sync/release.sh để đăng"
   fi
   exit 0
 }

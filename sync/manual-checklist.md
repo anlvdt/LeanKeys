@@ -1,6 +1,6 @@
 # Thử tay trước khi đăng bản
 
-Cài bản trong DMG (kéo `LeanKeys.app` vào Applications, cấp quyền Accessibility nếu được hỏi). Mục có hai ô làm hai lần: một lần với engine **Gõ Nhanh**, một lần với **Vikey** (menu bar → Cài đặt → Nâng cao → mở "Lõi gõ": **Chỉ dùng Gõ Nhanh** là Gõ Nhanh, **Tự động (khuyên dùng)** là Vikey, mặc định). Mục chỉ có ô Vikey (— ở cột Gõ Nhanh) làm một lần với Vikey. Kiểu gõ Telex.
+Cài bản trong DMG (kéo `LeanKeys.app` vào Applications, cấp quyền Trợ năng nếu được hỏi). Mục có hai ô làm hai lần: một lần với engine **Gõ Nhanh**, một lần với **Vikey** (menu bar → Cài đặt → Nâng cao → mở "Lõi gõ": **Chỉ dùng Gõ Nhanh** là Gõ Nhanh, **Tự động (khuyên dùng)** là Vikey, mặc định). Mục chỉ có ô Vikey (— ở cột Gõ Nhanh) làm một lần với Vikey. Kiểu gõ Telex.
 
 Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường học". Gõ thêm một từ tiếng Anh rồi Space, từ đó phải giữ nguyên: `push` với Gõ Nhanh, `more` với Vikey.
 
@@ -31,7 +31,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | P3 | Menu bar | Ở chế độ English (icon hiện E), gõ `treen `: Vikey tự chuyển sang Tiếng Việt, icon mờ dần từ E sang V, ô nổi đang mở đổi theo ngay. | — | [ ] |
 | P4 | Menu bar | Chế độ tối: ô nổi và cửa sổ Cài đặt đều đọc rõ. | — | [ ] |
 | P5 | Menu bar | Bật "Giảm chuyển động" của macOS: icon đổi ngay, không mờ dần. Ở Cài đặt → Nâng cao, đổi "Lõi gõ" rồi về Chung: các mục chỉ dành cho Gõ Nhanh hiện hoặc ẩn ngay. | — | [ ] |
-| P6 | Menu bar | bấm icon lần nữa thì ô nổi đóng, không mở lại | — | [ ] |
+| P6 | Menu bar | Bấm icon lần nữa thì ô nổi đóng, không mở lại. | — | [ ] |
 | A1 | Cài mới (Trợ năng) | Trên máy mới: bấm "Cấp quyền Trợ năng", LeanKeys hiện trong danh sách Trợ năng; bật một công tắc là gõ được. | — | [ ] |
 | A2 | Cửa sổ chào bị che hoặc đã đóng | Đưa cửa sổ chào của LeanKeys ra sau một cửa sổ khác, hoặc đóng hẳn cửa sổ đó, rồi cấp quyền Trợ năng: LeanKeys tự mở lại đúng một lần và gõ được. | — | [ ] |
 | A3 | Cập nhật self-signed | Cập nhật từ bản self-signed sang bản self-signed khác: gõ vẫn được, không phải cấp quyền lại. | — | [ ] |

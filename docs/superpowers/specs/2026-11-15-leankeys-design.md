@@ -151,7 +151,7 @@ Mỗi giai đoạn có kế hoạch triển khai riêng. Spec này đủ để l
 6. Chạy `check-divergence.sh`. Nếu file gốc bị sửa ngoài các điểm đã đăng ký thì báo lỗi.
 7. **Theo dõi phần chuyển tay:** so sánh diff của các file nguồn đã chuyển tay (danh sách trong `sync/ported.txt`) giữa tag cũ và tag mới của Vikey và OpenKey. Có thay đổi thì đưa diff vào báo cáo.
 8. Chạy test theo mục 7.1, bước 1 đến 4.
-9. **Tất cả đạt:** merge nhánh sync vào `main` (fast-forward hoặc merge commit), tăng phiên bản, build DMG ký ad-hoc vào `dist/`, cập nhật `state.json`, rồi gửi thông báo "Bản LeanKeys x.y sẵn sàng — chạy release.sh để đăng".
+9. **Tất cả đạt:** merge nhánh sync vào `main` (fast-forward hoặc merge commit), tăng phiên bản, build DMG ký ad-hoc vào `dist/`, cập nhật `state.json`, rồi gửi thông báo "Bản LeanKeys x.y sẵn sàng — chạy zsh sync/release.sh để đăng".
 10. **Có lỗi:** giữ nguyên nhánh sync để xem lại, `main` không đổi, gửi thông báo kèm đường dẫn báo cáo.
 
 `sync.sh` không push và không phát hành.
@@ -160,7 +160,7 @@ Mỗi giai đoạn có kế hoạch triển khai riêng. Spec này đủ để l
 
 1. Kiểm tra `gh auth status` và remote GitHub công khai `LeanKeys`. Repo được tạo ở lần phát hành đầu tiên.
 2. Mở DMG, kiểm tra app khởi chạy được. In danh sách thử tay (mục 7.2) và chờ xác nhận.
-3. `git push` nhánh `main` cùng tag `vX.Y`, rồi `gh release create` kèm DMG và ghi chú. Ghi chú tự sinh, gồm phiên bản engine gốc và changelog tóm tắt.
+3. `git push` nhánh `main` cùng tag `vX.Y`, rồi `gh release create` kèm DMG và ghi chú. Ghi chú tự sinh: một dòng hướng dẫn cài cho người dùng, phiên bản lõi gõ gốc ("Lõi gõ: …"), rồi "Thay đổi kỹ thuật" (các commit).
 4. Nếu lỗi giữa chừng thì xoá release nháp và tag vừa tạo.
 
 ## 6. Phát hành và tự cập nhật
