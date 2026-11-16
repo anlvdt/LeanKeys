@@ -131,6 +131,24 @@ final class PhraseLearnerTests: XCTestCase {
         XCTAssertTrue(readyTexts().contains("Liên hệ 0912.345.678 hoặc an@vidu.vn"))
     }
 
+    /// Ordinary lines with numbers, prices, dates, times, links and pieces before punctuation are still learned.
+    func testOrdinaryLinesWithNumbersStillLearned() {
+        let lines = [
+            "Email của em là an@vidu.vn.",
+            "Gọi em số 0912345678, cảm ơn anh",
+            "Giá 500.000đ một bộ nhé",
+            "Hẹn anh lúc 12h30 ngày 16/11/2026",
+            "Link đây shopee.vn/abc-xyz nha",
+            "Check-in lúc 14:00 nhé mọi người",
+        ]
+        for line in lines { observe(line, times: 3) }
+        for line in lines { XCTAssertTrue(readyTexts().contains(line), line) }
+        XCTAssertTrue(Exclusions.looksLikeSecret("hunter2hunter2"))
+        XCTAssertTrue(Exclusions.looksLikeSecret("Matkhau@2024"))
+        XCTAssertTrue(Exclusions.looksLikeSecret("P4ssw0rd!"))
+        XCTAssertTrue(Exclusions.looksLikeSecret("Abc@12345"))
+    }
+
     func testTerminalsNotLearned() {
         for bundle in ["com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "com.mitchellh.ghostty",
                        "org.alacritty", "net.kovidgoyal.kitty", "com.github.wez.wezterm"] {

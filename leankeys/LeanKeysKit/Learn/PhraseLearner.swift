@@ -286,8 +286,15 @@ enum PhraseDetector {
         let wordRegex = try! NSRegularExpression(pattern: #"\S+"#)
         for m in wordRegex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             words += 1
-            if ranges.contains(where: { NSIntersectionRange($0, m.range).length == m.range.length }) { continue }
-            if Exclusions.looksLikeSecret(ns.substring(with: m.range)) { return false }
+            // The word without the punctuation around it ("an@vidu.vn." ends a sentence): covered by a recognised
+            // piece (email, phone, tax code, address), it is that piece, not a password.
+            let word = ns.substring(with: m.range)
+            let core = Exclusions.trimmedWord(word)
+            let coreStart = (word as NSString).range(of: core).location
+            let coreRange = core.isEmpty || coreStart == NSNotFound ? m.range
+                : NSRange(location: m.range.location + coreStart, length: (core as NSString).length)
+            if ranges.contains(where: { NSIntersectionRange($0, coreRange).length == coreRange.length }) { continue }
+            if Exclusions.looksLikeSecret(word) { return false }
         }
         return words >= 2
     }

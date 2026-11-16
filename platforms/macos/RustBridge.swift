@@ -1935,6 +1935,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
     func cached(_ m: InjectionMethod, _ d: (UInt32, UInt32, UInt32), _ methodName: String) -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
         // Store base detection result (before overrides) for UI hint
         DetectionCache.setDetectedDefault(for: bundleId, value: (method: "\(m)", delays: d))
+        if m == .passthrough { DetectionCache.set(m, d, logKey: "\(methodName) [\(bundleId)]"); return (m, d) } // LEANKEYS-HOOK: engine-dispatch (no per-app override replaces pass-through)
 
         // Apply per-app profile overrides from snapshot (set on app switch, thread-safe)
         if let profile = DetectionCache.activeProfile {
