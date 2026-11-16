@@ -633,6 +633,7 @@ Thêm ngày 2026-11-16 theo yêu cầu người dùng. Áp dụng cho cả hai e
   - Ở các ô đó, phím đi thẳng, kể cả khi đang bật tiếng Việt.
 - **Cách gắn.** Một dòng trong `detectMethod()` của Gõ Nhanh, có đánh dấu hook `engine-dispatch`. Phần này chạy khi bộ nhớ đệm 200 ms hết hạn và dùng phần tử đang có con trỏ mà Gõ Nhanh đã lấy, nên chỉ thêm một lần hỏi AX (`AXUIElementCopyMultipleAttributeValues`, giới hạn 25 ms). Khi phím đi thẳng, cụm đang gõ dở bị bỏ (`discardPending`).
   - **(ghi chú 2026-11-16)** Lần hỏi AX này của `KeyPassthrough` vẫn nằm trong `RustBridge.detectMethod`, trên đường chậm sẵn có của Gõ Nhanh (tối đa một lần mỗi 200 ms, cùng lúc Gõ Nhanh tự hỏi AX), nên được giữ nguyên; các lần hỏi AX của việc học (12.3) thì đã chuyển khỏi luồng phím.
+- **(2026-11-17, audit bảo mật MEDIUM-1, LOW-1)** Bộ nhớ đệm 200 ms hết hạn ngay khi con trỏ có thể đã sang ô khác: bấm chuột, Tab, Return/Enter, và khi macOS báo đổi ô (`DetectionCache.expire`). Phím đầu tiên gõ vào ô đăng nhập vừa Tab tới vì vậy đã đi thẳng. Phím tắt khôi phục chữ không chạy khi phím đang đi thẳng, và bộ đệm của Gõ Nhanh được xoá cùng lúc với cụm gõ dở.
 - **Test:** `KeyPassthroughTests`, gồm cả các ô thường phải gõ tiếng Việt bình thường (tìm kiếm, "Shopping list", ô soạn tin nhắn).
 - **Thử tay:**
   - gõ `nguyenvana` vào ô Email/Username của một trang đăng nhập trên Safari: giữ nguyên chữ;
@@ -649,6 +650,8 @@ LeanKeys:
 - không bao giờ ghi ký tự đã gõ hay văn bản được chèn: chỉ ghi độ dài, dạng `<3>`;
 - không ghi mã phím của phím ký tự (chữ, số, dấu): ghi `char`; chỉ phím điều khiển (Return, Enter, Tab, Space, ⌫, Esc, xoá xuôi, mũi tên, Home, End, Page Up, Page Down) giữ mã;
 - không đụng tới `/tmp/gonhanh_debug.log` có sẵn (có thể là của một bản Gõ Nhanh cài riêng).
+
+**(2026-11-17, audit bảo mật LOW-2)** Phím đi thẳng (ô đăng nhập, terminal, trình quản lý mật khẩu, điều khiển từ xa) không được ghi vào nhật ký, kể cả số lần bấm. Dòng chọn cách gửi phím không ghi loại ô (`role`). Nhật ký tự tắt: tệp tạo cách đây hơn 24 giờ bị xoá khi app mở hay khi đọc lại công tắc (`DebugLog.isOnAfterExpiry`), vì tiến trình nào của cùng người dùng cũng tạo được tệp đó.
 
 Điều còn lại, chấp nhận: nhật ký vẫn cho thấy nhịp gõ và độ dài từ, vì không có chúng nhật ký không còn dùng được để tìm lỗi.
 

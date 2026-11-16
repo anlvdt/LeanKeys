@@ -32,6 +32,22 @@ public enum DebugLog {
     /// Whether the log is on (the file exists).
     public static var isOn: Bool { FileManager.default.fileExists(atPath: path) }
 
+    /// How long the log stays on once switched on (security audit LOW-2): any process of the same user can create
+    /// the file, so a log nobody remembers switching on must not keep recording typing rhythm.
+    public static let maxAge: TimeInterval = 24 * 3600
+
+    /// Whether the log is on, after deleting a log file created more than `maxAge` ago. Read once at launch and on
+    /// each refresh of the log switch.
+    public static func isOnAfterExpiry(path: String = path, now: Date = Date()) -> Bool {
+        let fm = FileManager.default
+        guard let attributes = try? fm.attributesOfItem(atPath: path) else { return false }
+        if let created = attributes[.creationDate] as? Date, now.timeIntervalSince(created) > maxAge {
+            try? fm.removeItem(atPath: path)
+            return false
+        }
+        return true
+    }
+
     /// Switches the log on (creates the folder 0700 and an empty file 0600) or off (removes the file).
     public static func setOn(_ on: Bool) {
         let fm = FileManager.default
