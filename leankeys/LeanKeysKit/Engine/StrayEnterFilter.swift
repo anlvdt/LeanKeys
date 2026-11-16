@@ -18,6 +18,8 @@ public struct StrayEnterFilter {
         42: ("\\", "|"), 30: ("]", "}"), 39: ("'", "\""),
     ]
     static let enterKeys: Set<UInt16> = [36, 76]
+    /// `]`, with Shift `}`.
+    private static let bracketKey: UInt16 = 30
     /// Stray characters that never close a pair: deleted even when the line's start is unknown.
     private static let pairless: Set<Character> = ["\\", "|"]
 
@@ -39,8 +41,11 @@ public struct StrayEnterFilter {
     ///     line when `lineStartKnown`, else only what was typed since the cursor last moved (possibly empty).
     ///   - lineStartKnown: `lineBeforeCursor` starts at the line's start. Without it the pair rule cannot be
     ///     checked, so only `\` and `|`, which close no pair, are deleted.
+    ///   - bracketTypesLetter: `]` and `}` type a letter (ư, Ư in Vietnamese Telex), so after Enter they begin the
+    ///     next line and are never dropped (ruling R14).
     public mutating func decide(keyCode: UInt16, shift: Bool, otherModifiers: Bool, time: TimeInterval,
-                                lineBeforeCursor: String, lineStartKnown: Bool, bundleID: String?) -> Decision {
+                                lineBeforeCursor: String, lineStartKnown: Bool, bundleID: String?,
+                                bracketTypesLetter: Bool = false) -> Decision {
         let before = previous
         previous = Press(keyCode: keyCode, shift: shift, modified: otherModifiers, time: time)
         guard !otherModifiers, let before, !before.modified, Self.isWithinWindow(time - before.time),
@@ -56,7 +61,8 @@ public struct StrayEnterFilter {
             }
             return .deleteBeforeEnter
         }
-        if Self.adjacentKeys[keyCode] != nil, Self.enterKeys.contains(before.keyCode) { return .dropKey }
+        if Self.adjacentKeys[keyCode] != nil, Self.enterKeys.contains(before.keyCode),
+           !(bracketTypesLetter && keyCode == Self.bracketKey) { return .dropKey }
         return .none
     }
 

@@ -570,7 +570,7 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 
 **17.1.4 Hoàn tác.** Nếu người dùng bấm ⌫ ngay sau một lần tự viết hoa (phím đầu tiên sau phím ngắt):
 - Chữ trở lại đúng như đã gõ, chỉ mất phím ngắt, giống 4C.
-- LeanKeys lưu luật "không viết hoa cụm này sau từ đứng trước này" vào sổ luật của 4C (`UndoRuleBook`, chữ có tiền tố `cap:` để không lẫn với luật 4C). Luật có từ đứng trước được dùng ngay sau 1 lần hoàn tác, luật không có từ đứng trước sau 2 lần, như 4C. Danh sách "Từ đã học" hiện luật này với nhãn "(viết hoa)".
+- LeanKeys lưu luật "không viết hoa cụm này sau từ đứng trước này" vào sổ luật của 4C (`UndoRuleBook`, chữ có tiền tố `cap:` để không lẫn với luật 4C). Luật có từ đứng trước được dùng ngay sau 1 lần hoàn tác, luật không có từ đứng trước sau 2 lần, như 4C. Từ đứng trước có dạng mật khẩu (`Exclusions.looksLikeSecret`) thì không được lưu làm ngữ cảnh, chỉ tăng luật không có từ đứng trước (ruling R14). Danh sách "Từ đã học" hiện luật này với nhãn "(viết hoa)".
 - Tên tự học bị hoàn tác 2 lần ở bất kỳ đâu thì bị xoá khỏi danh sách tên.
 
 ### 17.2 Bỏ ký tự gõ dính khi Enter
@@ -578,7 +578,7 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
   - `\` (42), `]` (30), `'` (39);
   - khi giữ Shift: `|`, `}`, `"`.
 - **Trước Enter.** Khi bấm Enter (36 hoặc 76), nếu phím ngay trước là một phím sát Enter, cách Enter **≤ 100 ms** (theo thời điểm nhấn phím), và đã gõ ra đúng một ký tự ở cuối dòng: LeanKeys xoá ký tự đó, rồi để Enter đi như thường.
-- **Sau Enter.** Nếu một phím sát Enter được nhấn trong vòng **≤ 100 ms** sau Enter, phím đó bị bỏ.
+- **Sau Enter.** Nếu một phím sát Enter được nhấn trong vòng **≤ 100 ms** sau Enter, phím đó bị bỏ. Riêng `]` và `}` không bị bỏ khi Vikey đang gõ tiếng Việt: Telex gõ chúng ra ư, Ư, chữ đầu của dòng mới (ruling R14).
 - **Không áp dụng khi:**
   - ký tự đó đóng một cặp đang mở trên cùng dòng: `'` khi trên dòng đã có số lẻ dấu `'`; `]` khi có `[` chưa đóng; `"` và `}` tương tự;
   - app đang dùng là terminal hay trình soạn code: Terminal, iTerm2, Warp, Ghostty, Alacritty, kitty, WezTerm, Hyper, Tabby, VS Code, VS Code Insiders, Cursor, Windsurf, Zed, Xcode, Sublime Text, Nova, BBEdit, các IDE của JetBrains (bundle ID bắt đầu bằng `com.jetbrains.`), Android Studio;

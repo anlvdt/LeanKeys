@@ -180,7 +180,8 @@ public final class EngineRouter {
         let decision = strayEnter.decide(keyCode: keyCode, shift: shift, otherModifiers: option, time: now(),
                                          lineBeforeCursor: mirror.typedTail,
                                          lineStartKnown: mirror.lineBeforeCursor != nil,
-                                         bundleID: mayAct ? frontmostBundleID() : nil)
+                                         bundleID: mayAct ? frontmostBundleID() : nil,
+                                         bracketTypesLetter: vikey.isVietnamese)
         let result: (Int, [Character], Bool)
         switch decision {
         case .none: return nil
@@ -188,6 +189,9 @@ public final class EngineRouter {
             vikey.resetContext()
             result = (1, [], false)
         case .dropKey:
+            // The macOS handler still runs an empty injection for this (U+202F and a ⌫ under `.emptyCharPrefix`,
+            // plus the settle delay): net-neutral. Skipping it needs a new upstream hook in `keyboardCallback`,
+            // which 4D avoids (global constraints; ruling R14, final review M1).
             result = (0, [], true)
         }
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)

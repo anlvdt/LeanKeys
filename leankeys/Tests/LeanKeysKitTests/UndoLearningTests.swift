@@ -269,6 +269,35 @@ final class UndoLearningTests: XCTestCase {
         XCTAssertEqual(names.names, [])
     }
 
+    /// Ruling R14 (M2): a capitalisation undone after a secret-shaped word records no context, so the word is never
+    /// kept; the contextless count still goes up.
+    func testCapitalizationUndoSkipsSecretContext() {
+        let book = UndoRuleBook(store: nil)
+        let learning = makeLearning(book)
+        learning.capitalizationUndone("cap:hà nội", previous: "matkhau2024", learnedName: nil)
+        learning.capitalizationUndone("cap:hà nội", previous: "matkhau2024", learnedName: nil)
+        settle(learning)
+        XCTAssertEqual(book.rules.map(\.previous), [""], "contextless only")
+        // Control: an ordinary previous word is kept as the context.
+        learning.capitalizationUndone("cap:huế", previous: "ở", learnedName: nil)
+        settle(learning)
+        XCTAssertTrue(book.rules.contains { $0.text == "cap:huế" && $0.previous == "ở" })
+    }
+
+    /// Ruling R14 (M5): words that can never be learned are dropped before the context (AX) is read.
+    func testUserCapitalizedReadsContextOnlyForNameShapedWords() {
+        var reads = 0
+        let learning = UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults,
+                                    context: { [unowned self] in reads += 1; return self.context }, names: fakeNames())
+        self.learning = learning
+        for word in ["FOMO", "A", "Matkhau2024", "tiki", "Abc@xyz"] {
+            learning.userCapitalized(word, previous: "mua")
+        }
+        XCTAssertEqual(reads, 0)
+        learning.userCapitalized("Tiki", previous: "mua")
+        XCTAssertEqual(reads, 1)
+    }
+
     func testCapitalizationRuleDisplayText() {
         let date = Date(timeIntervalSince1970: 0)
         XCTAssertEqual(UndoLearningSection.displayText(UndoRule(text: "cap:hà nội", previous: "", count: 1,

@@ -146,6 +146,8 @@ public final class UndoLearning: ObservableObject {
     func capitalizationUndone(_ text: String, previous: String, learnedName: String?) {
         if let learnedName { learnedNames.undone(word: learnedName) }
         guard learning, !isExcluded(context()) else { return }
+        // A secret-shaped word before the phrase is never kept as its context (ruling R14).
+        let previous = Exclusions.looksLikeSecret(previous) ? "" : previous
         recordQueue.async { [book] in
             book.record(before: text, previous: previous, reverse: false)
         }
@@ -153,9 +155,11 @@ public final class UndoLearning: ObservableObject {
 
     /// A word the user typed with a capital mid-phrase, as the router saw it: learned unless capitalisation is off
     /// or the user is typing somewhere excluded. Key-handling thread (ruling R4: the dictionary check replays the
-    /// engine); the context is read only here, once per such word.
+    /// engine); the context (up to 2 × 25 ms of AX IPC) is read only here, once per such word, and only for a word
+    /// `LearnedNames` could count (ruling R14).
     func userCapitalized(_ word: String, previous: String?) {
-        guard autoCapitalize, !isExcluded(context()) else { return }
+        guard autoCapitalize, LearnedNames.looksLikeTypedName(word.precomposedStringWithCanonicalMapping),
+              !isExcluded(context()) else { return }
         learnedNames.observe(word: word, previous: previous)
     }
 

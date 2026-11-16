@@ -13,9 +13,9 @@ final class StrayEnterFilterTests: XCTestCase {
 
     private func decide(_ filter: inout StrayEnterFilter, _ keyCode: UInt16, shift: Bool = false,
                         modifiers: Bool = false, at time: TimeInterval, line: String, known: Bool = true,
-                        bundle: String? = "com.apple.Notes") -> StrayEnterFilter.Decision {
+                        bundle: String? = "com.apple.Notes", telex: Bool = false) -> StrayEnterFilter.Decision {
         filter.decide(keyCode: keyCode, shift: shift, otherModifiers: modifiers, time: time, lineBeforeCursor: line,
-                      lineStartKnown: known, bundleID: bundle)
+                      lineStartKnown: known, bundleID: bundle, bracketTypesLetter: telex)
     }
 
     /// `key` typed at t0 onto `line` (its character is already the line's last), then Enter after `gap`.
@@ -115,6 +115,18 @@ final class StrayEnterFilterTests: XCTestCase {
         XCTAssertEqual(enterAfter(quote, gap: 0.040, line: "nói 'xin chào' xong'"), .deleteBeforeEnter)
         XCTAssertEqual(enterAfter(bracket, gap: 0.040, line: "[ghi chú] xong]"), .deleteBeforeEnter)
         XCTAssertEqual(enterAfter(bracket, gap: 0.040, line: "[a [b] c]"), .none, "nested: still one open")
+    }
+
+    /// Ruling R14 (M3): in Vietnamese Telex `]` and `}` type ư and Ư, so after Enter they start the next line and
+    /// are never dropped. `\` and `'` still are.
+    func testBracketKeptAfterEnterWhenItTypesALetter() {
+        for (key, shift, dropped) in [(bracket, false, false), (bracket, true, false), (backslash, false, true),
+                                      (quote, true, true)] {
+            var filter = StrayEnterFilter()
+            _ = decide(&filter, enter, at: t0, line: "xong", telex: true)
+            XCTAssertEqual(decide(&filter, key, shift: shift, at: t0 + 0.030, line: "", telex: true),
+                           dropped ? .dropKey : .none, "\(key) \(shift)")
+        }
     }
 
     func testExcludedApps() {
@@ -272,6 +284,7 @@ final class StrayEnterFilterTests: XCTestCase {
 
     func testRouterDropsAfterEnter() {
         let router = makeRouter()
+        router.setEnabled(false)  // English: in Vietnamese Telex `]` types ư (see the next test)
         let field = freshLine(router)
         field.type("xong")
         field.press(enter)
@@ -286,6 +299,25 @@ final class StrayEnterFilterTests: XCTestCase {
         clock += 1
         field.type("ok")
         XCTAssertEqual(String(field.text), "xong\nok")
+    }
+
+    /// Ruling R14 (M3): in Vietnamese `]` right after Enter types ư, the start of the next line: it is kept.
+    func testRouterKeepsBracketAfterEnterInVietnamese() {
+        let router = makeRouter()
+        router.setEnabled(true)
+        let field = freshLine(router)
+        field.type("xong")
+        field.press(enter)
+        clock += 0.030
+        field.press(bracket)
+        XCTAssertEqual(String(field.text), "xong\nư")
+        // `\` is still dropped.
+        let next = freshLine(router)
+        next.type("xong")
+        next.press(enter)
+        clock += 0.030
+        next.press(backslash)
+        XCTAssertEqual(String(next.text), "xong\n")
     }
 
     /// The first line after a click (line start unknown): a stray `\` typed since is still deleted (R8); a `]`
