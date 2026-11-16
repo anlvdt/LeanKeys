@@ -52,8 +52,22 @@ codesign --verify --deep --strict "$app" 2>/dev/null
 check "codesign --verify --deep" 0 "$?"
 # Ruling R28: a shipped build must not carry the Debug entitlement get-task-allow.
 ents="$(codesign -d --entitlements - "$app" 2>&1)"
-check "entitlements readable" yes "$([[ "$ents" == *com.apple.security.automation.apple-events* ]] && print yes || print no)"
+check "entitlements readable" yes "$([[ "$ents" == *com.apple.security.app-sandbox* ]] && print yes || print no)"
 check "no get-task-allow" no "$([[ "$ents" == *get-task-allow* ]] && print yes || print no)"
+# Security audit HIGH-1: hardened runtime on, and no entitlement that lets other code into the process (dyld
+# injection, unsigned pages) or that nothing uses (Apple Events).
+info="$(codesign -dv "$app" 2>&1)"
+check "hardened runtime" yes "$([[ "$info" == *flags=0x*'('*runtime*')'* ]] && print yes || print no)"
+for ent in cs.disable-library-validation cs.allow-jit cs.allow-unsigned-executable-memory \
+  cs.disable-executable-page-protection automation.apple-events; do
+  check "no $ent" no "$([[ "$ents" == *com.apple.security.$ent* ]] && print yes || print no)"
+done
+check "no NSAppleEventsUsageDescription" "<missing>" "$(key NSAppleEventsUsageDescription)"
+# A self-signed build keeps its certificate-leaf designated requirement, so users keep their Accessibility grant.
+if [[ "$info" == *"Authority=LeanKeys Self-Signed"* ]]; then
+  check "designated requirement is the certificate leaf" yes \
+    "$([[ "$(codesign -d -r- "$app" 2>&1)" == *'certificate leaf'* ]] && print yes || print no)"
+fi
 
 print -r -- "$passed passed, $failed failed"
 (( failed == 0 ))

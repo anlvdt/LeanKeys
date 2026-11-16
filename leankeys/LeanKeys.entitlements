@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  LeanKeys' release entitlements (security audit HIGH-1), used by leankeys/build.sh in place of upstream's
+  GoNhanh.entitlements.production. Signed with the hardened runtime. Only the sandbox is turned off (the event tap
+  and Accessibility need it). Nothing else: no cs.disable-library-validation, cs.allow-jit,
+  cs.allow-unsigned-executable-memory or cs.disable-executable-page-protection (the Rust core is a static library and
+  nothing is JIT-compiled), and no automation.apple-events (nothing sends Apple Events).
+-->
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+</dict>
+</plist>

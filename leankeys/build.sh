@@ -7,8 +7,9 @@
 # Output: dist/LeanKeys.app (universal: arm64 + x86_64). Exits non-zero if any step fails.
 #
 # Signing: when LEANKEYS_SIGN_IDENTITY and LEANKEYS_NOTARY_PROFILE are both set, signs with that Developer ID identity
-# (hardened runtime) and notarizes with that notarytool keychain profile. Otherwise signs with the "LeanKeys Self-Signed"
-# identity when it is in the keychain (see sync/make-signing-cert.sh), and ad-hoc when it is not.
+# and notarizes with that notarytool keychain profile. Otherwise signs with the "LeanKeys Self-Signed" identity when it
+# is in the keychain (see sync/make-signing-cert.sh), and ad-hoc when it is not. Every kind uses the hardened runtime
+# and leankeys/LeanKeys.entitlements (security audit HIGH-1); the build fails if the signed app lacks the runtime flag.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -23,7 +24,7 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 && -n "$2" ]] || { echo "build.sh: --version needs a value" >&2; exit 2; }
             VERSION="$2"; shift 2 ;;
         --dmg) MAKE_DMG=true; shift ;;
-        -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
         *) echo "build.sh: unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -65,7 +66,8 @@ ICON="$ROOT/leankeys/Branding/AppIcon.icns"
 [[ -f "$ICON" ]] || { echo "build.sh: missing $ICON (run: swift leankeys/Branding/make-icon.swift)" >&2; exit 1; }
 
 # Signing kind is picked before the expensive build so a required-but-missing stable identity fails fast.
-ENTITLEMENTS_PROD="$ROOT/platforms/macos/GoNhanh.entitlements.production"
+# LeanKeys' own entitlements, not upstream's GoNhanh.entitlements.production: sandbox off and nothing else (HIGH-1).
+ENTITLEMENTS_PROD="$ROOT/leankeys/LeanKeys.entitlements"
 SIGN_KIND="$(pick_signing_kind "$(security find-identity -p codesigning 2>/dev/null || true)")"
 require_stable_signing "$SIGN_KIND" || exit 1
 if [[ -n "${LEANKEYS_SIGN_IDENTITY:-}" && -z "${LEANKEYS_NOTARY_PROFILE:-}" ]]; then
@@ -112,7 +114,8 @@ $PB -c "Set :CFBundleExecutable $NAME" "$PLIST"
 $PB -c "Set :CFBundleIdentifier $BUNDLE_ID" "$PLIST"
 $PB -c "Set :CFBundleName $NAME" "$PLIST"
 $PB -c "Set :CFBundleDisplayName $NAME" "$PLIST" 2>/dev/null || $PB -c "Add :CFBundleDisplayName string $NAME" "$PLIST"
-$PB -c "Set :NSAppleEventsUsageDescription $NAME needs access to send keyboard events for Vietnamese input." "$PLIST" 2>/dev/null || true
+# Nothing sends Apple Events (HIGH-1): no usage string for them.
+$PB -c "Delete :NSAppleEventsUsageDescription" "$PLIST" 2>/dev/null || true
 # The asset catalog adds CFBundleIconName, which would make macOS use Gõ Nhanh's icon from Assets.car.
 $PB -c "Delete :CFBundleIconName" "$PLIST" 2>/dev/null || true
 $PB -c "Set :CFBundleIconFile AppIcon" "$PLIST" 2>/dev/null || $PB -c "Add :CFBundleIconFile string AppIcon" "$PLIST"
@@ -135,7 +138,7 @@ elif [[ "$SIGN_KIND" == self-signed ]]; then
     # Stable identity: macOS keeps the Accessibility grant across updates because the designated requirement stays the same.
     # Never falls back to ad-hoc: an ad-hoc build would cost every user their grant.
     echo "==> Signing self-signed"
-    if ! codesign --force --deep --entitlements "$ENTITLEMENTS_PROD" -s "LeanKeys Self-Signed" "$APP"; then
+    if ! codesign --force --deep --options runtime --entitlements "$ENTITLEMENTS_PROD" -s "LeanKeys Self-Signed" "$APP"; then
         echo "Signing with LeanKeys Self-Signed failed — unlock the login keychain or run sync/make-signing-cert.sh" >&2
         exit 1
     fi
@@ -146,10 +149,18 @@ elif [[ "$SIGN_KIND" == self-signed ]]; then
         exit 1
     fi
 else
-    # Ruling R28: the production entitlements, never the Debug ones (get-task-allow). No hardened runtime yet.
+    # Ruling R28: the production entitlements, never the Debug ones (get-task-allow).
     echo "==> Signing ad-hoc"
-    codesign --force --deep --entitlements "$ENTITLEMENTS_PROD" -s - "$APP"
+    codesign --force --deep --options runtime --entitlements "$ENTITLEMENTS_PROD" -s - "$APP"
     codesign --verify --deep --strict "$APP"
+fi
+# HIGH-1: without the hardened runtime, any process of the user could relaunch LeanKeys with DYLD_INSERT_LIBRARIES and
+# inherit its Accessibility grant. "flags=0x10000(runtime)", or "flags=0x10002(adhoc,runtime)" for ad-hoc.
+# Captured first: under pipefail, grep -q closing the pipe early would fail codesign with SIGPIPE.
+sig_info="$(codesign -dv "$APP" 2>&1 || true)"
+if ! grep -Eq '^CodeDirectory .*flags=0x[0-9a-f]+\([^)]*runtime[^)]*\)' <<<"$sig_info"; then
+    echo "build.sh: $APP is not signed with the hardened runtime" >&2
+    exit 1
 fi
 
 # 6. DMG: the app plus an /Applications link. UpdateManager mounts it and copies $NAME.app.
