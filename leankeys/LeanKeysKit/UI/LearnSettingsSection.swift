@@ -14,7 +14,7 @@ public enum LearnSettingsPart {
 public struct LearnSettingsSection: View {
     static let toggleTitle = "Gợi ý gõ tắt"
     static let toggleSubtitle = "Cho địa chỉ, số điện thoại… bạn hay gõ lại. Chỉ lưu trên máy này."
-    static let consentText = "LeanKeys sẽ đếm các cụm bạn gõ lặp lại (địa chỉ, số điện thoại, mã số thuế…) để gợi ý gõ tắt. Dữ liệu chỉ nằm trên máy này, được mã hoá, và bạn xoá được bất cứ lúc nào. Không học trong ô mật khẩu."
+    static let consentText = "LeanKeys sẽ đếm các cụm bạn gõ lặp lại (địa chỉ, số điện thoại, mã số thuế…) để gợi ý gõ tắt. Dữ liệu chỉ nằm trên máy này, được mã hoá, và bạn xoá được bất cứ lúc nào. Không học trong ô mật khẩu. Gợi ý bạn thêm vào Bảng gõ tắt được lưu như các gõ tắt khác, không mã hoá."
     static let consentConfirm = "Bật"
     static let consentCancel = "Huỷ"
     static let advancedTitle = "Gợi ý gõ tắt"
@@ -205,6 +205,23 @@ public struct LearnSettingsSection: View {
         "dev.warp.Warp-Stable": "Warp",
         "dev.warp.Warp-Preview": "Warp Preview",
         "com.apple.Terminal": "Terminal",
+        "com.lastpass.lastpassmacdesktop": "LastPass",
+        "in.sinew.Enpass-Desktop": "Enpass",
+        "me.proton.pass.electron": "Proton Pass",
+        // Code editors (security audit MEDIUM-4).
+        "com.microsoft.VSCode": "Visual Studio Code",
+        "com.microsoft.VSCodeInsiders": "VS Code Insiders",
+        "com.todesktop.230313mzl4w4u92": "Cursor",
+        "com.todesktop.cursor": "Cursor (bản cũ)",
+        "com.exafunction.windsurf": "Windsurf",
+        "dev.zed.Zed": "Zed",
+        "dev.zed.Zed-Preview": "Zed Preview",
+        "com.apple.dt.Xcode": "Xcode",
+        "com.sublimetext.4": "Sublime Text",
+        "com.sublimetext.3": "Sublime Text 3",
+        "com.panic.Nova": "Nova",
+        "com.barebones.bbedit": "BBEdit",
+        "com.google.android.studio": "Android Studio",
     ]
 
     private func chooseApp() {

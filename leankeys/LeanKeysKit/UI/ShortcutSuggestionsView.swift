@@ -11,7 +11,7 @@ public struct ShortcutSuggestionsView: View {
     static let dismissLabel = "Bỏ qua"
     /// Placeholder and VoiceOver name of the trigger edit field.
     static let triggerFieldLabel = "Từ viết tắt"
-    static let addHelp = "Thêm vào Bảng gõ tắt"
+    static let addHelp = "Thêm vào Bảng gõ tắt. Bảng gõ tắt không được mã hoá như dữ liệu gợi ý."
 
     /// Tooltip of the trigger chip: it is what the user types.
     static func triggerHelp(_ trigger: String) -> String {
