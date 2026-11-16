@@ -346,6 +346,7 @@ Viết ngày 2026-11-15, viết lại ngày 2026-11-16 sau khi đo. Người dù
   - Không gửi đi đâu.
 - **Giới hạn 5.000 luật.** Khi đầy, bỏ luật lâu không dùng nhất (LRU).
 - **Không học trong:** Secure Input, ô mật khẩu, và các app trong danh sách loại trừ của 4B. Luật đã học vẫn được áp dụng ở mọi nơi engine chạy.
+- **(sửa 2026-11-16, đánh giá toàn ứng dụng) Không hỏi AX trên luồng phím.** Trên luồng phím (event tap) chỉ đọc những gì không cần hỏi app khác: bundle ID và pid của app đang dùng (`NSWorkspace`), `IsSecureEventInputEnabled()`, thời điểm. Secure Input và app bị loại trừ được quyết ngay ở đó, trước khi đưa gì vào hàng đợi. Việc hỏi ô đang có con trỏ có phải ô mật khẩu không (AX, tối đa 2 × 25 ms) chạy trên hàng đợi nền ghi việc học (hàng đợi ghi của 4C và tên tự học, hàng đợi của 4B); ô mật khẩu, lỗi hay hết giờ thì bỏ lần học đó như trước. Chữ gõ chuyển sang hàng đợi chỉ nằm trong bộ nhớ. Kiểm tra từ điển của tên tự học vẫn chạy trên luồng phím (ruling R4). Ô được hỏi là ô đang có con trỏ lúc hàng đợi chạy, vài ms sau phím: chuyển rất nhanh từ ô mật khẩu sang ô thường trước lúc đó thì ô thường được hỏi; Secure Input (đọc trên luồng phím) vẫn là lớp chặn chính.
 
 ### 12.4 Test
 - **Shim (C++ qua Swift, engine thật):**
@@ -571,7 +572,8 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 - **Học "sau từ xưng hô":** từ được gõ hoa ngay sau một từ xưng hô (anh, chị, em, ông, bà, cô, chú, bác, thầy, sếp, dì, cậu) từ 2 lần trở lên. Lần sau, khi từ đó được gõ thường ngay sau một từ xưng hô, nó được viết hoa ("anh hùng" → "anh Hùng").
 - **Học "mọi nơi":** từ được gõ hoa giữa câu từ 2 lần trở lên mà không phải từ tiếng Việt hay tiếng Anh có thật (`lk_vikey_word_score` của cả hai ngôn ngữ đều là `LK_VIKEY_NOT_A_WORD`, xét trên các chữ ASCII của từ). Lần sau, từ đó được viết lại đúng dạng đã học ở mọi nơi ("shopee" → "Shopee", "chatgpt" → "ChatGPT").
 - **Lưu trữ:** trước khi đạt 2 lần chỉ lưu HMAC-SHA256 của từ (khoá HMAC lấy từ Keychain như 4B) kèm số lần. Đạt ngưỡng thì mới lưu dạng chữ. File riêng `~/Library/Application Support/LeanKeys/learned-names.bin` (quyền 0600, AES-GCM, dùng `KeychainEncryptedFileStore` với mục Keychain `io.github.anlvdt.leankeys.names`). Giới hạn 2.000 tên, bỏ tên lâu không dùng nhất (LRU).
-- **Không học** trong Secure Input, ô mật khẩu, và các app bị loại trừ (mục 11.1).
+- **Không học** trong Secure Input, ô mật khẩu, và các app bị loại trừ (mục 11.1). Ô mật khẩu được kiểm tra trên hàng đợi nền như 12.3.
+- **(sửa 2026-11-16, đánh giá toàn ứng dụng)** Cũng không học trong terminal và trình soạn code (danh sách của 17.2): ở đó từ viết hoa giữa dòng thường là tên biến hay lệnh (`Config`, `Router`). Danh sách loại trừ của 4B và 4C không đổi.
 
 **17.1.4 Hoàn tác.** Nếu người dùng bấm ⌫ ngay sau một lần tự viết hoa (phím đầu tiên sau phím ngắt):
 - Chữ trở lại đúng như đã gõ, chỉ mất phím ngắt, giống 4C.
@@ -623,6 +625,7 @@ Thêm ngày 2026-11-16 theo yêu cầu người dùng. Áp dụng cho cả hai e
   - đó là ô một dòng (`AXTextField`, `AXComboBox`) có chữ gợi ý, nhãn, tiêu đề hay mã định danh chứa một trong các từ (khớp nguyên từ): password, passwd, passcode, pin, otp, username, user name, userid, user id, login, log in, sign in, signin, email, e-mail, account, apple id, mật khẩu, mat khau, tên đăng nhập, ten dang nhap, đăng nhập, dang nhap, tài khoản, tai khoan, mã xác nhận, ma xac nhan, mã otp.
   - Ở các ô đó, phím đi thẳng, kể cả khi đang bật tiếng Việt.
 - **Cách gắn.** Một dòng trong `detectMethod()` của Gõ Nhanh, có đánh dấu hook `engine-dispatch`. Phần này chạy khi bộ nhớ đệm 200 ms hết hạn và dùng phần tử đang có con trỏ mà Gõ Nhanh đã lấy, nên chỉ thêm một lần hỏi AX (`AXUIElementCopyMultipleAttributeValues`, giới hạn 25 ms). Khi phím đi thẳng, cụm đang gõ dở bị bỏ (`discardPending`).
+  - **(ghi chú 2026-11-16)** Lần hỏi AX này của `KeyPassthrough` vẫn nằm trong `RustBridge.detectMethod`, trên đường chậm sẵn có của Gõ Nhanh (tối đa một lần mỗi 200 ms, cùng lúc Gõ Nhanh tự hỏi AX), nên được giữ nguyên; các lần hỏi AX của việc học (12.3) thì đã chuyển khỏi luồng phím.
 - **Test:** `KeyPassthroughTests`, gồm cả các ô thường phải gõ tiếng Việt bình thường (tìm kiếm, "Shopping list", ô soạn tin nhắn).
 - **Thử tay:**
   - gõ `nguyenvana` vào ô Email/Username của một trang đăng nhập trên Safari: giữ nguyên chữ;

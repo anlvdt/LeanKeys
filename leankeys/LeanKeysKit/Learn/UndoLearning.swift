@@ -9,10 +9,15 @@ import VikeyShim
 /// engine; the switches and `rules` live on main too. The key path does no I/O: the filter is one `shouldKeep`
 /// lookup, and `afterPress` hands records to a serial background queue (`UndoRuleBook.record` may be O(n) under its
 /// lock). Learned rules apply everywhere; only learning skips Secure Input, password fields and excluded apps.
+/// The key thread reads only the cheap context (`LearnContextReader.probe`: app, Secure Input, time) and decides
+/// Secure Input and excluded apps from it; the secure-field check (AX IPC) runs on that background queue, which drops
+/// the observation when the field is secure or the check fails (audit item 4). Typed text handed to the queue stays
+/// in memory.
 ///
 /// Spec 17.1 for the router: the "Tự viết hoa tên riêng" switch, the learned names, and capitalisation undos, which
 /// go into the same rule book as "cap:" rules. Learning a name runs on the key-handling thread (ruling R4: its
-/// dictionary check replays the engine) and reads the context only for a word the user capitalised.
+/// dictionary check replays the engine); the count itself is recorded on the background queue, after the
+/// secure-field check. Names are not learned in terminals and code editors (`CodeApps`: identifiers, commands).
 /// Nothing typed is logged.
 public final class UndoLearning: ObservableObject {
     public static let doubleKeyFixKey = "LeanKeys.doubleKeyFix", learningKey = "LeanKeys.undoLearning"
@@ -26,7 +31,8 @@ public final class UndoLearning: ObservableObject {
     public static let shared = UndoLearning(
         book: UndoRuleBook(store: KeychainEncryptedFileStore(url: storeURL, keychainService: keychainService)),
         defaults: .standard,
-        context: LearnContextReader.current,
+        probe: LearnContextReader.probe,
+        secureField: LearnContextReader.isSecureField,
         names: .shared)
 
     static let keychainService = "io.github.anlvdt.leankeys.undo"
@@ -69,21 +75,29 @@ public final class UndoLearning: ObservableObject {
 
     private let book: UndoRuleBook
     private let defaults: UserDefaults
-    private let context: () -> LearnContext
+    private let probe: () -> LearnContextProbe
+    private let secureField: (LearnContextProbe) -> Bool
     private let recordQueue = DispatchQueue(label: "io.github.anlvdt.leankeys.undo-learning.record")
+    private let onRecordQueue: (@escaping () -> Void) -> Void
 
     /// The instance the C filter asks. Set by `install()`; read on the key-handling thread, which also installs.
     fileprivate static var installed: UndoLearning?
 
     /// - Parameters:
-    ///   - context: where the user is typing; called on the key-handling thread, only when an undo arrives or a
-    ///     word the user capitalised could be learned.
+    ///   - probe: where the user is typing, without IPC; called on the key-handling thread, only when an undo
+    ///     arrives or a word the user capitalised could be learned.
+    ///   - secureField: whether the focused field of the probed app is a password field, or cannot be told; called
+    ///     on the record queue only, once per observation that passed the key-thread checks.
     ///   - names: memory only unless given (only `shared` opens `learned-names.bin`).
-    init(book: UndoRuleBook, defaults: UserDefaults, context: @escaping () -> LearnContext,
-         names: LearnedNames = UndoLearning.memoryNames()) {
+    ///   - onRecordQueue: runs work on the serial record queue; nil for this instance's own background queue.
+    init(book: UndoRuleBook, defaults: UserDefaults, probe: @escaping () -> LearnContextProbe,
+         secureField: @escaping (LearnContextProbe) -> Bool, names: LearnedNames = UndoLearning.memoryNames(),
+         onRecordQueue: ((@escaping () -> Void) -> Void)? = nil) {
         self.book = book
         self.defaults = defaults
-        self.context = context
+        self.probe = probe
+        self.secureField = secureField
+        self.onRecordQueue = onRecordQueue ?? { [recordQueue] in recordQueue.async(execute: $0) }
         learnedNames = names
         self.names = names.names
         rules = book.rules
@@ -123,13 +137,8 @@ public final class UndoLearning: ObservableObject {
     /// After each key Vikey handled: takes the shim's undo event, if any, and records it unless learning is off or
     /// the user is typing somewhere excluded. The event is always taken, so a skipped one never lingers.
     func afterPress(engine: VikeyEngine) {
-        guard let undo = engine.takeUndo(), learning else { return }
-        // Reading the context costs up to 2 × 25 ms of AX IPC (LearnContextReader). It happens only when an undo
-        // event exists, never per key: the same rule 4B uses once per phrase.
-        guard !isExcluded(context()) else { return }
-        recordQueue.async { [book] in
-            book.record(before: undo.before, previous: undo.previous, reverse: undo.reverse)
-        }
+        guard let undo = engine.takeUndo(), learning, let probe = includedProbe() else { return }
+        record(probe) { [book] in book.record(before: undo.before, previous: undo.previous, reverse: undo.reverse) }
     }
 
     // MARK: Capitalisation (spec 17.1)
@@ -145,22 +154,33 @@ public final class UndoLearning: ObservableObject {
     /// name made it. Key-handling thread; the record runs on the background queue, as in `afterPress`.
     func capitalizationUndone(_ text: String, previous: String, learnedName: String?) {
         if let learnedName { learnedNames.undone(word: learnedName) }
-        guard learning, !isExcluded(context()) else { return }
+        guard learning, let probe = includedProbe() else { return }
         // A secret-shaped word before the phrase is never kept as its context (ruling R14).
         let previous = Exclusions.looksLikeSecret(previous) ? "" : previous
-        recordQueue.async { [book] in
-            book.record(before: text, previous: previous, reverse: false)
-        }
+        record(probe) { [book] in book.record(before: text, previous: previous, reverse: false) }
     }
 
-    /// A word the user typed with a capital mid-phrase, as the router saw it: learned unless capitalisation is off
-    /// or the user is typing somewhere excluded. Key-handling thread (ruling R4: the dictionary check replays the
-    /// engine); the context (up to 2 × 25 ms of AX IPC) is read only here, once per such word, and only for a word
-    /// `LearnedNames` could count (ruling R14).
+    /// A word the user typed with a capital mid-phrase, as the router saw it: learned unless capitalisation is off,
+    /// the user is typing somewhere excluded, or in a terminal or code editor. Key-handling thread: the dictionary
+    /// check stays here (ruling R4: it replays the engine), and the context is probed only for a word `LearnedNames`
+    /// could count (ruling R14); the count is recorded on the queue.
     func userCapitalized(_ word: String, previous: String?) {
         guard autoCapitalize, LearnedNames.looksLikeTypedName(word.precomposedStringWithCanonicalMapping),
-              !isExcluded(context()) else { return }
-        learnedNames.observe(word: word, previous: previous)
+              let probe = includedProbe(), !CodeApps.contains(probe.bundleID),
+              let sighting = learnedNames.sighting(word: word, previous: previous) else { return }
+        record(probe) { [learnedNames] in learnedNames.record(sighting) }
+    }
+
+    /// The context without IPC, or nil under Secure Input or in an excluded app. Key-handling thread.
+    private func includedProbe() -> LearnContextProbe? {
+        let probe = probe()
+        return isExcluded(probe) ? nil : probe
+    }
+
+    /// Runs `work` on the record queue unless the probed app's focused field is a password field or cannot be told.
+    private func record(_ probe: LearnContextProbe, _ work: @escaping () -> Void) {
+        let secureField = secureField
+        onRecordQueue { if !secureField(probe) { work() } }
     }
 
     /// Learned names kept in memory only, with the real dictionary check and the bundled titles.
@@ -186,8 +206,9 @@ public final class UndoLearning: ObservableObject {
         learnedNames.flush()
     }
 
-    private func isExcluded(_ context: LearnContext) -> Bool {
-        if context.secureInput || context.secureField { return true }
+    /// Secure Input or an excluded app, from the key-thread probe; the password-field check comes on the queue.
+    private func isExcluded(_ context: LearnContextProbe) -> Bool {
+        if context.secureInput { return true }
         guard let bundleID = context.bundleID else { return false }
         return Exclusions.defaultBundleIDs.contains(bundleID)
             || (defaults.stringArray(forKey: ShortcutSuggestionsModel.excludedAppsKey) ?? []).contains(bundleID)

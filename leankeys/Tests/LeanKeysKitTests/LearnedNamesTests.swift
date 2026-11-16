@@ -81,6 +81,25 @@ final class LearnedNamesTests: XCTestCase {
         XCTAssertEqual(seen, ["duong"])
     }
 
+    /// Audit item 4: the dictionary check (key thread, ruling R4) runs when the sighting is made; recording it later,
+    /// on another queue, runs no check.
+    func testSightingThenRecord() throws {
+        var checks = 0
+        let n = LearnedNames(store: nil, hmacKey: Self.key, titles: Self.titles,
+                             isDictionaryWord: { _ in checks += 1; return false })
+        XCTAssertNil(n.sighting(word: "FOMO", previous: nil), "not name-shaped")
+        XCTAssertEqual(checks, 0)
+        let sighting = try XCTUnwrap(n.sighting(word: "Shopee", previous: nil))
+        XCTAssertEqual(checks, 1)
+        XCTAssertTrue(n.names.isEmpty, "a sighting counts nothing by itself")
+        n.record(sighting)
+        n.record(sighting)
+        XCTAssertEqual(checks, 1)
+        XCTAssertEqual(n.name(after: nil, word: "shopee"), "Shopee")
+        let dictionary = LearnedNames(store: nil, hmacKey: Self.key, titles: Self.titles, isDictionaryWord: { _ in true })
+        XCTAssertNil(dictionary.sighting(word: "Store", previous: "app"), "a dictionary word away from a title")
+    }
+
     func testDictionaryWordNotAnywhere() {
         let n = names()
         n.observe(word: "Store", previous: "app")

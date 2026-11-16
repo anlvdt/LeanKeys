@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 import VikeyShim
 @testable import LeanKeysKit
@@ -296,6 +297,114 @@ final class UndoLearningTests: XCTestCase {
         XCTAssertEqual(reads, 0)
         learning.userCapitalized("Tiki", previous: "mua")
         XCTAssertEqual(reads, 1)
+    }
+
+    // MARK: The AX secure-field read stays off the key thread (audit item 4)
+
+    /// A record queue that holds its work until `drain()`, and a secure-field (AX) check that counts its reads.
+    private final class Deferred {
+        var work: [() -> Void] = []
+        var axReads = 0
+        var secure = false
+        func drain() {
+            let pending = work
+            work = []
+            pending.forEach { $0() }
+        }
+    }
+
+    private func deferredLearning(_ deferred: Deferred, book: UndoRuleBook = UndoRuleBook(store: nil),
+                                  names: LearnedNames? = nil) -> UndoLearning {
+        let made = UndoLearning(book: book, defaults: defaults, probe: { [unowned self] in context.probe },
+                                secureField: { _ in
+                                    deferred.axReads += 1
+                                    return deferred.secure
+                                },
+                                names: names ?? fakeNames(), onRecordQueue: { deferred.work.append($0) })
+        learning = made
+        return made
+    }
+
+    func testKeyThreadNeverReadsSecureField() {
+        let deferred = Deferred()
+        let book = UndoRuleBook(store: nil)
+        let names = fakeNames()
+        let learning = deferredLearning(deferred, book: book, names: names)
+        XCTAssertEqual(undoCos(learning), "toi thich cos")
+        learning.capitalizationUndone("cap:hà nội", previous: "ở", learnedName: nil)
+        learning.userCapitalized("Tiki", previous: "mua")
+        learning.userCapitalized("Tiki", previous: "mua")
+        XCTAssertEqual(deferred.axReads, 0, "the key path reads no AX")
+        XCTAssertEqual(deferred.work.count, 4, "every observation is queued")
+        XCTAssertTrue(book.rules.isEmpty)
+        XCTAssertTrue(names.names.isEmpty)
+
+        deferred.drain()
+        XCTAssertEqual(deferred.axReads, 4, "the queue checks the field once per observation")
+        XCTAssertEqual(Set(book.rules.map(\.text)), ["cos", "cap:hà nội"])
+        XCTAssertEqual(names.names.map(\.form), ["Tiki"])
+    }
+
+    func testSecureFieldOnTheQueueDropsTheRecord() {
+        let deferred = Deferred()
+        deferred.secure = true
+        let book = UndoRuleBook(store: nil)
+        let names = fakeNames()
+        let learning = deferredLearning(deferred, book: book, names: names)
+        undoCos(learning)
+        learning.capitalizationUndone("cap:hà nội", previous: "ở", learnedName: nil)
+        learning.userCapitalized("Tiki", previous: "mua")
+        learning.userCapitalized("Tiki", previous: "mua")
+        deferred.drain()
+        XCTAssertEqual(deferred.axReads, 4)
+        XCTAssertTrue(book.rules.isEmpty, "a secure field drops the undo records")
+        XCTAssertTrue(names.names.isEmpty, "and the name sightings")
+    }
+
+    /// Secure Input and excluded apps are decided on the key thread: nothing reaches the queue.
+    func testExclusionsDecidedBeforeQueueing() {
+        defaults.set(["com.example.private"], forKey: ShortcutSuggestionsModel.excludedAppsKey)
+        let deferred = Deferred()
+        let learning = deferredLearning(deferred)
+        for context in [
+            LearnContext(bundleID: "com.apple.TextEdit", secureInput: true, secureField: false, now: Date()),
+            LearnContext(bundleID: "com.1password.1password", secureInput: false, secureField: false, now: Date()),
+            LearnContext(bundleID: "com.example.private", secureInput: false, secureField: false, now: Date()),
+        ] {
+            self.context = context
+            undoCos(learning)
+            learning.capitalizationUndone("cap:hà nội", previous: "ở", learnedName: nil)
+            learning.userCapitalized("Tiki", previous: "mua")
+        }
+        XCTAssertTrue(deferred.work.isEmpty)
+        XCTAssertEqual(deferred.axReads, 0)
+    }
+
+    /// Final re-review: identifiers typed in a terminal or code editor (`Config`, `Router`) are never learned as
+    /// names; 4B and 4C keep their own exclusions.
+    func testNoNameLearningInCodeApps() {
+        let deferred = Deferred()
+        let names = fakeNames()
+        let learning = deferredLearning(deferred, names: names)
+        for app in ["com.microsoft.VSCode", "com.jetbrains.intellij", "dev.warp.Warp-Preview"] {
+            context = LearnContext(bundleID: app, secureInput: false, secureField: false, now: Date())
+            learning.userCapitalized("Tiki", previous: "mua")
+            learning.userCapitalized("Tiki", previous: "mua")
+        }
+        deferred.drain()
+        XCTAssertTrue(names.names.isEmpty)
+    }
+
+    /// The live reader's key-thread half reads no AX: it only fills in what NSWorkspace and the Secure Input flag say.
+    func testLiveProbeIsCheap() {
+        let probe = LearnContextReader.probe()
+        XCTAssertEqual(probe.bundleID, NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+        XCTAssertEqual(probe.pid, NSWorkspace.shared.frontmostApplication?.processIdentifier)
+        // No pid: the queue half fails closed.
+        XCTAssertTrue(LearnContextReader.isSecureField(LearnContextProbe(bundleID: nil, pid: nil, secureInput: false,
+                                                                         now: Date())))
+        XCTAssertTrue(LearnContextReader.isSecureField(LearnContextProbe(bundleID: nil, pid: 1, secureInput: true,
+                                                                         now: Date())))
     }
 
     func testCapitalizationRuleDisplayText() {

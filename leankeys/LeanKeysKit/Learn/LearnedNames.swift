@@ -25,7 +25,8 @@ public struct LearnedName: Codable, Equatable, Identifiable {
 /// - The second undo of a learned name (anywhere) removes it.
 ///
 /// Thread-safe behind one lock, held only for dictionary work: `name(after:word:)` runs on the key-handling thread
-/// and does no I/O. Every change is saved through `store` on a private serial queue (JSON; the store encrypts it)
+/// and does no I/O. `observe` is split for the router (audit item 4): `sighting` runs the dictionary check, which
+/// the real `isDictionaryWord` allows on the key-handling thread only; `record` counts it on any thread. Every change is saved through `store` on a private serial queue (JSON; the store encrypts it)
 /// and announced through `onChange` on the main queue. Nothing is logged.
 public final class LearnedNames: LearnedNameLookup {
     public static let capacity = 2_000, threshold = 2
@@ -99,18 +100,39 @@ public final class LearnedNames: LearnedNameLookup {
         set { lock.withLock { _onChange = newValue } }
     }
 
+    /// A word that would count, with what was decided about it on the key-handling thread. Memory only: it holds
+    /// the typed word until `record` counts it (as a digest below the threshold).
+    public struct Sighting {
+        fileprivate let form: String
+        fileprivate let id: String
+        fileprivate let afterTitle: Bool
+        fileprivate let anywhere: Bool
+    }
+
     /// A word the user typed with a capital (Shift or Caps Lock), mid-sentence, not all caps, at least 2 letters,
     /// not capitalised by LeanKeys. `previous` = the word before it (lowercased) or nil.
     ///
     /// The caller decides "typed by the user, mid-sentence, not by LeanKeys, not in Secure Input or an excluded
     /// app"; this drops words without a capital, all caps, or with fewer than 2 letters.
     public func observe(word: String, previous: String?) {
+        if let sighting = sighting(word: word, previous: previous) { record(sighting) }
+    }
+
+    /// The first half of `observe`: whether `word` would count, or nil. Key-handling thread when `isDictionaryWord`
+    /// is the real check (ruling R4: it replays the engine). Touches no state.
+    public func sighting(word: String, previous: String?) -> Sighting? {
         let form = word.precomposedStringWithCanonicalMapping
-        guard Self.looksLikeTypedName(form) else { return }
+        guard Self.looksLikeTypedName(form) else { return nil }
         let id = form.lowercased()
         let afterTitle = previous.map { titles.contains(Self.normalized($0)) } ?? false
         let anywhere = !isDictionaryWord(Self.asciiFolded(id))
-        guard afterTitle || anywhere else { return }
+        guard afterTitle || anywhere else { return nil }
+        return Sighting(form: form, id: id, afterTitle: afterTitle, anywhere: anywhere)
+    }
+
+    /// The second half of `observe`: counts `sighting`. Any thread (one lock; the save is queued).
+    public func record(_ sighting: Sighting) {
+        let (form, id, afterTitle, anywhere) = (sighting.form, sighting.id, sighting.afterTitle, sighting.anywhere)
         let digest = Self.digest(id, key: key)
 
         let namesChanged: Bool = lock.withLock {

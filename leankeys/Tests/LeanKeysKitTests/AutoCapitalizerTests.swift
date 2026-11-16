@@ -90,8 +90,9 @@ final class AutoCapitalizerTests: XCTestCase {
     /// A router over the real engine with a memory-only rule book and `names` (memory-only real names by default).
     private func makeRouter(book: UndoRuleBook = UndoRuleBook(store: nil),
                             names: LearnedNames? = nil) -> EngineRouter {
+        // Records run at once, so a name typed twice is learned by the next line.
         let made = UndoLearning(book: book, defaults: defaults, context: { [unowned self] in self.context },
-                                names: names ?? UndoLearning.memoryNames())
+                                names: names ?? UndoLearning.memoryNames(), onRecordQueue: { $0() })
         learning = made
         let engine = self.engine!
         return EngineRouter(defaults: defaults, makeVikey: { engine }, undoLearning: { made },
