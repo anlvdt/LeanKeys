@@ -147,6 +147,8 @@ final class PhraseLearnerTests: XCTestCase {
         XCTAssertTrue(Exclusions.looksLikeSecret("Matkhau@2024"))
         XCTAssertTrue(Exclusions.looksLikeSecret("P4ssw0rd!"))
         XCTAssertTrue(Exclusions.looksLikeSecret("Abc@12345"))
+        XCTAssertTrue(Exclusions.looksLikeSecret("Matkhau.2024"), "a dotted password is no web address")
+        XCTAssertFalse(Exclusions.looksLikeSecret("shopee.vn/abc-xyz"))
     }
 
     func testTerminalsNotLearned() {
