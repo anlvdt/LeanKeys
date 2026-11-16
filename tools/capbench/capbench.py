@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Measures 4D auto-capitalisation (spec 17.1) on correctly cased corpora.
 
-Each line is lowercased and retyped word by word; after every word the rules run on what is on screen so far,
-exactly as ProperNounRules does. The result is compared with the original casing, skipping sentence-initial words:
+Each line is lowercased and retyped word by word; after every word the rules run on what is on screen so far, as
+ProperNounRules does, except that the context is the whole line (README, "Known approximation"). The result is compared with the original casing, skipping sentence-initial words:
   TP  capitalised and capitalised in the original
-  FP  capitalised but lowercase in the original (all-caps originals such as FOMO count here too)
+  FP  capitalised but lowercase in the original
+All-caps words (FOMO) are retyped as written, not lowercased, and not counted when the output leaves them so.
   missed  capitalised in the original but not by the rules
 Then the negatives corpus (ordinary sentences, tools/capbench/negatives.txt) is retyped as written, sentence-initial
 capitals included, with the fixed rules: any word the rules change there is an FP.
@@ -39,7 +40,7 @@ def load(path):
     places = {tuple(key(w) for w in p.split()) for p in d["places"] + d["singleWords"]}
     not_after = {" ".join(key(w) for w in p.split()): n(ws) for p, ws in d["placeNotAfter"].items()}
     given_not_after = {key(w): n(ws) for w, ws in d["givenNameNotAfter"].items()}
-    return dict(places=places, longest=max(len(k) for k in places), ambiguous=n(d["ambiguousPlaces"]),
+    return dict(places=places, longest=max((len(k) for k in places), default=0), ambiguous=n(d["ambiguousPlaces"]),
                 cues=n(d["placeCues"]), not_after=not_after, given_not_after=given_not_after, surnames=n(d["surnames"]), sure=n(d["sureSurnames"]),
                 middle=n(d["middleNames"]), given=n(d["givenNames"]), titles=n(d["titles"]))
 
@@ -47,6 +48,12 @@ def load(path):
 def cap(w):
     """As ProperNounRules.capitalized: only an all-lowercase word gets a capital; any other is left as typed."""
     return w[:1].upper() + w[1:] if w == w.lower() else w
+
+
+def all_caps(w):
+    """At least 2 letters, every letter a capital (`FOMO`, `HCM`, `COVID19`)."""
+    letters = [c for c in w if c.isalpha()]
+    return len(letters) >= 2 and all(c.isupper() for c in letters)
 
 
 def touchable(w):
@@ -89,7 +96,9 @@ def run(lines, D, learned=None, show=0, label="", as_typed=False):
                     phrase_first = None
                 out.append(t); orig.append(t)
                 continue
-            low = t.lower(); out.append(t if as_typed else low); orig.append(t); kw = key(low)
+            # All-caps words (`FOMO`, `HCM`) are retyped as written: people type them so, and the app never
+            # touches them. Single letters are lowercased like the rest ("I", "A" at a line start).
+            low = t.lower(); out.append(t if as_typed or all_caps(t) else low); orig.append(t); kw = key(low)
             i = len(out) - 1
             if phrase_first is None:
                 phrase_first = i
@@ -151,6 +160,8 @@ def run(lines, D, learned=None, show=0, label="", as_typed=False):
                 continue
             if st:
                 st = False; continue
+            if all_caps(b) and a == b:
+                continue  # retyped as written and left alone: neither right nor wrong
             A = a[:1].isupper(); B = b[:1].isupper() and not b.isupper()
             if A and B: tp += 1
             elif A and not B: fp += 1; ex[b] += 1
