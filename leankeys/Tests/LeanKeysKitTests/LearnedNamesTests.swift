@@ -6,12 +6,16 @@ import XCTest
 private final class InMemoryStore: LearnStore {
     private let lock = NSLock()
     private var data: Data?
-    private(set) var saves = 0
+    private var _saves = 0, _erased = 0
+
+    init(_ data: Data? = nil) { self.data = data }
 
     var saved: Data? { lock.withLock { data } }
+    var saves: Int { lock.withLock { _saves } }
+    var erased: Int { lock.withLock { _erased } }
     func load() throws -> Data? { lock.withLock { data } }
-    func save(_ data: Data) throws { lock.withLock { self.data = data; saves += 1 } }
-    func erase() throws { lock.withLock { data = nil } }
+    func save(_ data: Data) throws { lock.withLock { self.data = data; _saves += 1 } }
+    func erase() throws { lock.withLock { data = nil; _erased += 1 } }
 }
 
 /// A clock that moves one second per reading, so every observation has its own `lastUsed`.
@@ -126,7 +130,7 @@ final class LearnedNamesTests: XCTestCase {
     /// hidden; a hyphenated name still is.
     func testSecretShapedWordsNeverLearned() {
         let store = InMemoryStore()
-        let n = names(store, nonWords: ["matkhau2024", "abc@xyz", "e-de", "ab-", "ab--cd"])
+        let n = names(store, nonWords: ["matkhau2024", "abc@xyz", "ede", "ab-", "ab--cd"])
         for _ in 0..<3 {
             for word in ["Matkhau2024", "Abc@xyz", "Ab-", "Ab--cd", "-Ab"] {
                 n.observe(word: word, previous: nil)
@@ -238,12 +242,15 @@ final class LearnedNamesTests: XCTestCase {
         otherKey.observe(word: "Lan", previous: "chị")
         XCTAssertNil(otherKey.name(after: "chị", word: "lan"))
 
-        // Memory only.
+        // Memory only: learned while it runs, and nothing reaches the store.
+        otherKey.flush()
+        let savesBefore = store.saves
         let none = names(nil)
         none.observe(word: "Shopee", previous: nil)
         none.observe(word: "Shopee", previous: nil)
         none.flush()
-        XCTAssertTrue(names(nil).names.isEmpty)
+        XCTAssertEqual(none.names.map(\.form), ["Shopee"])
+        XCTAssertEqual(store.saves, savesBefore)
     }
 
     func testRemoveAndRemoveAll() {
@@ -260,14 +267,62 @@ final class LearnedNamesTests: XCTestCase {
         XCTAssertEqual(n.names.map(\.form), ["Tiki"])
         n.removeAll()
         XCTAssertTrue(n.names.isEmpty)
-        n.observe(word: "Lan", previous: "chị")
-        XCTAssertNil(n.name(after: "chị", word: "lan"), "removeAll forgets hidden counts too")
         n.flush()
-        XCTAssertTrue(names(store).names.isEmpty)
+        // The saved snapshot has no hidden count left: one more sighting after a reload is still below the threshold.
+        let reloaded = names(store)
+        XCTAssertTrue(reloaded.names.isEmpty)
+        reloaded.observe(word: "Lan", previous: "chị")
+        XCTAssertNil(reloaded.name(after: "chị", word: "lan"), "removeAll forgot the hidden counts on disk too")
+        n.observe(word: "Lan", previous: "chị")
+        XCTAssertNil(n.name(after: "chị", word: "lan"), "and in memory")
+    }
+
+    /// Task 2 minor 6: a file that cannot be decoded is never overwritten by the session that could not read it.
+    func testUndecodableFileIsNotOverwritten() {
+        let garbage = Data("not json".utf8)
+        let store = InMemoryStore(garbage)
+        let n = names(store)
+        n.observe(word: "Shopee", previous: nil)
+        n.observe(word: "Shopee", previous: nil)
+        n.flush()
+        XCTAssertEqual(store.saved, garbage)
+        XCTAssertEqual(store.saves, 0)
+    }
+
+    /// Task 5 minor 4: "Xoá tất cả" erases a file the session could not read, so its names never come back.
+    func testRemoveAllErasesAnUnreadableFile() {
+        let store = InMemoryStore(Data("not json".utf8))
+        let n = names(store)
+        n.removeAll()
+        n.flush()
+        XCTAssertEqual(store.erased, 1)
+        XCTAssertNil(store.saved)
+        // From now on the file is this session's: changes are saved.
+        n.observe(word: "Shopee", previous: nil)
+        n.observe(word: "Shopee", previous: nil)
+        n.flush()
+        XCTAssertEqual(names(store).names.map(\.form), ["Shopee"])
+    }
+
+    /// Task 2 minor 1: a lookup marks the name used in memory but starts no save of the whole file; the new
+    /// `lastUsed` rides along with the next real change.
+    func testLookupStartsNoSave() {
+        let store = InMemoryStore()
+        let n = names(store)
+        n.observe(word: "Shopee", previous: nil)
+        n.observe(word: "Shopee", previous: nil)
+        n.flush()
+        let saves = store.saves
+        for _ in 0..<5 { XCTAssertEqual(n.name(after: nil, word: "shopee"), "Shopee") }
+        n.flush()
+        XCTAssertEqual(store.saves, saves)
     }
 
     func testRealDictionaryCheck() {
         XCTAssertEqual(LearnedNames.asciiFolded("Đường"), "duong")
+        // Task 2 minor 2: letters only, so a hyphen or apostrophe does not make every such word a non-word.
+        XCTAssertEqual(LearnedNames.asciiFolded("Ê-đê"), "ede")
+        XCTAssertEqual(LearnedNames.asciiFolded("O’Neil"), "oneil")
         XCTAssertTrue(LearnedNames.isDictionaryWord("store"))
         XCTAssertTrue(LearnedNames.isDictionaryWord(LearnedNames.asciiFolded("Hùng")))
         XCTAssertFalse(LearnedNames.isDictionaryWord("shopee"))

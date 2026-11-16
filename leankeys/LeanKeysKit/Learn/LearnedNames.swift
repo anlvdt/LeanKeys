@@ -59,7 +59,8 @@ public final class LearnedNames: LearnedNameLookup {
     private var pending: [String: Pending] = [:]
     private var undos: [String: Int] = [:]
     private var savePending = false
-    /// The store could not be read at launch: nothing is saved this session, so its file is never overwritten.
+    /// The store could not be read or decoded at launch: nothing is saved this session, so its file is never
+    /// overwritten, until "Xoá tất cả" erases it (`removeAll`).
     private var persistent: Bool
     private var _onChange: (() -> Void)?
 
@@ -81,7 +82,12 @@ public final class LearnedNames: LearnedNameLookup {
         persistent = store != nil
         guard let store else { return }
         do {
-            if let data = try store.load(), let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) {
+            if let data = try store.load() {
+                // A file that cannot be decoded (corrupt, or from a later version) is never overwritten.
+                guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else {
+                    persistent = false
+                    return
+                }
                 for name in snapshot.names where !name.form.isEmpty && name.count > 0 {
                     learned[Self.normalized(name.form)] = name
                 }
@@ -171,8 +177,8 @@ public final class LearnedNames: LearnedNameLookup {
             learned[id] = name
             return name.form
         }
-        // The new `lastUsed` is saved, but the UI is not told: only the order of `names` moved.
-        if form != nil { scheduleSave() }
+        // The new `lastUsed` rides along with the next save (no write of the whole file per name typed), and the UI
+        // is not told: only the order of `names` moved.
         return form
     }
 
@@ -208,12 +214,20 @@ public final class LearnedNames: LearnedNameLookup {
         if removed { didChange() }
     }
 
-    /// Forgets every name, hidden count and undo count.
+    /// Forgets every name, hidden count and undo count. A file this session could not read is erased, so its names
+    /// do not come back at the next launch; from then on changes are saved.
     public func removeAll() {
-        lock.withLock {
+        let eraseUnreadable: Bool = lock.withLock {
             learned = [:]
             pending = [:]
             undos = [:]
+            return !persistent && store != nil
+        }
+        if eraseUnreadable {
+            saveQueue.async { [self] in
+                guard (try? store?.erase()) != nil else { return }
+                lock.withLock { persistent = true }
+            }
         }
         didChange()
     }
@@ -230,11 +244,11 @@ public final class LearnedNames: LearnedNameLookup {
         lk_vikey_word_score(0, letters) != LK_VIKEY_NOT_A_WORD || lk_vikey_word_score(1, letters) != LK_VIKEY_NOT_A_WORD
     }
 
-    /// Lowercase without Vietnamese marks, đ as d: "Đường" → "duong".
+    /// Lowercase ASCII letters without Vietnamese marks, đ as d: "Đường" → "duong", "Ê-đê" → "ede".
     static func asciiFolded(_ word: String) -> String {
         let lower = word.lowercased().replacingOccurrences(of: "đ", with: "d")
         let scalars = lower.decomposedStringWithCanonicalMapping.unicodeScalars
-            .filter { !(0x0300...0x036F).contains($0.value) }
+            .filter { ("a"..."z").contains($0) }
         return String(String.UnicodeScalarView(scalars))
     }
 
