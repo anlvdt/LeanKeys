@@ -162,4 +162,13 @@ final class KeyPassthroughTests: XCTestCase {
             XCTAssertEqual(KeyPassthrough.reason(bundleID: id, focused: nil), "remote", id)
         }
     }
+
+    // Security review I-1: a hyphenated label keeps its hyphen for the word list.
+    func testHyphenatedLabelsAreCredentials() {
+        for a in [field(placeholder: "E-mail"), field(title: "E-mail:"), field(label: "Địa chỉ e-mail"),
+                  field(description: "Log-in")] {
+            XCTAssertTrue(KeyPassthrough.isCredentialField(attributes: a), "\(a)")
+        }
+        XCTAssertFalse(KeyPassthrough.isCredentialField(attributes: field(placeholder: "Tìm kiếm")))
+    }
 }

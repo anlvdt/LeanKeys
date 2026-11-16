@@ -147,6 +147,8 @@ final class SafeInstallerTests: XCTestCase {
         XCTAssertFalse(SafeInstaller.isNewer("1.2.0", than: "1.2"))
         XCTAssertFalse(SafeInstaller.isNewer("", than: "1.2"))
         XCTAssertFalse(SafeInstaller.isNewer("1.x", than: "1.2"))
+        XCTAssertTrue(SafeInstaller.isNewer("1.3-beta", than: "1.2"), "the Rust checker offers pre-releases too")
+        XCTAssertFalse(SafeInstaller.isNewer("1.2-beta", than: "1.2"))
     }
 
     func testOnlyGitHubHTTPSDownloads() {

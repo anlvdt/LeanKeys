@@ -102,7 +102,7 @@ public enum KeyPassthrough {
         guard let role = a[kAXRoleAttribute as String], fieldRoles.contains(role) else { return false }
         let labels = [kAXPlaceholderValueAttribute as String, kAXDescriptionAttribute as String,
                       kAXTitleAttribute as String, kAXHelpAttribute as String, titleLabelKey]
-            .compactMap { a[$0] }.map { normalized($0) }
+            .compactMap { a[$0] }.flatMap { [normalized($0), normalized($0, splitWords: false)] } // "E-mail" stays whole
         let identifiers = [kAXIdentifierAttribute as String, "AXDOMIdentifier"].compactMap { a[$0] }
         if (labels + identifiers.map { normalized($0) }).contains(where: { text in
             credentialWords.contains { containsWord(text, $0) }

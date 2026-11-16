@@ -101,10 +101,11 @@ public enum SafeInstaller {
     }
 
     /// Whether `candidate` is a higher dotted version than `current` ("1.10" > "1.9", "1.2.0" == "1.2"). A leading
-    /// "v" is ignored; anything not made of numbers is never newer.
+    /// "v" and a pre-release suffix ("-beta") are ignored; anything else not made of numbers is never newer.
     public static func isNewer(_ candidate: String, than current: String) -> Bool {
         func parts(_ v: String) -> [Int]? {
-            let trimmed = v.hasPrefix("v") ? String(v.dropFirst()) : v
+            var trimmed = v.hasPrefix("v") ? String(v.dropFirst()) : v
+            if let dash = trimmed.firstIndex(of: "-") { trimmed = String(trimmed[..<dash]) }
             let numbers = trimmed.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
             guard !numbers.isEmpty, numbers.allSatisfy({ $0 != nil }) else { return nil }
             return numbers.map { $0! }

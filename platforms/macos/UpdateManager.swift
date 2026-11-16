@@ -675,7 +675,7 @@ extension UpdateManager {
                 UserDefaults.standard.removeObject(forKey: self.dmgKey)
                 UserDefaults.standard.removeObject(forKey: self.versionKey)
                 self.pendingVersion = ""
-                self.state = .idle
+                self.state = silent ? .idle : .error(PopoverUpdateRow.Failure.installMessage) // The click says why nothing happened.
             }
         }
     }

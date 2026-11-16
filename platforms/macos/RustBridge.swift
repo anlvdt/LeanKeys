@@ -1437,19 +1437,20 @@ private func matchesModifierOnlyShortcut(flags: CGEventFlags) -> Bool {
 }
 
 /// Trigger restore shortcut - restore raw ASCII and clear buffer
-private func triggerRestoreShortcut(flags: CGEventFlags, proxy: CGEventTapProxy) {
+@discardableResult private func triggerRestoreShortcut(flags: CGEventFlags, proxy: CGEventTapProxy) -> Bool { // LEANKEYS-HOOK: engine-dispatch (false: keys pass through, nothing restored)
     let shift = flags.contains(.maskShift)
     let caps = shift || flags.contains(.maskAlphaShift)
     // Don't bypass IME for restore shortcut - modifiers are part of the shortcut itself
     // Always pass ctrl=false so engine performs the restore action
     let (method, delays) = detectMethod()
     EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
-    if method == .passthrough { RustBridge.clearBuffer(); return } // LEANKEYS-HOOK: engine-dispatch (no restore inside a sign-in field or terminal)
+    if method == .passthrough { RustBridge.clearBuffer(); return false } // LEANKEYS-HOOK: engine-dispatch (no restore inside a sign-in field or terminal)
     if let (bs, chars, _) = RustBridge.processKey(keyCode: UInt16(KeyCode.esc), caps: caps, ctrl: false, shift: shift) {
         Log.key(UInt16(KeyCode.esc), "restore: bs=\(bs) chars=\(DebugLog.redact(chars))") // LEANKEYS-HOOK: debug-log
         sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
     }
     RustBridge.clearBuffer()
+    return true // LEANKEYS-HOOK: engine-dispatch
 }
 
 private func keyboardCallback(
@@ -1629,7 +1630,7 @@ private func keyboardCallback(
     // Issue #157: Pass key through after restore so it still functions normally (Tab inserts tab, ESC closes dialog)
     // Issue #303: Only pass through special keys (ESC, Tab, etc.), not letter/number keys with modifiers (Shift-Z, Option-Z)
     if AppState.shared.restoreShortcutEnabled && SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active) && matchesRestoreShortcut(keyCode: keyCode, flags: flags) { // LEANKEYS-HOOK: copy
-        triggerRestoreShortcut(flags: flags, proxy: proxy)
+        guard triggerRestoreShortcut(flags: flags, proxy: proxy) else { return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch (pass-through: the key is not swallowed)
         // Only pass through special keys that should still function after restore
         // (ESC closes dialogs, Tab moves focus, Enter submits, etc.)
         // For letter/number keys with modifiers (Shift-Z, Option-Z), consume the event
@@ -1830,9 +1831,9 @@ private enum DetectionCache {
 
     static func set(_ method: InjectionMethod, _ delays: (UInt32, UInt32, UInt32), logKey: String) {
         result = (method, delays)
-        timestamp = CFAbsoluteTimeGetCurrent()
+        expiryLock.lock(); timestamp = generation == detectGeneration ? CFAbsoluteTimeGetCurrent() : 0; expiryLock.unlock() // LEANKEYS-HOOK: engine-dispatch (a focus move during this detection: the next key detects again)
         // Only log when method+app combination changes
-        if logKey != lastLoggedKey {
+        if method != .passthrough, logKey != lastLoggedKey { // LEANKEYS-HOOK: debug-log (nothing logged for pass-through)
             lastLoggedKey = logKey
             Log.method(logKey)
         }
@@ -1842,7 +1843,11 @@ private enum DetectionCache {
         result = nil
         timestamp = 0
     }
-    static func expire() { timestamp = 0 } // LEANKEYS-HOOK: engine-dispatch (focus moved: the next key re-detects; one Double write, safe off the key thread)
+    private static let expiryLock = NSLock() // LEANKEYS-HOOK: engine-dispatch
+    private static var generation = 0 // LEANKEYS-HOOK: engine-dispatch (bumped by every focus move)
+    private static var detectGeneration = 0 // LEANKEYS-HOOK: engine-dispatch (the generation a slow detection started in)
+    static func beginDetect() { expiryLock.lock(); detectGeneration = generation; expiryLock.unlock() } // LEANKEYS-HOOK: engine-dispatch
+    static func expire() { expiryLock.lock(); generation &+= 1; timestamp = 0; expiryLock.unlock() } // LEANKEYS-HOOK: engine-dispatch (focus moved: the next key re-detects)
 }
 
 /// Get detected default for a bundleId (method name + delay tuple)
@@ -1894,6 +1899,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
     }
 
     // Slow path: query AX for focused element
+    DetectionCache.beginDetect() // LEANKEYS-HOOK: engine-dispatch
     let systemWide = axSystemWideBounded()
     var focused: CFTypeRef?
     var role: String?
@@ -2211,10 +2217,10 @@ private class FocusChangeObserver {
         // Callback for AX notifications - must be a C function pointer
         let callback: AXObserverCallback = { _, element, notification, _ in
             // Debounce: skip if processed recently (prevents rapid-fire from multiple notifications)
+            DetectionCache.expire() // LEANKEYS-HOOK: engine-dispatch
             let now = CFAbsoluteTimeGetCurrent()
             guard now - FocusChangeObserver.lastProcessedTime > FocusChangeObserver.debounceInterval else { return }
             FocusChangeObserver.lastProcessedTime = now
-            DetectionCache.expire() // LEANKEYS-HOOK: engine-dispatch
 
             // Dispatch to main thread to avoid race conditions
             DispatchQueue.main.async {
