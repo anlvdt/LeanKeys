@@ -7,6 +7,7 @@ import Foundation
 /// - **Remote control and virtual machines.** These apps send the physical keys to another computer, which has its
 ///   own input method. Synthetic edits (Backspace + Vietnamese letters) are not forwarded the same way, so typing
 ///   there would be composed twice or garbled.
+/// - **Password managers and macOS sign-in dialogs** (`credentialAppBundleIDs`): every field there.
 /// - **Sign-in fields.** A user name, email or password must be typed exactly as the keys say. macOS hides real
 ///   password fields behind Secure Input (LeanKeys then never sees the keys), but many sign-in boxes are plain text
 ///   fields, and a user name or email field never is secure.
@@ -38,6 +39,15 @@ public enum KeyPassthrough {
         "org.virtualbox.app.VirtualBoxVM", // VirtualBox
     ]
 
+    /// Password managers, and the macOS dialogs that ask for a user name and password (authorization prompts, the
+    /// login window). Their user name, TOTP secret and recovery-code fields are plain text fields (MEDIUM-3).
+    public static let credentialAppBundleIDs: Set<String> = Exclusions.passwordManagers.union([
+        "com.apple.SecurityAgent",
+        "com.apple.SecurityAgentHelper.arm64",
+        "com.apple.SecurityAgentHelper.x86_64",
+        "com.apple.loginwindow",
+    ])
+
     /// Single-line fields only: a sign-in box is never a text area.
     static let fieldRoles: Set<String> = ["AXTextField", "AXComboBox"]
 
@@ -67,9 +77,10 @@ public enum KeyPassthrough {
     /// (`kAXTitleUIElementAttribute` → its `kAXValueAttribute`): native forms put "Mật khẩu:" in a separate static text.
     static let titleLabelKey = "AXTitleUIElement.value"
 
-    /// "remote", "credential", or nil to type normally.
+    /// "remote", "credential-app", "credential", or nil to type normally.
     public static func reason(bundleID: String?, focused: AXUIElement?) -> String? {
         if let bundleID, remoteBundleIDs.contains(bundleID) { return "remote" }
+        if let bundleID, credentialAppBundleIDs.contains(bundleID) { return "credential-app" }
         guard let focused else { return nil }
         // An error or timeout reads as "not a credential field": typing must not stall or stop on a busy app.
         return isCredentialField(attributes: readAttributes(focused) ?? [:]) ? "credential" : nil

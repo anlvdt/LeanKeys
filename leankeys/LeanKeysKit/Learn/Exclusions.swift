@@ -2,15 +2,22 @@ import Foundation
 
 /// What PhraseLearner never learns from: password managers, and phrases holding a card number or an OTP.
 public enum Exclusions {
-    /// Apps never learned from, by default.
-    public static let defaultBundleIDs: Set<String> = Set([
+    /// Password managers. Every key passes straight through there too (`KeyPassthrough`, security audit MEDIUM-3):
+    /// user names, TOTP secrets and recovery codes are plain text fields.
+    public static let passwordManagers: Set<String> = [
         "com.1password.1password",
         "com.agilebits.onepassword7",
         "com.bitwarden.desktop",
         "com.apple.keychainaccess",
         "com.apple.Passwords",
         "org.keepassxc.keepassxc",
-    ])
+        "in.sinew.Enpass-Desktop",          // Enpass
+        "com.lastpass.lastpassmacdesktop",  // LastPass
+        "me.proton.pass.electron",          // Proton Pass
+    ]
+
+    /// Apps never learned from, by default.
+    public static let defaultBundleIDs: Set<String> = passwordManagers
     // Terminals: sudo, ssh and git ask for passwords there without Secure Input or a secure text field. The one
     // list `CodeApps` keeps (task 4 review minor 8).
     .union(CodeApps.terminals)

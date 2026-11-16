@@ -125,4 +125,17 @@ final class KeyPassthroughTests: XCTestCase {
         XCTAssertFalse(LearnContextReader.isExcludedField(attributes: field(placeholder: "Nhập tin nhắn")))
         XCTAssertFalse(LearnContextReader.isExcludedField(attributes: [:]))     // no attributes: an ordinary element
     }
+
+    // MARK: Security audit MEDIUM-3
+
+    func testPasswordManagersAndAuthorizationDialogsPassThrough() {
+        for id in ["com.1password.1password", "com.agilebits.onepassword7", "com.bitwarden.desktop",
+                   "com.apple.keychainaccess", "com.apple.Passwords", "org.keepassxc.keepassxc",
+                   "in.sinew.Enpass-Desktop", "com.lastpass.lastpassmacdesktop", "me.proton.pass.electron",
+                   "com.apple.SecurityAgent", "com.apple.SecurityAgentHelper.arm64",
+                   "com.apple.SecurityAgentHelper.x86_64", "com.apple.loginwindow"] {
+            XCTAssertEqual(KeyPassthrough.reason(bundleID: id, focused: nil), "credential-app", id)
+        }
+        XCTAssertNil(KeyPassthrough.reason(bundleID: "com.apple.TextEdit", focused: nil))
+    }
 }
