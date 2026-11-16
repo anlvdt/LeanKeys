@@ -529,3 +529,74 @@ Thay mục 4 của §14.1 bằng một hàng luôn hiện, nằm dưới `Kiểu
 - **Đơn vị (LeanKeysKit):** ánh xạ trạng thái `UpdateManager` + cờ → trạng thái hàng; chữ của từng trạng thái; bấm thì làm gì; tiến độ không xác định (-1) không làm hỏng chữ; `SafeInstaller.verify` từ chối bản ad-hoc khi yêu cầu chữ ký ổn định; mô hình ô nổi gọi đúng hành động và báo đóng.
 - **Ảnh:** `docs/ui/popover-update-*-{light,dark}.png` bằng dữ liệu giả.
 - **Thử tay:** mục U1–U4 trong `sync/manual-checklist.md`.
+
+## 17. 4D: Tự viết hoa tên riêng, bỏ ký tự gõ dính khi Enter
+
+Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu làm luôn. Cả hai tính năng chỉ chạy với engine Vikey (chế độ "Tự động", mặc định), cùng lý do như 4C (mục 12.2), và đều bật sẵn.
+
+### 17.1 Tự viết hoa tên riêng
+**Nguyên tắc: viết hoa sai còn tệ hơn không viết hoa.** Mỗi quy tắc dưới đây đã được đo trên hai kho câu của Vikey (`chat_messages` và `synthetic_val`, chữ hoa đúng chuẩn). Cách đo: hạ toàn bộ chữ về chữ thường, gõ lại từng từ, rồi so với bản gốc, không tính từ đầu câu. Bản dựng thử: quy tắc cố định viết hoa **đúng 302 lần, sai 0 lần**; thêm phần tự học (17.1.3) thì đúng 777 lần, sai 0 lần (2 lần lệch do bản gốc viết hoa toàn bộ, `FOMO`).
+
+**Thời điểm.** Khi một từ được chốt bằng phím cách hoặc dấu câu, LeanKeys xét các từ vừa gõ trong `TextMirror` (cùng cụm, không vượt qua dấu câu). Nếu khớp một quy tắc, LeanKeys thay các từ đó bằng dạng viết hoa: xoá N ký tự rồi gõ lại, phím ngắt vẫn đi như thường. Gõ tắt (4B) vẫn được xét trước.
+
+**17.1.1 Địa danh.** Một cụm 1–4 từ, khớp không phân biệt hoa thường, trong danh sách sau được viết hoa từng âm tiết:
+- 34 tỉnh, thành sau sắp xếp 2025: Hà Nội, Huế, Lai Châu, Điện Biên, Sơn La, Lạng Sơn, Quảng Ninh, Thanh Hóa, Nghệ An, Hà Tĩnh, Cao Bằng, Tuyên Quang, Lào Cai, Thái Nguyên, Phú Thọ, Bắc Ninh, Hưng Yên, Hải Phòng, Ninh Bình, Quảng Trị, Đà Nẵng, Quảng Ngãi, Gia Lai, Khánh Hòa, Lâm Đồng, Đắk Lắk, Hồ Chí Minh, Đồng Nai, Tây Ninh, Cần Thơ, Vĩnh Long, Đồng Tháp, Cà Mau, An Giang.
+- Tên tỉnh cũ: Hà Giang, Yên Bái, Bắc Kạn, Hòa Bình, Vĩnh Phúc, Bắc Giang, Hải Dương, Thái Bình, Hà Nam, Nam Định, Quảng Bình, Thừa Thiên Huế, Quảng Nam, Bình Định, Phú Yên, Ninh Thuận, Bình Thuận, Kon Tum, Đắk Nông, Bình Phước, Bình Dương, Bà Rịa, Vũng Tàu, Long An, Tiền Giang, Bến Tre, Trà Vinh, Hậu Giang, Sóc Trăng, Bạc Liêu, Kiên Giang.
+- Địa danh quen thuộc: Sài Gòn, Hội An, Phú Quốc, Đà Lạt, Nha Trang, Hạ Long, Sa Pa, Mũi Né, Quy Nhơn, Buôn Ma Thuột, Pleiku, Biên Hòa, Thủ Đức, Côn Đảo, Tam Đảo, Mộc Châu, Phan Thiết, Rạch Giá, Hà Tiên, Châu Đốc, Mỹ Tho, Long Xuyên, Cát Bà, Tân Sơn Nhất, Nội Bài, Hoàn Kiếm, Ba Đình, Cầu Giấy, Gò Vấp, Bình Thạnh, Tân Bình, Phú Nhuận.
+- Tên nước và vùng: Việt Nam, Trung Quốc, Nhật Bản, Hàn Quốc, Hoa Kỳ, Thái Lan, Campuchia, Singapore, Malaysia, Indonesia, Philippines, Ấn Độ, Canada, Đài Loan, Hồng Kông, Triều Tiên, Châu Âu, Châu Á, Châu Phi, Châu Mỹ, Đông Nam Á, Liên Hợp Quốc, Myanmar.
+- Từ đơn: Tết.
+- **Cụm trùng từ thường** chỉ được viết hoa khi từ (hoặc cặp từ) ngay trước là một từ chỉ nơi chốn: `tỉnh`, `thành phố`, `tp`, `ở`, `tại`, `về`, `đến`, `quê`, `từ`, `ra`, `vào`, `đi`. Các cụm đó là: hòa bình, thái bình, cao bằng, hải dương, phú thọ, vĩnh phúc, bình định, an giang, long an, hà nam, quảng nam, gia lai, bình dương, nam định, tân bình, bình thạnh, phú nhuận, cầu giấy, ba đình, bà rịa, thanh hóa, phú yên, hưng yên, vĩnh long, châu á, châu âu, châu phi, châu mỹ, hoa kỳ.
+- Cụm dài được ưu tiên: "thừa thiên huế" thắng "huế"; "hồ chí minh" thắng họ "hồ".
+
+**17.1.2 Họ tên.**
+- **Họ:** nguyễn, trần, lê, phạm, hoàng, huỳnh, phan, vũ, võ, đặng, bùi, đỗ, hồ, ngô, dương, lý, đinh, đoàn, trương, lâm, mai, tô, trịnh, đào, cao, lương, hà, lưu, tạ, châu, quách, thái, vương, kiều.
+- **Họ luôn viết hoa** (không trùng từ thường): nguyễn, huỳnh, trịnh, quách. Không thêm phạm (vi phạm), trương (khai trương), đặng: đo thấy viết hoa sai.
+- **Tên lót:** văn, thị. Khi đứng ngay sau một họ, cả họ và tên lót được viết hoa.
+- **Sau "Họ Văn/Thị",** từ kế tiếp luôn được viết hoa ("Nguyễn Văn Tèo").
+- **Tên phổ biến** (danh sách khoảng 130 tên trong bản dựng thử `data.py`, ví dụ an, anh, bình, dũng, hùng, lan, linh, mai, minh, nam, ngọc, phương, quân, thảo, trang, tuấn, vân, yến…):
+  - đứng sau một họ đã viết hoa, hoặc sau một họ luôn viết hoa: viết hoa cả hai;
+  - đứng sau hai từ viết hoa mà từ đầu là họ hoặc tên lót: viết hoa.
+- Ngoài các trường hợp trên thì không viết hoa: "nguyễn đi chợ" → "Nguyễn đi chợ".
+
+**17.1.3 Tên tự học.** LeanKeys đếm các từ người dùng **tự gõ hoa bằng Shift hoặc Caps Lock** ở giữa câu. Từ đầu câu, từ viết hoa toàn bộ, từ một chữ cái, và từ do chính LeanKeys viết hoa đều không tính.
+- **Học "sau từ xưng hô":** từ được gõ hoa ngay sau một từ xưng hô (anh, chị, em, ông, bà, cô, chú, bác, thầy, sếp, dì, cậu) từ 2 lần trở lên. Lần sau, khi từ đó được gõ thường ngay sau một từ xưng hô, nó được viết hoa ("anh hùng" → "anh Hùng").
+- **Học "mọi nơi":** từ được gõ hoa giữa câu từ 2 lần trở lên mà không phải từ tiếng Việt hay tiếng Anh có thật (`lk_vikey_word_score` của cả hai ngôn ngữ đều là `LK_VIKEY_NOT_A_WORD`, xét trên các chữ ASCII của từ). Lần sau, từ đó được viết lại đúng dạng đã học ở mọi nơi ("shopee" → "Shopee", "chatgpt" → "ChatGPT").
+- **Lưu trữ:** trước khi đạt 2 lần chỉ lưu HMAC-SHA256 của từ (khoá HMAC của 4B) kèm số lần. Đạt ngưỡng thì mới lưu dạng chữ. Dữ liệu nằm cùng file với luật 4C (`undo-rules.bin`, mã hoá). Giới hạn 2.000 tên, bỏ tên lâu không dùng nhất (LRU).
+- **Không học** trong Secure Input, ô mật khẩu, và các app bị loại trừ (mục 11.1).
+
+**17.1.4 Hoàn tác.** Nếu người dùng bấm ⌫ ngay sau một lần tự viết hoa (phím đầu tiên sau phím ngắt):
+- Chữ trở lại đúng như đã gõ, chỉ mất phím ngắt, giống 4C.
+- LeanKeys lưu luật "không viết hoa cụm này sau từ đứng trước này". Luật nằm cùng sổ với 4C và hiện trong danh sách "Từ đã học".
+- Tên tự học bị hoàn tác 2 lần ở bất kỳ đâu thì bị xoá khỏi danh sách tên.
+
+### 17.2 Bỏ ký tự gõ dính khi Enter
+- **Phím sát Enter** (mã phím Mac):
+  - `\` (42), `]` (30), `'` (39);
+  - khi giữ Shift: `|`, `}`, `"`.
+- **Trước Enter.** Khi bấm Enter (36 hoặc 76), nếu phím ngay trước là một phím sát Enter, cách Enter **≤ 100 ms** (theo thời điểm nhấn phím), và đã gõ ra đúng một ký tự ở cuối dòng: LeanKeys xoá ký tự đó, rồi để Enter đi như thường.
+- **Sau Enter.** Nếu một phím sát Enter được nhấn trong vòng **≤ 100 ms** sau Enter, phím đó bị bỏ.
+- **Không áp dụng khi:**
+  - ký tự đó đóng một cặp đang mở trên cùng dòng: `'` khi trên dòng đã có số lẻ dấu `'`; `]` khi có `[` chưa đóng; `"` và `}` tương tự;
+  - app đang dùng là terminal hay trình soạn code: Terminal, iTerm2, Warp, Ghostty, Alacritty, kitty, WezTerm, VS Code, VS Code Insiders, Cursor, Windsurf, Zed, Xcode, Sublime Text, Nova, BBEdit, các IDE của JetBrains (bundle ID bắt đầu bằng `com.jetbrains.`), Android Studio;
+  - đang ở chế độ Gõ Nhanh.
+- **Ngưỡng 100 ms** là hằng số có tên, đặt trong một file. Gõ dính là hai phím gần như cùng lúc, còn gõ `\` rồi Enter có chủ đích thường cách nhau trên 150 ms.
+
+### 17.3 Cài đặt
+Thẻ "Tự sửa và tự học" (mục 12.3) có thêm:
+- hai công tắc `Tự viết hoa tên riêng` và `Bỏ ký tự gõ dính khi Enter`, bật sẵn; khoá UserDefaults là `LeanKeys.autoCapitalize` và `LeanKeys.strayEnter`;
+- danh sách `Tên đã học` (dạng chữ, số lần, nút xoá); nút "Xoá tất cả" của thẻ xoá cả danh sách này.
+
+### 17.4 Test
+- **Đơn vị:**
+  - Mỗi quy tắc ở 17.1.1–17.1.2, kèm các ca phải giữ chữ thường: "vi phạm", "khai trương", "hòa bình thế giới", "nguyễn đi chợ" → "Nguyễn đi chợ", "anh hùng" khi chưa học.
+  - Tên tự học: ngưỡng 2 lần; không học từ đầu câu, từ do LeanKeys viết hoa, hay trong ô mật khẩu; file lưu không chứa tên chưa đạt ngưỡng; LRU 2.000.
+  - Hoàn tác bằng ⌫.
+  - Ký tự gõ dính: trước Enter, sau Enter, đúng 100 ms (có) và 101 ms (không); cặp đang mở; app bị loại; chế độ Gõ Nhanh.
+- **Đo lại** bằng `tools/capbench/` (bản dựng thử, chuyển vào repo): quy tắc cố định không có lần viết hoa sai nào trên hai kho câu.
+- **Thử tay:**
+  - gõ "toi o ha noi" → "tôi ở Hà Nội";
+  - gõ "nguyen van an" → "Nguyễn Văn An";
+  - gõ "anh Hùng" hai lần, rồi "anh hùng" → "anh Hùng";
+  - ⌫ ngay sau khi tự viết hoa trả lại chữ thường;
+  - trong Notes gõ "xong." rồi bấm `\` và Enter gần như cùng lúc → dòng kết thúc ở "xong.";
+  - trong Terminal, `\` rồi Enter vẫn giữ `\`.
