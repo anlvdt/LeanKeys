@@ -1278,6 +1278,7 @@ private var wasControlPressed = false
 /// Returns the word only if cursor is right after a space/punctuation that follows a word
 /// This ensures we only restore when actually entering a word, not when deleting within a word
 private func getWordToRestoreOnBackspace() -> String? {
+    if IsSecureEventInputEnabled() { return nil } // LEANKEYS-HOOK: engine-dispatch (security audit LOW-5: read no field value under Secure Input)
     let systemWide = axSystemWideBounded()
     var focused: CFTypeRef?
 
