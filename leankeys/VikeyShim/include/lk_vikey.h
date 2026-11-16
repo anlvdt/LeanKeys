@@ -19,6 +19,24 @@ void lk_vikey_reset_context(void);              // also clears the shim's copy o
 // gives back the word from before the doubled key ("học") and keeps Vietnamese, in one edit (delete the word,
 // type the old one; languageChanged when the language comes back to Vietnamese). Off: Vikey's own Backspace.
 void lk_vikey_set_double_key_fix(int on);
+// Spec 12.2: Vikey's own fix of a finished word at a break key (English -> Vietnamese "cos " -> "có ", or back to
+// English "ít " -> "its "), which Vikey lets the user undo with Backspace twice.
+typedef struct {
+    uint16_t before[64]; int beforeLength;     // the word on screen before Vikey changed it ("cos", "ít")
+    uint16_t after[64];  int afterLength;      // the word Vikey made ("có", "its")
+    uint16_t previous[64]; int previousLength; // the word before it on the same line, lower case; may be empty
+} lk_fix;
+// Called when Vikey has just fixed a word (words over 64 UTF-16 units are never reported). Return 1 to keep `before`:
+// the shim undoes the fix inside the engine and types the break key again, all in the one edit the key returns, with
+// the language as it was before the key. 0 lets the fix stand.
+typedef int (*lk_fix_filter)(const lk_fix* fix);
+void lk_vikey_set_fix_filter(lk_fix_filter filter); // NULL = never veto (the default)
+// An undo: the user pressed Backspace twice right after a fix (Vikey puts `before` back; reverse = 0), or right after
+// a veto (the shim applies the fix after all: `after` comes back with its language; reverse = 1).
+typedef struct { lk_fix fix; int reverse; } lk_undo;
+// 1 and fills `out` once per undo; 0 when there is none. One slot: a newer undo replaces one not yet taken.
+int  lk_vikey_take_undo(lk_undo* out);
+
 void lk_vikey_set_language(int vietnamese);     // 1 = Việt, 0 = Anh; clears the copy of the line too
 int  lk_vikey_language(void);
 void lk_vikey_set_options(int modernOrthography, int autoSwitch, int telexStyle);

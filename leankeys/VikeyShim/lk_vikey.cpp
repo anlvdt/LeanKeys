@@ -4,6 +4,8 @@
 #include "telex_map.h"
 #include <cstring>
 #include <string>
+#include <utility>
+#include <vector>
 
 extern vKeyHookState HookState;   // Engine.cpp: the engine's output for the last key
 
@@ -14,6 +16,20 @@ int vLanguage = 1, vSwitchKeyStatus = 0, vCheckSpelling = 1, vUseModernOrthograp
 
 // One driver: the engine keeps its state in globals (vKeyInit), so a second driver would share it anyway.
 static VikeyDriver* driver = nullptr;
+
+// Spec 12.2 reads three private members of VikeyDriver (Driver.h) to see a fix Backspace can undo: undoActive and
+// undoBreakGone (set by rememberFix, Driver.cpp) and undoText (the word as typed). vendor/ stays untouched, so they
+// are reached the one standard way: an explicit template instantiation may name a private member, and the friend
+// function it defines hands the member pointer out.
+template <typename Tag, typename Tag::type Member> struct PrivateAccess {
+    friend typename Tag::type member(Tag) { return Member; }
+};
+struct UndoActiveTag { typedef bool VikeyDriver::*type; friend type member(UndoActiveTag); };
+struct UndoBreakGoneTag { typedef bool VikeyDriver::*type; friend type member(UndoBreakGoneTag); };
+struct UndoTextTag { typedef std::u16string VikeyDriver::*type; friend type member(UndoTextTag); };
+template struct PrivateAccess<UndoActiveTag, &VikeyDriver::undoActive>;
+template struct PrivateAccess<UndoBreakGoneTag, &VikeyDriver::undoBreakGone>;
+template struct PrivateAccess<UndoTextTag, &VikeyDriver::undoText>;
 
 static const Uint16 kLetterKeys[26] = {KEY_A, KEY_B, KEY_C, KEY_D, KEY_E, KEY_F, KEY_G, KEY_H, KEY_I, KEY_J, KEY_K, KEY_L,
                                        KEY_M, KEY_N, KEY_O, KEY_P, KEY_Q, KEY_R, KEY_S, KEY_T, KEY_U, KEY_V, KEY_W, KEY_X,
@@ -88,10 +104,11 @@ static std::u16string wordOf(const std::u16string& line) { return wordEndingAt(l
 // The current word: the letters at the end of the line.
 static std::u16string currentWord() { return wordOf(model.line); }
 
-// The previous finished word, lower case: the letters before the current word and the break after them.
-[[maybe_unused]] static std::u16string previousWord() {
-    size_t i = model.line.size() - currentWord().size();
-    while (i > 0 && !isWordLetter(model.line[i - 1])) i--;
+// The word before the one starting at `start` on the same line, lower case: the letters before the break that ends
+// it. Empty at the start of the line (a Return, or a reset after a click, arrow or app switch).
+static std::u16string previousWordBefore(size_t start) {
+    size_t i = start;
+    while (i > 0 && !isWordLetter(model.line[i - 1]) && model.line[i - 1] != u'\n') i--;
     std::u16string w = wordEndingAt(model.line, i);
     for (char16_t& c : w) c = toLower(c);
     return w;
@@ -169,6 +186,11 @@ static VKEdit pressTracked(Uint16 key, bool shift, double now) {
     const std::u16string wordBefore = currentWord();
     const int languageBefore = vLanguage;
     VKEdit e = driver->press(key, shift, now);
+    // Backspace always deletes in Vikey: Driver.cpp gives deleteCount 1 for vDoNothing (Vietnamese) and in English,
+    // and corrected >= 1 for its undo (rememberFix requires corrected > 0); when the engine itself answers Backspace
+    // it is checkGrammar(1) (Engine.cpp), which adds the deleted letter to hBPC. Should an empty edit ever come, the
+    // key's native effect (VikeyEngine passes it through) deletes one character, and the model must follow.
+    if (key == KEY_DELETE && e.deleteCount == 0 && e.text.empty()) e.deleteCount = 1;
     applyToModel(e);
     if (wordBefore.empty() && !currentWord().empty()) model.wordStartLanguage = languageBefore;
     if (key != KEY_DELETE) {
@@ -179,6 +201,35 @@ static VKEdit pressTracked(Uint16 key, bool shift, double now) {
     model.lastKeyReplaced = key != KEY_DELETE && e.deleteCount > 0;
     model.wordBeforeLastKey = wordBefore;
     return e;
+}
+
+// The keys (with Shift) that type `word` in `language`, Telex for Vietnamese. A capital letter takes Shift on all of
+// its keys, and the tone key takes Shift when the letter carrying the tone is a capital, so a tone key typed next
+// keeps the word's case ("HỌC" is H O C J with Shift; + S gives "HÓC"). false when a character has no keys.
+static bool keyPresses(const std::u16string& word, int language, std::vector<std::pair<Uint16, bool>>& presses) {
+    presses.clear();
+    char tone = 0;
+    bool toneShift = false;
+    for (char16_t c : word) {
+        const bool upper = isUpper(c);
+        if (isAsciiLetter(c)) { presses.push_back({kLetterKeys[(c | 32) - 'a'], upper}); continue; }
+        const LKTelexLetter* m = language == 1 ? telexLetter(c) : nullptr;
+        if (!m) return false;
+        for (const char* p = m->keys; *p; p++) presses.push_back({kLetterKeys[(*p | 32) - 'a'], upper});
+        if (m->tone) { tone = m->tone; toneShift = upper; }
+    }
+    if (tone) presses.push_back({kLetterKeys[tone - 'a'], toneShift});
+    return true;
+}
+
+// The engine starts over in `language` and is fed the keys of `word`, which is already on screen: typing goes on from
+// it (tones, English look-back). Its output is dropped. Without keys for the word, it just starts over.
+static void rebuildEngineWord(const std::u16string& word, int language, double now) {
+    driver->setLanguage(language);
+    driver->resetContext();
+    std::vector<std::pair<Uint16, bool>> presses;
+    if (!keyPresses(word, language, presses)) return;
+    for (const auto& p : presses) driver->press(p.first, p.second, now);
 }
 
 // Spec 12.1: Backspace right after a doubled key that undid a mark ("học" + j + j -> "hocj") gives back the word
@@ -213,14 +264,106 @@ static bool repairDoubleKey(const ScreenModel& before, double now, VKEdit& e) {
     applyToModel(repair);
 
     // The engine holds the word on screen again, in Vietnamese; its output is already on screen.
-    driver->setLanguage(1);
-    driver->resetContext();
-    for (size_t i = 0; i < keys.size(); i++) driver->press(kLetterKeys[keys[i] - 'a'], i == 0 && isUpper(snapshot[0]), now);
+    rebuildEngineWord(snapshot, 1, now);
 
     model.wordStartLanguage = 1;
     model.lastKey = model.keyBefore = kNoKey;
     model.lastKeyReplaced = false;
     model.languageAfterLastKey = 1;
+    return true;
+}
+
+// MARK: - Spec 12.2: fix filter, undo events, reverse undo
+
+static const size_t kFixWordMax = sizeof(((lk_fix*)nullptr)->before) / sizeof(uint16_t);
+
+struct Fix {
+    std::u16string before, after, previous;
+};
+
+static lk_fix_filter fixFilter = nullptr;
+static bool hasLastFix = false;       // Vikey's fix of the last key, which Backspace twice may still undo
+static Fix lastFix;
+struct Veto {
+    bool active = false;
+    Fix fix;
+    int languageAfterFix = 1;          // vLanguage right after Vikey's fix, before the veto undid it
+    int backspaces = 0;                // Backspaces since the veto
+};
+static Veto veto;
+static bool hasPendingUndo = false;
+static lk_undo pendingUndo;
+
+static void forgetFixes() {
+    hasLastFix = false;
+    veto = Veto();
+}
+
+static void copyWord(const std::u16string& w, uint16_t* out, int* length) {
+    for (size_t i = 0; i < w.size(); i++) out[i] = (uint16_t)w[i];
+    *length = (int)w.size();
+}
+
+static lk_fix toC(const Fix& f) {
+    lk_fix c;
+    memset(&c, 0, sizeof(c));
+    copyWord(f.before, c.before, &c.beforeLength);
+    copyWord(f.after, c.after, &c.afterLength);
+    copyWord(f.previous, c.previous, &c.previousLength);
+    return c;
+}
+
+static void queueUndo(const Fix& f, bool reverse) {
+    pendingUndo.fix = toC(f);
+    pendingUndo.reverse = reverse ? 1 : 0;
+    hasPendingUndo = true;
+}
+
+// The fix Vikey made on this key, if Backspace can undo it: rememberFix (Driver.cpp) armed the undo on this very key
+// (the next key clears it), and the edit replaced the word. `before` is the word as typed, `after` the word now
+// before the break character, `previous` the word before that. false for words too long for lk_fix.
+static bool fixOfLastKey(const VKEdit& e, Fix& fix) {
+    if (!(driver->*member(UndoActiveTag())) || driver->*member(UndoBreakGoneTag()) || e.deleteCount <= 0) return false;
+    size_t end = model.line.size();
+    if (end > 0 && !isWordLetter(model.line[end - 1])) end--;   // the break character
+    fix.before = driver->*member(UndoTextTag());
+    fix.after = wordEndingAt(model.line, end);
+    fix.previous = previousWordBefore(end - fix.after.size());
+    return !fix.before.empty() && !fix.after.empty() && fix.before.size() <= kFixWordMax &&
+           fix.after.size() <= kFixWordMax && fix.previous.size() <= kFixWordMax;
+}
+
+// The filter kept `before`: Backspace twice undoes the fix inside the engine (the first takes the break character,
+// the second puts the typed word and its language back), then the key is pressed again. `e` becomes the one edit for
+// the four. Only shim presses (pressTracked): never the double-key repair (ruling P1), never another filter call.
+static void vetoFix(const ScreenModel& before, Uint16 key, bool shift, double now, VKEdit& e, const Fix& fix) {
+    veto = Veto();
+    veto.fix = fix;
+    veto.languageAfterFix = vLanguage;
+    veto.active = true;
+    for (int i = 0; i < 2; i++) e = composeEdits(e, pressTracked(KEY_DELETE, false, now));
+    e = composeEdits(e, pressTracked(key, shift, now));
+    // The model saw one key from the user.
+    model.keyBefore = before.lastKey;
+}
+
+// Backspace twice right after a veto: the second one applies Vikey's fix after all, in its language. The first went
+// through as a plain Backspace (the break character), so `before` is the word at the end of the line.
+static bool reverseVeto(double now, VKEdit& e) {
+    if (!veto.active || veto.backspaces != 1 || currentWord() != veto.fix.before) return false;
+    e = VKEdit();
+    e.deleteCount = (int)veto.fix.before.size();
+    e.text = veto.fix.after;
+    e.languageChanged = vLanguage != veto.languageAfterFix;
+    applyToModel(e);
+    rebuildEngineWord(veto.fix.after, veto.languageAfterFix, now);
+    model.wordStartLanguage = veto.languageAfterFix;
+    model.lastKey = model.keyBefore = kNoKey;
+    model.lastKeyReplaced = false;
+    model.languageAfterLastKey = vLanguage;
+    model.wordBeforeLastKey.clear();
+    queueUndo(veto.fix, true);
+    veto = Veto();
     return true;
 }
 
@@ -236,8 +379,31 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
     out->deleteCount = 0; out->length = 0; out->languageChanged = 0;
     if (!driver) return;
     const ScreenModel before = model;
-    VKEdit e = pressTracked(macKeyCode, shift != 0, now);
-    if (macKeyCode == KEY_DELETE && doubleKeyFix) repairDoubleKey(before, now, e);
+    const bool backspace = macKeyCode == KEY_DELETE;
+    VKEdit e;
+    if (backspace && reverseVeto(now, e)) {
+        hasLastFix = false;
+    } else {
+        if (backspace && veto.active) veto.backspaces++;
+        else veto = Veto();
+        if (!backspace) hasLastFix = false;
+        const int undosBefore = driver->undos;
+        e = pressTracked(macKeyCode, shift != 0, now);
+        if (driver->undos != undosBefore) {
+            if (hasLastFix) queueUndo(lastFix, false);
+            hasLastFix = false;
+        }
+        Fix fix;
+        if (backspace) {
+            if (doubleKeyFix) repairDoubleKey(before, now, e);
+        } else if (fixOfLastKey(e, fix)) {
+            if (fixFilter) {
+                const lk_fix c = toC(fix);
+                if (fixFilter(&c) == 1) vetoFix(before, macKeyCode, shift != 0, now, e, fix);
+                else { lastFix = fix; hasLastFix = true; }
+            } else { lastFix = fix; hasLastFix = true; }
+        }
+    }
     out->deleteCount = e.deleteCount;
     const int cap = (int)(sizeof(out->text) / sizeof(out->text[0]));
     const int n = e.text.size() < (size_t)cap ? (int)e.text.size() : cap;
@@ -246,9 +412,21 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
     out->languageChanged = e.languageChanged ? 1 : 0;
 }
 
+void lk_vikey_set_fix_filter(lk_fix_filter filter) {
+    fixFilter = filter;
+}
+
+int lk_vikey_take_undo(lk_undo* out) {
+    if (!out || !hasPendingUndo) return 0;
+    *out = pendingUndo;
+    hasPendingUndo = false;
+    return 1;
+}
+
 void lk_vikey_reset_context(void) {
     if (driver) driver->resetContext();
     resetModel();
+    forgetFixes();   // an undo not yet taken stays: VikeyEngine resets right after Return
 }
 
 void lk_vikey_set_double_key_fix(int on) {
@@ -257,6 +435,7 @@ void lk_vikey_set_double_key_fix(int on) {
 
 void lk_vikey_set_language(int vietnamese) {
     resetModel();
+    forgetFixes();
     if (driver) driver->setLanguage(vietnamese ? 1 : 0);
     else vLanguage = vietnamese ? 1 : 0;
 }
@@ -348,6 +527,7 @@ int lk_vikey_types_as_is(const char* letters) {
     if (driver) driver->resetContext();
     else { startNewSession(); vAutoSwitchForget(); }
     resetModel();
+    forgetFixes();
     return ok ? 1 : 0;
 }
 

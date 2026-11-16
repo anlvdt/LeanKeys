@@ -99,6 +99,14 @@ final class DoubleKeyFixTests: XCTestCase {
         XCTAssertEqual(typed("HOCJJ⌫"), "HỌC")
     }
 
+    /// The engine is rebuilt in capitals too: a tone key after the repair keeps the word all caps, as when the word
+    /// is typed straight ("HÕC" is not a word, so S: "HỌC" + S = "HÓC").
+    func testCapitalsStayAfterRepair() {
+        XCTAssertEqual(typed("HOCJS"), "HÓC")
+        XCTAssertEqual(typed("HOCJJ⌫S"), "HÓC")
+        XCTAssertEqual(typed("TIEENGSS⌫F"), typed("TIEENGSF"))
+    }
+
     func testSecondBackspaceIsPlain() {
         XCTAssertEqual(typed("hocjj⌫⌫"), "họ")
     }
