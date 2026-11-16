@@ -48,7 +48,8 @@ public final class UndoRuleBook {
     /// Text → same-direction undos still needed before its rules apply again.
     private var blocked: [String: Int] = [:]
     private var savePending = false
-    /// The store could not be read at launch: nothing is saved this session, so its file is never overwritten.
+    /// The store could not be read or decoded at launch: nothing is saved this session, so its file is never
+    /// overwritten, until "Xoá tất cả" erases it (`removeAll`; ruling R16).
     private var persistent: Bool
     private var _onChange: (() -> Void)?
 
@@ -59,7 +60,12 @@ public final class UndoRuleBook {
         persistent = store != nil
         guard let store else { return }
         do {
-            if let data = try store.load(), let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) {
+            if let data = try store.load() {
+                // A file that cannot be decoded (corrupt, or from a later version) is never overwritten (R16).
+                guard let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else {
+                    persistent = false
+                    return
+                }
                 for rule in snapshot.rules where !rule.text.isEmpty && rule.count > 0 {
                     entries[Key(previous: rule.previous, text: rule.text)] = rule
                 }
@@ -130,11 +136,19 @@ public final class UndoRuleBook {
         if removed { didChange() }
     }
 
-    /// Forgets every rule, hidden count and block.
+    /// Forgets every rule, hidden count and block. A file this session could not read is erased, so its rules do
+    /// not come back at the next launch; from then on changes are saved (ruling R16).
     public func removeAll() {
-        lock.withLock {
+        let eraseUnreadable: Bool = lock.withLock {
             entries = [:]
             blocked = [:]
+            return !persistent && store != nil
+        }
+        if eraseUnreadable {
+            saveQueue.async { [self] in
+                guard (try? store?.erase()) != nil else { return }
+                lock.withLock { persistent = true }
+            }
         }
         didChange()
     }
