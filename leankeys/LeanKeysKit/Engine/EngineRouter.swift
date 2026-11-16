@@ -30,6 +30,10 @@ public final class EngineRouter {
     /// `vikey` when it is the real engine, with the undo learner (spec 12.2) that drains its undo events.
     private var vikeyEngine: VikeyEngine?
     private var undoLearning: UndoLearning?
+    /// Spec 17.1, with the real engine only (built with `undoLearning`).
+    private var capitalizer: AutoCapitalizer?
+    /// The word being typed began with a letter key the user typed as a capital (Shift or Caps Lock).
+    private var wordStartsWithUserCapital = false
     private var vikeyAttempted = false
     private var method = 0
     private var vietnamese = true
@@ -66,6 +70,7 @@ public final class EngineRouter {
         set {
             guard newValue != settings.engine else { return }
             vikey?.resetContext()
+            forgetWord()
             settings.engine = newValue
             refresh()
             vikey?.resetContext()
@@ -79,22 +84,52 @@ public final class EngineRouter {
 
     public func intercept(keyCode: UInt16, caps: Bool, ctrl: Bool, shift: Bool) -> InterceptResult {
         guard active == .vikey, let vikey else { return .passToGoNhanh }
+        // Only the very next key may undo a capitalisation (spec 17.1.4).
+        let capitalized = capitalizer?.last
+        capitalizer?.last = nil
         // A Ctrl chord is a shortcut, not typing: the word ends and the key goes through untouched.
         if ctrl {
             vikey.resetContext()
             mirror.discard()
+            wordStartsWithUserCapital = false
             return .handled(nil)
         }
+        let wordWasEmpty = mirror.currentWord.isEmpty
+        let result = interceptVikey(vikey, keyCode: keyCode, caps: caps, shift: shift, capitalized: capitalized)
+        // Whether the word now being typed began with the user's own capital (spec 17.1.3).
+        if mirror.currentWord.isEmpty {
+            wordStartsWithUserCapital = false
+        } else if wordWasEmpty {
+            wordStartsWithUserCapital = caps
+                && VikeyEngine.typedCharacter(keyCode: keyCode, shift: shift, caps: caps)?.isLetter == true
+        }
+        return .handled(result)
+    }
+
+    private func interceptVikey(_ vikey: TypingEngine, keyCode: UInt16, caps: Bool, shift: Bool,
+                                capitalized: AutoCapitalizer.Made?) -> (Int, [Character], Bool)? {
+        if keyCode == Self.backspaceKey, let capitalized {
+            return undoCapitalization(capitalized, vikey: vikey, keyCode: keyCode, caps: caps, shift: shift)
+        }
+        // Read before anything changes the mirror: the break key commits the word, and may end the phrase.
+        let isSpace = keyCode == Self.spaceKey
+        let committed = isSpace || Self.triggersShortcut(keyCode, shift: shift) ? committedWord() : nil
         if let result = expandShortcut(keyCode: keyCode, shift: shift) {
             vikey.resetContext()
             observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
-            return .handled(result)
+            return result
         }
         let processed = vikey.process(keyCode: keyCode, caps: caps, shift: shift)
         if let vikeyEngine { undoLearning?.afterPress(engine: vikeyEngine) }
         guard let edit = processed else {
+            // Vikey left the word as typed: LeanKeys may capitalise it (spec 17.1). After a fix of Vikey's own at
+            // this key it does not, so Vikey's ⌫⌫ undo still finds its word.
+            if let committed {
+                learnName(committed)
+                if let result = capitalize(committed, keyCode: keyCode, shift: shift, caps: caps) { return result }
+            }
             observe(keyCode: keyCode, shift: shift, caps: caps, result: nil)
-            return .handled(nil)
+            return nil
         }
         if edit.languageChanged {
             let on = vikey.isVietnamese
@@ -106,7 +141,74 @@ public final class EngineRouter {
         }
         let result = (edit.deleteCount, edit.text, !edit.keyPassesThrough)
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
-        return .handled(result)
+        return result
+    }
+
+    // MARK: Capitalisation (spec 17.1)
+
+    /// The word a break key is about to commit, read from the mirror before the key.
+    private struct CommittedWordContext {
+        let word: String
+        let phraseText: String
+        /// The phrase's word before `word`, lowercased.
+        let previous: String?
+        let atPhraseStart: Bool
+        let userCapital: Bool
+    }
+
+    /// nil when there is no whole word to commit, or it is glued to punctuation (`gov.vn`, `3.5`, `an@vidu.vn`).
+    private func committedWord() -> CommittedWordContext? {
+        guard capitalizer != nil else { return nil }
+        let word = mirror.currentWord
+        guard !word.isEmpty, !mirror.currentWordFollowsBreak, let phraseText = mirror.phraseText else { return nil }
+        return CommittedWordContext(word: word, phraseText: phraseText,
+                                    previous: mirror.phraseWords.dropLast().last?.lowercased(),
+                                    atPhraseStart: mirror.atPhraseStart, userCapital: wordStartsWithUserCapital)
+    }
+
+    /// Spec 17.1.3: a word the user typed with a capital, mid-phrase, goes to the learned names. Words LeanKeys
+    /// wrote (capitalisation, gõ tắt, Vikey's edits) never start with the user's capital key, so they never count.
+    private func learnName(_ committed: CommittedWordContext) {
+        guard committed.userCapital, !committed.atPhraseStart, committed.word.first?.isUppercase == true else { return }
+        undoLearning?.userCapitalized(committed.word, previous: committed.previous)
+    }
+
+    /// The edit that capitalises the committed words, with the break key: Space rides in the text (consumed), while
+    /// Return and punctuation are typed by the key itself after the edit, as in `expandShortcut`.
+    private func capitalize(_ committed: CommittedWordContext, keyCode: UInt16, shift: Bool,
+                            caps: Bool) -> (Int, [Character], Bool)? {
+        guard let undoLearning, undoLearning.autoCapitalize, let capitalizer,
+              let replacement = capitalizer.replacement(phraseText: committed.phraseText,
+                                                        keepsLowercase: undoLearning.keepsLowercase)
+        else { return nil }
+        let isSpace = keyCode == Self.spaceKey
+        let result = (replacement.original.count, Array(replacement.capitalized) + (isSpace ? [" "] : []), isSpace)
+        observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+        // Not after Return/Enter: in a chat app the text has been sent by now, so ⌫ there must stay a plain ⌫.
+        if !Self.returnKeys.contains(keyCode) {
+            capitalizer.last = AutoCapitalizer.Made(replacement: replacement, breakLength: 1)
+        }
+        return result
+    }
+
+    /// Spec 17.1.4: ⌫ right after a capitalisation removes the break character and gives the words back as typed.
+    /// Vikey sees the ⌫ too, so its buffer follows the screen back into the word; its own edit, if any, is dropped.
+    private func undoCapitalization(_ made: AutoCapitalizer.Made, vikey: TypingEngine, keyCode: UInt16, caps: Bool,
+                                    shift: Bool) -> (Int, [Character], Bool) {
+        if vikey.process(keyCode: keyCode, caps: caps, shift: shift) != nil { vikey.resetContext() }
+        if let vikeyEngine { undoLearning?.afterPress(engine: vikeyEngine) }
+        let replacement = made.replacement
+        undoLearning?.capitalizationUndone(replacement.rule, previous: replacement.previous,
+                                           learnedName: capitalizer?.learnedName(in: replacement))
+        let result = (replacement.capitalized.count + made.breakLength, Array(replacement.original), true)
+        observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+        return result
+    }
+
+    /// The word and any capitalisation to undo are gone: the cursor moved, or the text changed out of sight.
+    private func forgetWord() {
+        capitalizer?.last = nil
+        wordStartsWithUserCapital = false
     }
 
     /// The user's gõ tắt, for Vikey only: Gõ Nhanh expands its own copy (`RustBridge.syncShortcuts`), so the
@@ -167,6 +269,7 @@ public final class EngineRouter {
     private static let digitKeys: Set<UInt16> = [29, 18, 19, 20, 21, 23, 22, 26, 28, 25]
 
     private static let spaceKey: UInt16 = 49
+    private static let returnKeys: Set<UInt16> = [36, 76]
     /// Keys besides Space that end a word for shortcuts in Gõ Nhanh (core/src/engine/mod.rs: Return/Enter and
     /// `break_key_to_char`): `breakKeys` without Tab, Esc and the arrows; digits with Shift.
     private static let shortcutBreakKeys = breakKeys.subtracting([48, 53, 123, 124, 125, 126])
@@ -183,6 +286,7 @@ public final class EngineRouter {
     /// restore shortcut, Secure Input, other input sources, an app switch (ruling R20).
     public func discardPending() {
         mirror.discard()
+        forgetWord()
     }
 
     /// Gõ Nhanh's input method: 0 = Telex, 1 = VNI.
@@ -190,6 +294,7 @@ public final class EngineRouter {
         guard method != self.method else { return }
         self.method = method
         vikey?.resetContext()
+        forgetWord()
         refresh()
     }
 
@@ -226,6 +331,7 @@ public final class EngineRouter {
     public func clear() {
         vikey?.resetContext()
         mirror.reset()
+        forgetWord()
     }
 
     /// Recomputes `fallbackReason`, building Vikey the first time it is needed.
@@ -237,8 +343,10 @@ public final class EngineRouter {
             vikey = makeVikey()
             if let engine = vikey as? VikeyEngine {
                 vikeyEngine = engine
-                undoLearning = makeUndoLearning()
-                undoLearning?.install()
+                let learning = makeUndoLearning()
+                undoLearning = learning
+                learning.install()
+                capitalizer = AutoCapitalizer(learned: learning.learnedNames)
             }
             vikey?.setVietnamese(vietnamese)
             vikey?.setAutoSwitch(autoSwitch)

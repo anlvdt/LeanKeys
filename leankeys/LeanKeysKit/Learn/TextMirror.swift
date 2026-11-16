@@ -53,6 +53,36 @@ public final class TextMirror {
         return !(before == " " || before == "\n" || before == "\r" || before == "\t")
     }
 
+    /// The current phrase's words before the cursor, oldest first, ending with the word being typed: runs of
+    /// letters and digits, punctuation dropped. Empty while the word being typed is unknown.
+    public var phraseWords: [String] {
+        phraseText.map { Self.words(in: $0) } ?? []
+    }
+
+    /// The word being typed is the phrase's first, as far as the mirror knows. Also true when what comes before it
+    /// is unknown (after an overflow or an edit past the mirror's start), so a caller that skips phrase-initial words
+    /// skips those too.
+    public var atPhraseStart: Bool {
+        if overflowed || phraseUnknown || wordUnknown { return true }
+        guard pendingTerminator == nil else { return false }
+        return !buffer[..<wordStart].contains(where: Self.isWordCharacter)
+    }
+
+    /// The current phrase's text before the cursor, as on screen; nil while the word being typed is unknown. A
+    /// pending `. ! ?` is left out: it joins the phrase only if a character other than Space or Return follows.
+    var phraseText: String? {
+        wordUnknown ? nil : String(buffer)
+    }
+
+    /// Runs of letters and digits in `text`, oldest first.
+    static func words(in text: String) -> [String] {
+        text.split(whereSeparator: { !isWordCharacter($0) }).map(String.init)
+    }
+
+    static func isWordCharacter(_ c: Character) -> Bool {
+        c.isLetter || c.isNumber
+    }
+
     /// An engine edit: delete `deleteCount` characters before the cursor, then insert `insert`. Inserted breaks
     /// commit exactly like typed ones.
     public func apply(deleteCount: Int, insert: [Character]) {
