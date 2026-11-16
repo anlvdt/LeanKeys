@@ -530,3 +530,22 @@ Thay mục 4 của §14.1 bằng một hàng luôn hiện, nằm dưới `Kiểu
 - **Đơn vị (LeanKeysKit):** ánh xạ trạng thái `UpdateManager` + cờ → trạng thái hàng; chữ của từng trạng thái; bấm thì làm gì; tiến độ không xác định (-1) không làm hỏng chữ; `SafeInstaller.verify` từ chối bản ad-hoc khi yêu cầu chữ ký ổn định; mô hình ô nổi gọi đúng hành động và báo đóng.
 - **Ảnh:** `docs/ui/popover-update-*-{light,dark}.png` bằng dữ liệu giả.
 - **Thử tay:** mục U1–U4 trong `sync/manual-checklist.md`.
+
+## 18. Phím đi thẳng: ô đăng nhập, mật khẩu, điều khiển từ xa
+
+Thêm ngày 2026-11-16 theo yêu cầu người dùng. Áp dụng cho cả hai engine.
+
+- **Điều khiển từ xa và máy ảo.** Khi app đang dùng là một app điều khiển máy khác hay một máy ảo, mọi phím đi thẳng, không bỏ dấu, không gõ tắt, không học. Máy bên kia có bộ gõ riêng, còn phím giả mà LeanKeys gửi (Backspace + chữ có dấu) không được chuyển đi như phím thật, nên gõ ở đây sẽ bị bỏ dấu hai lần hoặc lỗi chữ.
+  - Gõ Nhanh đã làm việc này cho RustDesk, AnyDesk và TeamViewer.
+  - LeanKeys thêm: MacViewer (tương thích UltraViewer), Windows App / Microsoft Remote Desktop, Parsec, RealVNC Viewer, Jump Desktop, Screens, Screen Sharing của Apple, Splashtop, NoMachine, VMware Fusion, Parallels Desktop, UTM, VirtualBox.
+  - Danh sách nằm trong `KeyPassthrough.remoteBundleIDs`.
+- **Ô đăng nhập và mật khẩu.** Ô được nhận ra khi:
+  - đó là ô mật khẩu của hệ thống (`AXSecureTextField`); hoặc
+  - đó là ô một dòng (`AXTextField`, `AXComboBox`) có chữ gợi ý, nhãn, tiêu đề hay mã định danh chứa một trong các từ (khớp nguyên từ): password, passwd, passcode, pin, otp, username, user name, userid, user id, login, log in, sign in, signin, email, e-mail, account, apple id, mật khẩu, mat khau, tên đăng nhập, ten dang nhap, đăng nhập, dang nhap, tài khoản, tai khoan, mã xác nhận, ma xac nhan, mã otp.
+  - Ở các ô đó, phím đi thẳng, kể cả khi đang bật tiếng Việt.
+- **Cách gắn.** Một dòng trong `detectMethod()` của Gõ Nhanh, có đánh dấu hook `engine-dispatch`. Phần này chạy khi bộ nhớ đệm 200 ms hết hạn và dùng phần tử đang có con trỏ mà Gõ Nhanh đã lấy, nên chỉ thêm một lần hỏi AX (`AXUIElementCopyMultipleAttributeValues`, giới hạn 25 ms). Khi phím đi thẳng, cụm đang gõ dở bị bỏ (`discardPending`).
+- **Test:** `KeyPassthroughTests`, gồm cả các ô thường phải gõ tiếng Việt bình thường (tìm kiếm, "Shopping list", ô soạn tin nhắn).
+- **Thử tay:**
+  - gõ `nguyenvana` vào ô Email/Username của một trang đăng nhập trên Safari: giữ nguyên chữ;
+  - gõ vào một máy Windows qua MacViewer, TeamViewer hay AnyDesk: chữ do bộ gõ bên Windows xử lý, không bị bỏ dấu hai lần;
+  - mật khẩu gõ ở dấu nhắc `sudo` trong Terminal không xuất hiện trong gợi ý gõ tắt.

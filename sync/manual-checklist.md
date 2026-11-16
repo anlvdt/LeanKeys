@@ -48,5 +48,8 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | U2 | Cập nhật trong ô nổi | Bản Release self-signed cũ hơn bản trên GitHub: bấm "Kiểm tra cập nhật" một lần, không bấm gì thêm. Thấy thanh tiến độ "Đang tải bản mới… N%", rồi "Đang cài, LeanKeys sẽ tự mở lại". App tự thoát, tự mở lại ở bản mới (Giới thiệu hiện đúng số bản), gõ được ngay, không phải cấp lại quyền Trợ năng. Đóng ô nổi giữa chừng cũng không làm dừng việc cài. | — | [ ] |
 | U3 | Cập nhật trong ô nổi | Tắt Wi-Fi, bấm "Kiểm tra cập nhật": một dòng "Không kết nối được, thử lại sau" và nút "Thử lại"; không có chữ tiếng Anh. Bật Wi-Fi, bấm "Thử lại": chạy như U1 hoặc U2. | — | [ ] |
 | U4 | Cập nhật trong ô nổi | Bản mới ký ad-hoc (`leankeys/build.sh` trên máy không có chứng chỉ, đặt DMG làm bản tải về): ô nổi báo "Không cài được bản mới", app vẫn chạy bản cũ, gõ được. | — | [ ] |
+| K1 | Phím đi thẳng · ô đăng nhập | Safari, một trang đăng nhập: gõ `nguyenvana` vào ô Email hoặc Username khi đang bật tiếng Việt: chữ giữ nguyên, không thành "nguyễnvana". | — | [ ] |
+| K2 | Phím đi thẳng · điều khiển từ xa | Điều khiển một máy Windows qua MacViewer, TeamViewer hoặc AnyDesk, bật bộ gõ bên Windows: gõ `tieengs vieejt` ra "tiếng việt" một lần, không bị lỗi hay bỏ dấu hai lần. | — | [ ] |
+| K3 | Không học mật khẩu | Bật "Đề xuất gõ tắt". Trong Terminal chạy `sudo -k; sudo true` ba lần, gõ mật khẩu rồi Enter; trong TextEdit gõ một từ trộn chữ và số (ví dụ `Thu@2024`) rồi Enter ba lần: không có gợi ý gõ tắt nào. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 54 ô đều đạt.
+Chỉ gõ `yes` khi cả 57 ô đều đạt.
