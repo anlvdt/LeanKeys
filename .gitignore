@@ -70,6 +70,8 @@ sync/.lock
 /.sync-worktree/
 # mixbench outputs
 tools/mixbench/vk
+tools/mixbench/lk
+tools/mixbench/*.out
 tools/mixbench/*.tsv
 *.gn
 *.gn0
