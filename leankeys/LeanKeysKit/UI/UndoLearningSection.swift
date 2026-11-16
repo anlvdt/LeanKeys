@@ -1,22 +1,28 @@
 import AppKit
 import SwiftUI
 
-/// 4C settings card on Nâng cao (spec 12.3), with 4D's additions (spec 17.3): the four switches, the learned words
-/// (capitalisation undos shown as the phrase + " (viết hoa)") and the learned names. Copies the look of
+/// 4C settings card on Nâng cao (spec 12.3), with 4D's additions (spec 17.3): the four switches, the words kept as
+/// typed (capitalisation undos shown as the phrase + " (giữ chữ thường)") and the learned names. Copies the look of
 /// `LearnSettingsSection`'s advanced card.
 public struct UndoLearningSection: View {
     static let title = "Tự sửa và tự học"
-    static let doubleKeyFixTitle = "⌫ sửa phím gõ đúp"
-    static let learningTitle = "Tự học từ hoàn tác"
+    static let doubleKeyFixTitle = "Sửa lỗi bấm đúp phím dấu"
+    static let doubleKeyFixSubtitle = "Bấm ⌫ ngay sau khi lỡ bấm đúp: hocjj⌫ → học"
+    static let learningTitle = "Nhớ từ bạn giữ nguyên"
+    static let learningSubtitle = "Bấm ⌫⌫ ngay sau khi một từ bị tự đổi: lần sau giữ nguyên"
     static let autoCapitalizeTitle = "Tự viết hoa tên riêng"
-    static let strayEnterTitle = "Bỏ ký tự gõ dính khi Enter"
-    static let listTitle = "Từ đã học"
-    static let emptyText = "Chưa có từ nào"
+    static let autoCapitalizeSubtitle = "Tên người, địa danh: Hà Nội, Nguyễn Văn An"
+    static let strayEnterTitle = "Bỏ phím \\ ] ' lỡ bấm cùng Enter"
+    static let strayEnterSubtitle = "Không áp dụng trong Terminal và trình soạn code"
+    static let listTitle = "Từ giữ nguyên"
+    static let emptyText = "Chưa có. Bấm ⌫⌫ ngay sau khi một từ bị tự đổi để thêm."
     static let namesTitle = "Tên đã học"
-    static let namesEmptyText = "Chưa có tên nào"
-    static let capitalizationSuffix = " (viết hoa)"
+    static let namesEmptyText = "Chưa có. Tên bạn tự viết hoa từ hai lần sẽ hiện ở đây."
+    /// A `cap:` rule records that the user undid a capital: LeanKeys keeps that phrase lowercase.
+    static let capitalizationSuffix = " (giữ chữ thường)"
     static let removeAllLabel = "Xoá tất cả"
     static let removeAllConfirmTitle = "Xoá mọi từ và tên đã học?"
+    static let removeAllConfirmMessage = "Mọi từ giữ nguyên và tên đã học sẽ bị xoá. Không hoàn tác được."
     static let removeAllConfirm = "Xoá"
     static let removeAllCancel = "Huỷ"
 
@@ -39,13 +45,13 @@ public struct UndoLearningSection: View {
                 .padding(.top, 10)
                 .padding(.bottom, 4)
 
-            toggleRow(Self.doubleKeyFixTitle, isOn: $model.doubleKeyFix)
+            toggleRow(Self.doubleKeyFixTitle, subtitle: Self.doubleKeyFixSubtitle, isOn: $model.doubleKeyFix)
             Divider().padding(.leading, 12)
-            toggleRow(Self.learningTitle, isOn: $model.learning)
+            toggleRow(Self.learningTitle, subtitle: Self.learningSubtitle, isOn: $model.learning)
             Divider().padding(.leading, 12)
-            toggleRow(Self.autoCapitalizeTitle, isOn: $model.autoCapitalize)
+            toggleRow(Self.autoCapitalizeTitle, subtitle: Self.autoCapitalizeSubtitle, isOn: $model.autoCapitalize)
             Divider().padding(.leading, 12)
-            toggleRow(Self.strayEnterTitle, isOn: $model.strayEnter)
+            toggleRow(Self.strayEnterTitle, subtitle: Self.strayEnterSubtitle, isOn: $model.strayEnter)
             Divider().padding(.leading, 12)
 
             list(Self.listTitle, empty: Self.emptyText, items: model.rules, row: ruleRow)
@@ -68,12 +74,24 @@ public struct UndoLearningSection: View {
         .alert(Self.removeAllConfirmTitle, isPresented: $confirmRemoveAll) {
             Button(Self.removeAllConfirm, role: .destructive) { model.removeAll() }
             Button(Self.removeAllCancel, role: .cancel) {}
+        } message: {
+            Text(Self.removeAllConfirmMessage)
         }
     }
 
-    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
+    /// Looks like Gõ Nhanh's `SettingsToggleRow`: the subtitle is one 11 pt line, in full in its tooltip.
+    private func toggleRow(_ title: String, subtitle: String? = nil, isOn: Binding<Bool>) -> some View {
         HStack {
-            Text(title).font(.system(size: 13))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13))
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        .lineLimit(1)
+                        .help(subtitle)
+                }
+            }
             Spacer()
             Toggle("", isOn: isOn)
                 .toggleStyle(.switch)
@@ -85,7 +103,7 @@ public struct UndoLearningSection: View {
         .padding(.vertical, 10)
     }
 
-    /// How a rule reads in the list: a capitalisation undo ("cap:hà nội") as "hà nội (viết hoa)", others as typed.
+    /// How a rule reads in the list: a capitalisation undo ("cap:hà nội") as "hà nội (giữ chữ thường)", others as typed.
     static func displayText(_ rule: UndoRule) -> String {
         guard rule.text.hasPrefix(AutoCapitalizer.rulePrefix) else { return rule.text }
         return String(rule.text.dropFirst(AutoCapitalizer.rulePrefix.count)) + capitalizationSuffix
@@ -121,7 +139,7 @@ public struct UndoLearningSection: View {
         return HStack(spacing: 6) {
             Text(text).font(.system(size: 12)).lineLimit(1)
             if !rule.previous.isEmpty {
-                Text("sau \"\(rule.previous)\"")
+                Text("sau “\(rule.previous)”")
                     .font(.system(size: 11))
                     .foregroundColor(Color(NSColor.secondaryLabelColor))
                     .lineLimit(1)

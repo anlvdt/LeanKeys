@@ -337,10 +337,11 @@ Viết ngày 2026-11-15, viết lại ngày 2026-11-16 sau khi đo. Người dù
 ### 12.3 Cài đặt và bảo mật
 - **Bật sẵn, không có bước cài đặt.** Cả 12.1 và 12.2 đều bật mặc định.
 - **Trang Nâng cao có thẻ "Tự sửa và tự học" gồm:**
-  - công tắc "⌫ sửa phím gõ đúp";
-  - công tắc "Tự học từ hoàn tác";
-  - danh sách "Từ đã học" (chữ, từ đứng trước nếu có, số lần), mỗi mục có nút xoá;
-  - nút "Xoá tất cả".
+  - công tắc "Sửa lỗi bấm đúp phím dấu", dòng phụ "Bấm ⌫ ngay sau khi lỡ bấm đúp: hocjj⌫ → học";
+  - công tắc "Nhớ từ bạn giữ nguyên", dòng phụ "Bấm ⌫⌫ ngay sau khi một từ bị tự đổi: lần sau giữ nguyên";
+  - danh sách "Từ giữ nguyên" (chữ, từ đứng trước nếu có, số lần), mỗi mục có nút xoá; khi trống ghi "Chưa có. Bấm ⌫⌫ ngay sau khi một từ bị tự đổi để thêm.";
+  - nút "Xoá tất cả", hỏi lại kèm dòng "Mọi từ giữ nguyên và tên đã học sẽ bị xoá. Không hoàn tác được.".
+- Mỗi dòng phụ chỉ một dòng (mục 14.3), đủ chữ trong tooltip.
 - **Lưu trữ.** Chỉ lưu những chữ người dùng đã hoàn tác, không lưu văn bản khác.
   - File `~/Library/Application Support/LeanKeys/undo-rules.bin`, quyền 0600, mã hoá AES-GCM bằng khoá trong login Keychain.
   - Dùng lại `KeychainEncryptedFileStore` của 4B với tên file và mục Keychain riêng.
@@ -578,7 +579,7 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 
 **17.1.4 Hoàn tác.** Nếu người dùng bấm ⌫ ngay sau một lần tự viết hoa (phím đầu tiên sau phím ngắt):
 - Chữ trở lại đúng như đã gõ, chỉ mất phím ngắt, giống 4C.
-- LeanKeys lưu luật "không viết hoa cụm này sau từ đứng trước này" vào sổ luật của 4C (`UndoRuleBook`, chữ có tiền tố `cap:` để không lẫn với luật 4C). Luật có từ đứng trước được dùng ngay sau 1 lần hoàn tác, luật không có từ đứng trước sau 2 lần, như 4C. Từ đứng trước có dạng mật khẩu (`Exclusions.looksLikeSecret`) thì không được lưu làm ngữ cảnh, chỉ tăng luật không có từ đứng trước (ruling R14). Danh sách "Từ đã học" hiện luật này với nhãn "(viết hoa)".
+- LeanKeys lưu luật "không viết hoa cụm này sau từ đứng trước này" vào sổ luật của 4C (`UndoRuleBook`, chữ có tiền tố `cap:` để không lẫn với luật 4C). Luật có từ đứng trước được dùng ngay sau 1 lần hoàn tác, luật không có từ đứng trước sau 2 lần, như 4C. Từ đứng trước có dạng mật khẩu (`Exclusions.looksLikeSecret`) thì không được lưu làm ngữ cảnh, chỉ tăng luật không có từ đứng trước (ruling R14). Danh sách "Từ giữ nguyên" hiện luật này với nhãn "(giữ chữ thường)": LeanKeys giữ cụm đó chữ thường.
 - Tên tự học bị hoàn tác 2 lần ở bất kỳ đâu thì bị xoá khỏi danh sách tên.
 
 ### 17.2 Bỏ ký tự gõ dính khi Enter
@@ -595,8 +596,8 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 
 ### 17.3 Cài đặt
 Thẻ "Tự sửa và tự học" (mục 12.3) có thêm:
-- hai công tắc `Tự viết hoa tên riêng` và `Bỏ ký tự gõ dính khi Enter`, bật sẵn; khoá UserDefaults là `LeanKeys.autoCapitalize` và `LeanKeys.strayEnter`;
-- danh sách `Tên đã học` (dạng chữ, số lần, nút xoá); nút "Xoá tất cả" của thẻ xoá cả danh sách này.
+- hai công tắc `Tự viết hoa tên riêng` (dòng phụ "Tên người, địa danh: Hà Nội, Nguyễn Văn An") và `Bỏ phím \ ] ' lỡ bấm cùng Enter` (dòng phụ "Không áp dụng trong Terminal và trình soạn code"), bật sẵn; khoá UserDefaults là `LeanKeys.autoCapitalize` và `LeanKeys.strayEnter`. Tên công tắc thứ hai đổi từ `Bỏ ký tự gõ dính khi Enter` theo ruling R19 (rà soát chữ trên giao diện);
+- danh sách `Tên đã học` (dạng chữ, số lần, nút xoá); khi trống ghi "Chưa có. Tên bạn tự viết hoa từ hai lần sẽ hiện ở đây."; nút "Xoá tất cả" của thẻ xoá cả danh sách này.
 
 ### 17.4 Test
 - **Đơn vị:**

@@ -42,8 +42,8 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | S5 | Chữ hoa với Shift | Gõ `DDaif Loan` trong Notes, giữ Shift (không bật Caps Lock) khi gõ `DD` và `L`: ra "Đài Loan", không ra "đài Loan". | [ ] | [ ] |
 | C1 | 4C · ⌫ sau phím gõ đúp | Vikey, tiếng Việt: gõ `hocjj` rồi ⌫ trong Notes: ra "học", biểu tượng vẫn là V. | — | [ ] |
 | C2 | 4C · Tự học có ngữ cảnh | Trong một câu tiếng Anh (`about its`), gõ "its" rồi ⌫⌫ để giữ nguyên. Lần sau gõ lại `about its`: "its" được giữ nguyên ngay. | — | [ ] |
-| C3 | 4C · Tự học không ngữ cảnh | Gõ "cos" ở hai câu khác nhau, mỗi lần ⌫⌫ để giữ nguyên. Lần thứ ba, ở một câu khác nữa, "cos" được giữ nguyên ngay. Cài đặt → Nâng cao → "Từ đã học" có dòng "cos". | — | [ ] |
-| C4 | 4C · Ô mật khẩu | Trong ô mật khẩu của Safari, gõ "its" rồi ⌫⌫ hai lần: "Từ đã học" không có thêm dòng nào. | — | [ ] |
+| C3 | 4C · Tự học không ngữ cảnh | Gõ "cos" ở hai câu khác nhau, mỗi lần ⌫⌫ để giữ nguyên. Lần thứ ba, ở một câu khác nữa, "cos" được giữ nguyên ngay. Cài đặt → Nâng cao → "Từ giữ nguyên" có dòng "cos". | — | [ ] |
+| C4 | 4C · Ô mật khẩu | Trong ô mật khẩu của Safari, gõ "its" rồi ⌫⌫ hai lần: "Từ giữ nguyên" không có thêm dòng nào. | — | [ ] |
 | U1 | Cập nhật trong ô nổi | Bản Release, máy đang có mạng, đang chạy bản mới nhất: bấm trái icon → "Kiểm tra cập nhật". Thấy vòng quay "Đang kiểm tra cập nhật…", rồi "Bạn đang dùng bản mới nhất". Đóng ô nổi, mở lại: nút "Kiểm tra cập nhật" hiện lại. | — | [ ] |
 | U2 | Cập nhật trong ô nổi | Bản Release self-signed cũ hơn bản trên GitHub: bấm "Kiểm tra cập nhật" một lần, không bấm gì thêm. Thấy thanh tiến độ "Đang tải bản mới… N%", rồi "Đang cài, LeanKeys sẽ tự mở lại". App tự thoát, tự mở lại ở bản mới (Giới thiệu hiện đúng số bản), gõ được ngay, không phải cấp lại quyền Trợ năng. Đóng ô nổi giữa chừng cũng không làm dừng việc cài. | — | [ ] |
 | U3 | Cập nhật trong ô nổi | Tắt Wi-Fi, bấm "Kiểm tra cập nhật": một dòng "Không kết nối được, thử lại sau" và nút "Thử lại"; không có chữ tiếng Anh. Bật Wi-Fi, bấm "Thử lại": chạy như U1 hoặc U2. | — | [ ] |
@@ -55,8 +55,8 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | D1 | 4D · Tự viết hoa tên riêng | Vikey, tiếng Việt, Notes: gõ `tooi owr haf nooij ` ra "tôi ở Hà Nội". | — | [ ] |
 | D2 | 4D · Tự viết hoa tên riêng | Vikey, Notes: gõ `nguyeenx vawn an ` ra "Nguyễn Văn An". | — | [ ] |
 | D3 | 4D · Tên tự học | Vikey, Notes: gõ `anh Hufng ` (tự gõ chữ H hoa) ở hai câu khác nhau, rồi gõ `anh hufng ` (chữ thường): ra "anh Hùng". Cài đặt → Nâng cao → "Tên đã học" có dòng "Hùng". | — | [ ] |
-| D4 | 4D · Hoàn tác viết hoa | Vikey, Notes: gõ `owr haf nooij ` (LeanKeys viết thành "ở Hà Nội"), bấm ⌫ ngay: trả lại chữ thường "ở hà nội". Rồi Cài đặt → Nâng cao → "Từ đã học" có dòng "hà nội (viết hoa)" sau "ở"; bấm xoá dòng đó (để D1 vẫn đạt ở lần thử sau). | — | [ ] |
-| D5 | 4D · Ký tự gõ dính khi Enter | Vikey, Notes: gõ "xong." rồi bấm `\` và Enter gần như cùng lúc: dòng kết thúc ở "xong.", không có `\`. | — | [ ] |
-| D6 | 4D · Ký tự gõ dính khi Enter | Vikey, Terminal: gõ `\` rồi Enter: `\` vẫn được giữ. | — | [ ] |
+| D4 | 4D · Hoàn tác viết hoa | Vikey, Notes: gõ `owr haf nooij ` (LeanKeys viết thành "ở Hà Nội"), bấm ⌫ ngay: trả lại chữ thường "ở hà nội". Rồi Cài đặt → Nâng cao → "Từ giữ nguyên" có dòng "hà nội (giữ chữ thường)" sau "ở"; bấm xoá dòng đó (để D1 vẫn đạt ở lần thử sau). | — | [ ] |
+| D5 | 4D · Bỏ phím lỡ bấm cùng Enter | Vikey, Notes: gõ "xong." rồi bấm `\` và Enter gần như cùng lúc: dòng kết thúc ở "xong.", không có `\`. | — | [ ] |
+| D6 | 4D · Bỏ phím lỡ bấm cùng Enter | Vikey, Terminal: gõ `\` rồi Enter: `\` vẫn được giữ. | — | [ ] |
 
 Chỉ gõ `yes` khi cả 64 ô đều đạt.
