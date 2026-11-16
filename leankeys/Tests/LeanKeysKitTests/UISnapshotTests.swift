@@ -59,6 +59,22 @@ final class UISnapshotTests: XCTestCase {
                 to: outDir.appendingPathComponent("popover-suggestions-\(label).png")
             )
 
+            // Spec §16: the update row while checking, up to date, downloading and after a network error (fake data).
+            let updatePhases: [(String, PopoverUpdateRow.Phase)] = [
+                ("checking", .checking),
+                ("latest", .upToDate),
+                ("downloading", .downloading(progress: 0.42)),
+                ("error", .failed(.network)),
+            ]
+            for (name, phase) in updatePhases {
+                let view = StatusPopoverView(model: StatusPopoverModel(actions: Self.popoverActions(vietnameseOn, update: phase)))
+                    .background(Color(NSColor.windowBackgroundColor))
+                try Self.render(
+                    view, width: 280, height: nil, appearance: appearance,
+                    to: outDir.appendingPathComponent("popover-update-\(name)-\(label).png")
+                )
+            }
+
             let list = ShortcutSuggestionsView(model: .preview(candidates: ShortcutSuggestionsModel.sampleCandidates))
                 .background(Color(NSColor.windowBackgroundColor))
             try Self.render(
@@ -105,7 +121,8 @@ final class UISnapshotTests: XCTestCase {
         }
     }
 
-    private static func popoverActions(_ snapshot: StatusSnapshot, suggestions: Int = 0) -> StatusPopoverActions {
+    private static func popoverActions(_ snapshot: StatusSnapshot, suggestions: Int = 0,
+                                       update: PopoverUpdateRow.Phase? = nil) -> StatusPopoverActions {
         StatusPopoverActions(
             snapshot: { snapshot },
             method: { 0 },
@@ -115,7 +132,8 @@ final class UISnapshotTests: XCTestCase {
             installUpdate: {},
             openSettings: {},
             quit: {},
-            suggestionCount: { suggestions }
+            suggestionCount: { suggestions },
+            updatePhase: update.map { phase in { phase } }
         )
     }
 

@@ -492,3 +492,40 @@ Thêm ngày 2026-11-15, người dùng đã duyệt. macOS không cho app tự b
 - **Kiểm chứng trên máy thật (bắt buộc trước khi merge):** cấp quyền cho bản A ký bằng chứng chỉ; build bản B; thay bản A bằng B; B phải gõ được ngay, không cần cấp lại. Ghi kết quả vào báo cáo.
 - **Kết quả 2026-11-15 (máy của người dùng):** bản A (1.0, ký `LeanKeys Self-Signed`, yêu cầu chữ ký `certificate leaf = H"c5f280e9…"`) mở lên ở luồng người dùng cũ, tự `tccutil reset` thành công, người dùng chỉ gạt một công tắc, app tự khởi động lại. Bản B (1.0.1, binary khác, cùng chứng chỉ) thay vào cùng đường dẫn và mở lên **không cần cấp lại quyền**. Đạt.
 - **Thử tay:** thêm vào `sync/manual-checklist.md`: cài mới chỉ gạt một công tắc; cửa sổ màn chào bị che vẫn tự khởi động lại; cập nhật không mất quyền.
+
+
+## 16. Kiểm tra cập nhật ngay trong ô nổi
+
+Thêm ngày 2026-11-16. Mục tiêu: bấm một lần trong ô nổi là xong; có bản mới thì app tự tải, kiểm tra, cài và mở lại.
+
+### 16.1 Khoảng trống
+- Ô nổi (§14.1) chỉ có `Cài bản mới` khi bản cập nhật đã tải sẵn; không có nút kiểm tra.
+- `checkForUpdatesManually()` (trang Giới thiệu, menu cũ) mở cửa sổ riêng và cần bấm thêm `Cập nhật`; tải xong lại chờ máy rảnh 30 giây (`installWhenIdle`). Đường này giữ nguyên.
+
+### 16.2 Hàng cập nhật trong ô nổi
+Thay mục 4 của §14.1 bằng một hàng luôn hiện, nằm dưới `Kiểu gõ`:
+
+| Trạng thái | Hiện | Bấm |
+|---|---|---|
+| Chưa kiểm tra | nút `Kiểm tra cập nhật` | kiểm tra |
+| Đang kiểm tra | vòng quay + `Đang kiểm tra cập nhật…` | — |
+| Đang tải | thanh tiến độ + `Đang tải bản mới… 42%` | — |
+| Đang cài | vòng quay + `Đang cài, LeanKeys sẽ tự mở lại` | — |
+| Đã tải sẵn (tải ngầm) | nút `Cài bản mới` | cài |
+| Mới nhất | `Bạn đang dùng bản mới nhất` | — |
+| Lỗi | một dòng ngắn + nút `Thử lại` | kiểm tra lại |
+
+- Lỗi kiểm tra: `Không kết nối được, thử lại sau`; lỗi tải: `Tải bản mới thất bại`; bộ cài từ chối: `Không cài được bản mới`. Không hiện chữ lỗi kỹ thuật (tiếng Anh) của `UpdateChecker`.
+- Đóng ô nổi thì `Mới nhất` và `Lỗi` trở về `Chưa kiểm tra`.
+
+### 16.3 Luồng
+- Bấm `Kiểm tra cập nhật`: đặt cờ "người dùng yêu cầu cài" trong `UpdateManager`, kiểm tra; có bản mới thì tải ngay với tiến độ (không mở cửa sổ cũ). Nếu bản tải ngầm đang chạy dở thì nhận lấy nó, không tải lần hai.
+- Tải xong, `installWhenIdle` thấy cờ thì cài ngay, không chờ máy rảnh (người dùng vừa bấm, không phải đang gõ).
+- Bộ cài của ô nổi (cả `Cài bản mới`) luôn từ chối bản ký ad-hoc: app đang chạy ký ổn định thì bản mới phải khớp yêu cầu chữ ký của nó; app đang chạy là ad-hoc thì bản mới phải ký bằng chứng chỉ (giữ đường chuyển §15.3). Bị từ chối thì xoá bản tải về và báo lỗi một dòng.
+- Bản Debug không bao giờ tự cài (R23): luồng dừng ở `Cài bản mới`.
+- Trang Giới thiệu và menu cũ không đổi.
+
+### 16.4 Test
+- **Đơn vị (LeanKeysKit):** ánh xạ trạng thái `UpdateManager` + cờ → trạng thái hàng; chữ của từng trạng thái; bấm thì làm gì; tiến độ không xác định (-1) không làm hỏng chữ; `SafeInstaller.verify` từ chối bản ad-hoc khi yêu cầu chữ ký ổn định; mô hình ô nổi gọi đúng hành động và báo đóng.
+- **Ảnh:** `docs/ui/popover-update-*-{light,dark}.png` bằng dữ liệu giả.
+- **Thử tay:** mục U1–U4 trong `sync/manual-checklist.md`.

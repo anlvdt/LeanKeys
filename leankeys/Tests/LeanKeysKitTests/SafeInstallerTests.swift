@@ -91,4 +91,36 @@ final class SafeInstallerTests: XCTestCase {
         let text = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(text.contains("trap"), "the relaunch must run on every exit")
     }
+
+    // Popover install (spec §16.3): an ad-hoc or unsigned candidate is always refused.
+    private func checks(signature: UpdateInstallPolicy.SignatureKind, sameIdentity: Bool = true) -> SafeInstaller.Checks {
+        SafeInstaller.Checks(appExists: { _ in true }, bundleIdentifier: { _ in self.bundleID },
+                             codesignValid: { _ in true }, sameIdentity: { _ in sameIdentity }, signature: { _ in signature })
+    }
+
+    private func verifyStable(_ checks: SafeInstaller.Checks, requireSameIdentity: Bool) -> SafeInstaller.Verdict {
+        SafeInstaller.verify(mountPoint: mount, appName: "LeanKeys", expectedBundleID: bundleID, checks: checks,
+                             requireSameIdentity: requireSameIdentity, requireStableSignature: true)
+    }
+
+    func testPopoverInstallRejectsAdhocAndUnsigned() {
+        XCTAssertEqual(verifyStable(checks(signature: .adhoc), requireSameIdentity: false), .unstableSignature)
+        XCTAssertEqual(verifyStable(checks(signature: .unsigned), requireSameIdentity: false), .unstableSignature)
+        XCTAssertEqual(verifyStable(checks(signature: .adhoc), requireSameIdentity: true), .unstableSignature)
+    }
+
+    func testPopoverInstallAcceptsCertificateFromAdhocApp() {
+        // The running app is ad-hoc (no identity required): a certificate build is the §15.3 move to a stable signature.
+        XCTAssertEqual(verifyStable(checks(signature: .certificate, sameIdentity: false), requireSameIdentity: false), .valid(app))
+        XCTAssertEqual(verifyStable(checks(signature: .developerID(team: "ABC")), requireSameIdentity: false), .valid(app))
+    }
+
+    func testPopoverInstallFromStableAppRequiresSameIdentity() {
+        XCTAssertEqual(verifyStable(checks(signature: .certificate, sameIdentity: false), requireSameIdentity: true), .differentIdentity)
+        XCTAssertEqual(verifyStable(checks(signature: .certificate, sameIdentity: true), requireSameIdentity: true), .valid(app))
+    }
+
+    func testStableSignatureNotRequiredByDefault() {
+        XCTAssertEqual(verify(checks(signature: .adhoc)), .valid(app), "the legacy one-click path is unchanged")
+    }
 }

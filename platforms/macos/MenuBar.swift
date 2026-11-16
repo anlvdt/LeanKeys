@@ -435,12 +435,20 @@ class MenuBarController: NSObject, NSWindowDelegate {
                 guard let mode = InputMode(rawValue: raw) else { return }
                 AppState.shared.setMethod(mode)
             },
-            installUpdate: { UpdateManager.shared.restartToUpdate() },
+            installUpdate: { UpdateManager.shared.installFromPopoverNow() },
             openSettings: { [weak self] in self?.showSettings() },
             quit: { NSApp.terminate(nil) },
             suggestionCount: { ShortcutSuggestionsModel.shared.suggestionCount },
-            openSuggestions: { ShortcutSuggestionsWindow.show(.shared) }
+            openSuggestions: { ShortcutSuggestionsWindow.show(.shared) },
+            updatePhase: { UpdateManager.shared.popoverPhase },
+            checkForUpdates: { UpdateManager.shared.checkFromPopover() },
+            popoverClosed: { UpdateManager.shared.popoverClosed() }
         ))
+        // Check, download progress and install show while the popover is open (spec §16).
+        NotificationCenter.default.publisher(for: .updateStateChanged)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak model] _ in model?.reload() }
+            .store(in: &cancellables)
         // A suggestion can appear while the popover is open.
         ShortcutSuggestionsModel.shared.$candidates
             .dropFirst()

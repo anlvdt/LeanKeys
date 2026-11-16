@@ -56,6 +56,19 @@ public enum UpdateInstallPolicy {
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return .unsigned }
         var staticCode: SecStaticCode?
         guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return .unsigned }
+        return signature(of: staticCode)
+    }
+
+    /// The signature kind of the app bundle at `bundle` (a downloaded update), in the same order as currentSignature().
+    public static func signature(of bundle: URL) -> SignatureKind {
+        var staticCode: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(bundle as CFURL, [], &staticCode) == errSecSuccess, let staticCode else {
+            return .unsigned
+        }
+        return signature(of: staticCode)
+    }
+
+    private static func signature(of staticCode: SecStaticCode) -> SignatureKind {
         var info: CFDictionary?
         let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
         guard SecCodeCopySigningInformation(staticCode, flags, &info) == errSecSuccess,

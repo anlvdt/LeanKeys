@@ -40,5 +40,9 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | S3 | Đề xuất gõ tắt | Gõ cùng một chuỗi 3 lần trong ô mật khẩu của Safari (Return sau mỗi lần): không có gợi ý nào. | — | [ ] |
 | S4 | Đề xuất gõ tắt | Cài đặt → Nâng cao → "Xoá dữ liệu đã học" → Xoá: ô nổi không còn dòng gợi ý, danh sách gợi ý trống. | — | [ ] |
 | S5 | Chữ hoa với Shift | Gõ `DDaif Loan` trong Notes, giữ Shift (không bật Caps Lock) khi gõ `DD` và `L`: ra "Đài Loan", không ra "đài Loan". | [ ] | [ ] |
+| U1 | Cập nhật trong ô nổi | Bản Release, máy đang có mạng, đang chạy bản mới nhất: bấm trái icon → "Kiểm tra cập nhật". Thấy vòng quay "Đang kiểm tra cập nhật…", rồi "Bạn đang dùng bản mới nhất". Đóng ô nổi, mở lại: nút "Kiểm tra cập nhật" hiện lại. | — | [ ] |
+| U2 | Cập nhật trong ô nổi | Bản Release self-signed cũ hơn bản trên GitHub: bấm "Kiểm tra cập nhật" một lần, không bấm gì thêm. Thấy thanh tiến độ "Đang tải bản mới… N%", rồi "Đang cài, LeanKeys sẽ tự mở lại". App tự thoát, tự mở lại ở bản mới (Giới thiệu hiện đúng số bản), gõ được ngay, không phải cấp lại quyền Trợ năng. Đóng ô nổi giữa chừng cũng không làm dừng việc cài. | — | [ ] |
+| U3 | Cập nhật trong ô nổi | Tắt Wi-Fi, bấm "Kiểm tra cập nhật": một dòng "Không kết nối được, thử lại sau" và nút "Thử lại"; không có chữ tiếng Anh. Bật Wi-Fi, bấm "Thử lại": chạy như U1 hoặc U2. | — | [ ] |
+| U4 | Cập nhật trong ô nổi | Bản mới ký ad-hoc (`leankeys/build.sh` trên máy không có chứng chỉ, đặt DMG làm bản tải về): ô nổi báo "Không cài được bản mới", app vẫn chạy bản cũ, gõ được. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 46 ô đều đạt.
+Chỉ gõ `yes` khi cả 50 ô đều đạt.
