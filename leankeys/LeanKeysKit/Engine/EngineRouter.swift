@@ -177,7 +177,8 @@ public final class EngineRouter {
         // Only Enter and the keys next to it can be acted on: the frontmost app is asked for those only.
         let mayAct = StrayEnterFilter.enterKeys.contains(keyCode) || StrayEnterFilter.adjacentKeys[keyCode] != nil
         let decision = strayEnter.decide(keyCode: keyCode, shift: shift, otherModifiers: option, time: now(),
-                                         lineBeforeCursor: mirror.lineBeforeCursor ?? "",
+                                         lineBeforeCursor: mirror.typedTail,
+                                         lineStartKnown: mirror.lineBeforeCursor != nil,
                                          bundleID: mayAct ? frontmostBundleID() : nil)
         let result: (Int, [Character], Bool)
         switch decision {

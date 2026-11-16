@@ -36,18 +36,27 @@ public final class TextMirror {
     /// not known to be whole (no `onWord`, empty `currentWord`) until the next break; the phrase is dropped.
     private var wordUnknown = false
     private var phraseUnknown = false
-    /// Text since the last newline, as on screen; nil when unknown: before the first newline, after a cursor move,
-    /// a bypass, or a delete past the line's start. Sentence ends, which end the phrase, keep it.
-    private var line: [Character]?
+    /// What was typed on the current line, as on screen: since the last newline, or since the line's start became
+    /// unknown (before the first newline, after a cursor move or a bypass, a delete past what is held, an overflow).
+    /// Sentence ends, which end the phrase, keep it.
+    private var line: [Character] = []
+    /// `line` starts at the line's start.
+    private var lineStartKnown = false
 
-    /// Longest line held; a longer one becomes unknown.
+    /// Longest line held; past it the oldest half is dropped and the line's start becomes unknown.
     static let lineLimit = 2_000
 
     public init() {}
 
-    /// The current line before the cursor, as on screen; nil when unknown (see `line`). Spec 17.2 reads it.
+    /// The current line before the cursor, as on screen; nil when its start is unknown (see `typedTail`).
     public var lineBeforeCursor: String? {
-        line.map { String($0) }
+        lineStartKnown ? String(line) : nil
+    }
+
+    /// The end of the current line that the mirror saw typed, as on screen: the whole line when its start is known,
+    /// else what was typed since the cursor last moved (empty right after). Spec 17.2 reads it.
+    public var typedTail: String {
+        String(line)
     }
 
     /// The word being typed: everything since the last word break. Empty right after a break or a reset.
@@ -97,8 +106,12 @@ public final class TextMirror {
     /// An engine edit: delete `deleteCount` characters before the cursor, then insert `insert`. Inserted breaks
     /// commit exactly like typed ones.
     public func apply(deleteCount: Int, insert: [Character]) {
-        if deleteCount > 0, let held = line {
-            line = deleteCount <= held.count ? Array(held.dropLast(deleteCount)) : nil
+        if deleteCount > 0 {
+            if deleteCount <= line.count {
+                line.removeLast(deleteCount)
+            } else {
+                forgetLine()
+            }
         }
         var deleteCount = deleteCount
         if deleteCount > 0, pendingTerminator != nil {
@@ -156,7 +169,12 @@ public final class TextMirror {
     /// secure-field checks.
     public func discard() {
         clearPhrase()
-        line = nil
+        forgetLine()
+    }
+
+    private func forgetLine() {
+        line.removeAll()
+        lineStartKnown = false
     }
 
     /// Ends the phrase on the same line: the line stays known.
@@ -206,10 +224,14 @@ public final class TextMirror {
     /// `line` after `c` reaches the screen. Tab is a cursor move: `typed` resets, which forgets the line.
     private func trackLine(_ c: Character) {
         if c == "\n" || c == "\r" {
-            line = []
-        } else if line != nil {
-            line?.append(c)
-            if let held = line, held.count > Self.lineLimit { line = nil }
+            line.removeAll()
+            lineStartKnown = true
+        } else {
+            line.append(c)
+            if line.count > Self.lineLimit {
+                line.removeFirst(line.count / 2)
+                lineStartKnown = false
+            }
         }
     }
 

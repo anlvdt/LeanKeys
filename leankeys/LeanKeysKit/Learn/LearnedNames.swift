@@ -216,12 +216,22 @@ public final class LearnedNames: LearnedNameLookup {
         return String(String.UnicodeScalarView(scalars))
     }
 
-    /// At least 2 letters, at least one capital, not every letter a capital.
+    /// At least 2 letters, at least one capital, not every letter a capital. Letters only, save `-` `'` `’` between
+    /// two letters ("Ê-đê"): a word with a digit or another symbol ("Matkhau2024", "Abc@xyz"), or one shaped like a
+    /// secret, is never counted, not even as a digest.
     private static func looksLikeTypedName(_ word: String) -> Bool {
-        let letters = word.filter(\.isLetter)
+        let chars = Array(word)
+        for (i, c) in chars.enumerated() where !c.isLetter {
+            guard Self.joiners.contains(c), i > 0, i < chars.count - 1,
+                  chars[i - 1].isLetter, chars[i + 1].isLetter else { return false }
+        }
+        guard !Exclusions.looksLikeSecret(word) else { return false }
+        let letters = chars.filter(\.isLetter)
         guard letters.count >= 2 else { return false }
         return letters.contains(where: \.isUppercase) && !letters.allSatisfy(\.isUppercase)
     }
+
+    private static let joiners: Set<Character> = ["-", "'", "’"]
 
     private static func normalized(_ word: String) -> String {
         word.precomposedStringWithCanonicalMapping.lowercased()

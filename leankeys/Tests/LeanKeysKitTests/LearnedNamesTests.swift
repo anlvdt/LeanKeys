@@ -23,6 +23,11 @@ private final class Clock {
     }
 }
 
+/// "Name" plus `i` spelled in letters (0 → a … 9 → j): names carry no digits (fix round 1, R9).
+private func letterName(_ i: Int) -> String {
+    "Name" + String(String(i).map { Character(UnicodeScalar(UInt8(97) + UInt8(String($0))!)) })
+}
+
 final class LearnedNamesTests: XCTestCase {
     private static let titles: Set<String> = Set(ProperNounData.bundled.titles)
     private static let key = Data(repeating: 7, count: 32)
@@ -98,6 +103,31 @@ final class LearnedNamesTests: XCTestCase {
         XCTAssertTrue(n.names.isEmpty)
     }
 
+    /// Fix round 1 (R9): a word with a digit or a symbol, or shaped like a secret, is never counted, not even
+    /// hidden; a hyphenated name still is.
+    func testSecretShapedWordsNeverLearned() {
+        let store = InMemoryStore()
+        let n = names(store, nonWords: ["matkhau2024", "abc@xyz", "e-de", "ab-", "ab--cd"])
+        for _ in 0..<3 {
+            for word in ["Matkhau2024", "Abc@xyz", "Ab-", "Ab--cd", "-Ab"] {
+                n.observe(word: word, previous: nil)
+                n.observe(word: word, previous: "anh")
+            }
+        }
+        n.flush()
+        XCTAssertEqual(store.saves, 0, "nothing counted, not even a digest")
+        XCTAssertNil(store.saved)
+        for word in ["matkhau2024", "abc@xyz", "ab-", "ab--cd", "-ab"] {
+            XCTAssertNil(n.name(after: nil, word: word), word)
+            XCTAssertNil(n.name(after: "anh", word: word), word)
+        }
+        XCTAssertTrue(n.names.isEmpty)
+
+        n.observe(word: "Ê-đê", previous: nil)
+        n.observe(word: "Ê-đê", previous: nil)
+        XCTAssertEqual(n.name(after: nil, word: "ê-đê"), "Ê-đê", "a hyphenated name is still learned")
+    }
+
     func testUndoneTwiceRemoves() {
         let n = names()
         n.undone(word: "shopee")
@@ -114,7 +144,7 @@ final class LearnedNamesTests: XCTestCase {
     }
 
     func testLRU() {
-        let words = (0...LearnedNames.capacity).map { "Name\($0)" }
+        let words = (0...LearnedNames.capacity).map(letterName)
         let n2 = LearnedNames(store: nil, hmacKey: Self.key, titles: Self.titles,
                               isDictionaryWord: { _ in false }, now: { [clock] in clock!.now() })
         for word in words {
@@ -122,23 +152,23 @@ final class LearnedNamesTests: XCTestCase {
             n2.observe(word: word, previous: nil)
         }
         XCTAssertEqual(n2.names.count, 2_000)
-        XCTAssertNil(n2.name(after: nil, word: "name0"), "the least recently used goes first")
-        XCTAssertEqual(n2.name(after: nil, word: "name2000"), "Name2000")
-        XCTAssertEqual(n2.names.first?.form, "Name2000", "most recent first")
+        XCTAssertNil(n2.name(after: nil, word: "namea"), "the least recently used goes first")
+        XCTAssertEqual(n2.name(after: nil, word: "namecaaa"), "Namecaaa")
+        XCTAssertEqual(n2.names.first?.form, "Namecaaa", "most recent first")
     }
 
     func testLookupKeepsANameFresh() {
         let n = LearnedNames(store: nil, hmacKey: Self.key, titles: Self.titles,
                              isDictionaryWord: { _ in false }, now: { [clock] in clock!.now() })
-        for word in (0..<LearnedNames.capacity).map({ "Name\($0)" }) {
+        for word in (0..<LearnedNames.capacity).map(letterName) {
             n.observe(word: word, previous: nil)
             n.observe(word: word, previous: nil)
         }
-        XCTAssertEqual(n.name(after: nil, word: "name0"), "Name0")
+        XCTAssertEqual(n.name(after: nil, word: "namea"), "Namea")
         n.observe(word: "Extra", previous: nil)
         n.observe(word: "Extra", previous: nil)
-        XCTAssertEqual(n.name(after: nil, word: "name0"), "Name0", "a lookup counts as use")
-        XCTAssertNil(n.name(after: nil, word: "name1"))
+        XCTAssertEqual(n.name(after: nil, word: "namea"), "Namea", "a lookup counts as use")
+        XCTAssertNil(n.name(after: nil, word: "nameb"))
     }
 
     func testBelowThresholdNotStoredInClear() throws {

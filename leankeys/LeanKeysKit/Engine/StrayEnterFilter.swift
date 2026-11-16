@@ -28,6 +28,8 @@ public struct StrayEnterFilter {
         42: ("\\", "|"), 30: ("]", "}"), 39: ("'", "\""),
     ]
     static let enterKeys: Set<UInt16> = [36, 76]
+    /// Stray characters that never close a pair: deleted even when the line's start is unknown.
+    private static let pairless: Set<Character> = ["\\", "|"]
 
     private struct Press {
         let keyCode: UInt16
@@ -43,10 +45,12 @@ public struct StrayEnterFilter {
     /// - Parameters:
     ///   - otherModifiers: ⌘, ⌥ or ⌃ is held.
     ///   - time: when the key was pressed, in seconds on a monotonic clock.
-    ///   - lineBeforeCursor: the text from the line start to the cursor, as on screen after the previous key; empty
-    ///     when unknown, which deletes nothing.
+    ///   - lineBeforeCursor: the text before the cursor on its line, as on screen after the previous key: the whole
+    ///     line when `lineStartKnown`, else only what was typed since the cursor last moved (possibly empty).
+    ///   - lineStartKnown: `lineBeforeCursor` starts at the line's start. Without it the pair rule cannot be
+    ///     checked, so only `\` and `|`, which close no pair, are deleted.
     public mutating func decide(keyCode: UInt16, shift: Bool, otherModifiers: Bool, time: TimeInterval,
-                                lineBeforeCursor: String, bundleID: String?) -> Decision {
+                                lineBeforeCursor: String, lineStartKnown: Bool, bundleID: String?) -> Decision {
         let before = previous
         previous = Press(keyCode: keyCode, shift: shift, modified: otherModifiers, time: time)
         guard !otherModifiers, let before, !before.modified, Self.isWithinWindow(time - before.time),
@@ -54,8 +58,12 @@ public struct StrayEnterFilter {
         if Self.enterKeys.contains(keyCode) {
             guard let pair = Self.adjacentKeys[before.keyCode] else { return .none }
             let stray = before.shift ? pair.shifted : pair.plain
-            guard lineBeforeCursor.last == stray,
-                  !Self.closesOpenPair(stray, after: lineBeforeCursor.dropLast()) else { return .none }
+            guard lineBeforeCursor.last == stray else { return .none }
+            if lineStartKnown {
+                guard !Self.closesOpenPair(stray, after: lineBeforeCursor.dropLast()) else { return .none }
+            } else {
+                guard Self.pairless.contains(stray) else { return .none }
+            }
             return .deleteBeforeEnter
         }
         if Self.adjacentKeys[keyCode] != nil, Self.enterKeys.contains(before.keyCode) { return .dropKey }

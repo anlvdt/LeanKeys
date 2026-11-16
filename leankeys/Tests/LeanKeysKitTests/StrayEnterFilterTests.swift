@@ -12,19 +12,21 @@ final class StrayEnterFilterTests: XCTestCase {
     private let t0: TimeInterval = 1_000.7
 
     private func decide(_ filter: inout StrayEnterFilter, _ keyCode: UInt16, shift: Bool = false,
-                        modifiers: Bool = false, at time: TimeInterval, line: String,
+                        modifiers: Bool = false, at time: TimeInterval, line: String, known: Bool = true,
                         bundle: String? = "com.apple.Notes") -> StrayEnterFilter.Decision {
         filter.decide(keyCode: keyCode, shift: shift, otherModifiers: modifiers, time: time, lineBeforeCursor: line,
-                      bundleID: bundle)
+                      lineStartKnown: known, bundleID: bundle)
     }
 
     /// `key` typed at t0 onto `line` (its character is already the line's last), then Enter after `gap`.
     private func enterAfter(_ key: UInt16, shift: Bool = false, gap: TimeInterval, line: String,
-                            enterModifiers: Bool = false,
+                            enterModifiers: Bool = false, known: Bool = true,
                             bundle: String? = "com.apple.Notes") -> StrayEnterFilter.Decision {
         var filter = StrayEnterFilter()
-        XCTAssertEqual(decide(&filter, key, shift: shift, at: t0, line: String(line.dropLast()), bundle: bundle), .none)
-        return decide(&filter, enter, modifiers: enterModifiers, at: t0 + gap, line: line, bundle: bundle)
+        XCTAssertEqual(decide(&filter, key, shift: shift, at: t0, line: String(line.dropLast()), known: known,
+                              bundle: bundle), .none)
+        return decide(&filter, enter, modifiers: enterModifiers, at: t0 + gap, line: line, known: known,
+                      bundle: bundle)
     }
 
     func testDeletesStrayBackslashBeforeEnter() {
@@ -84,6 +86,25 @@ final class StrayEnterFilterTests: XCTestCase {
         XCTAssertEqual(decide(&filter, enter, at: t0 + 0.020, line: "x\\a"), .none)
     }
 
+    /// Fix round 1 (R8): with the line's start unknown (after a click, app switch, Tab, launch), `\` and `|` are
+    /// still deleted from the typed tail; `'` `"` `]` `}` need the whole line for the pair rule, so they stay.
+    func testUnknownLineStartDeletesOnlyPairless() {
+        XCTAssertEqual(enterAfter(backslash, gap: 0.040, line: "xong.\\", known: false), .deleteBeforeEnter)
+        XCTAssertEqual(enterAfter(backslash, shift: true, gap: 0.040, line: "xong|", known: false), .deleteBeforeEnter)
+        XCTAssertEqual(enterAfter(backslash, gap: 0.100, line: "xong\\", known: false), .deleteBeforeEnter)
+        XCTAssertEqual(enterAfter(backslash, gap: 0.101, line: "xong\\", known: false), .none)
+        XCTAssertEqual(enterAfter(backslash, gap: 0.040, line: "xong\\", enterModifiers: true, known: false), .none)
+        XCTAssertEqual(enterAfter(backslash, gap: 0.040, line: "xong\\", known: false, bundle: "com.apple.Terminal"),
+                       .none)
+        for (key, shift, line) in [(quote, false, "xong'"), (quote, true, "xong\""), (bracket, false, "xong]"),
+                                   (bracket, true, "xong}")] {
+            XCTAssertEqual(enterAfter(key, shift: shift, gap: 0.040, line: line, known: false), .none, line)
+        }
+        XCTAssertEqual(enterAfter(backslash, gap: 0.040, line: "", known: false), .none, "empty tail")
+        XCTAssertEqual(enterAfter(backslash, gap: 0.040, line: "xong", known: false), .none, "tail without it")
+        XCTAssertEqual(enterAfter(backslash, shift: true, gap: 0.040, line: "xong\\", known: false), .none)
+    }
+
     func testOpenPairKept() {
         // An odd number of quotes before it: the quote closes "'xin chào", so it stays.
         XCTAssertEqual(enterAfter(quote, gap: 0.040, line: "nói 'xin chào'"), .none)
@@ -132,8 +153,14 @@ final class StrayEnterFilterTests: XCTestCase {
     func testMirrorLineBeforeCursor() {
         let mirror = TextMirror()
         XCTAssertNil(mirror.lineBeforeCursor, "unknown until a newline")
+        XCTAssertEqual(mirror.typedTail, "")
         for c in "abc" { mirror.typed(c) }
         XCTAssertNil(mirror.lineBeforeCursor)
+        XCTAssertEqual(mirror.typedTail, "abc", "what was typed is still known")
+        mirror.apply(deleteCount: 1, insert: ["\\"])
+        XCTAssertEqual(mirror.typedTail, "ab\\")
+        mirror.apply(deleteCount: 5, insert: ["x"])
+        XCTAssertEqual(mirror.typedTail, "x", "deleted past what is held: only the new text")
         mirror.typed("\n")
         XCTAssertEqual(mirror.lineBeforeCursor, "")
         // Sentence ends clear the phrase, not the line.
@@ -144,11 +171,13 @@ final class StrayEnterFilterTests: XCTestCase {
         // Deleting past the line start, a click (reset) or a bypass (discard): unknown.
         mirror.apply(deleteCount: 30, insert: ["x"])
         XCTAssertNil(mirror.lineBeforeCursor)
+        XCTAssertEqual(mirror.typedTail, "x")
         mirror.typed("\r")
         XCTAssertEqual(mirror.lineBeforeCursor, "")
         mirror.typed("a")
         mirror.reset()
         XCTAssertNil(mirror.lineBeforeCursor)
+        XCTAssertEqual(mirror.typedTail, "", "a click: nothing typed since")
         mirror.typed("\n")
         mirror.discard()
         XCTAssertNil(mirror.lineBeforeCursor)
@@ -255,16 +284,35 @@ final class StrayEnterFilterTests: XCTestCase {
         XCTAssertEqual(String(field.text), "xong\nok")
     }
 
-    /// The first line after a click is unknown: nothing is deleted, though the drop after Enter still works.
-    func testRouterNoDeleteOnUnknownLine() {
+    /// The first line after a click (line start unknown): a stray `\` typed since is still deleted (R8); a `]`
+    /// is kept, since the pair rule needs the whole line.
+    func testRouterUnknownLineStart() {
         let router = makeRouter()
         router.clear()
-        let field = RouterField(router)
-        field.type("xong")
+        var field = RouterField(router)
+        field.type("xong.")
         field.press(backslash)
         clock += 0.040
         field.press(enter)
-        XCTAssertEqual(String(field.text), "xong\\\n")
+        XCTAssertEqual(String(field.text), "xong.\n")
+
+        clock += 1
+        router.clear()
+        field = RouterField(router)
+        field.type("xong ")
+        field.press(bracket)
+        let typed = String(field.text)
+        clock += 0.040
+        field.press(enter)
+        XCTAssertEqual(String(field.text), typed + "\n", "kept")
+
+        clock += 1
+        router.clear()
+        field = RouterField(router)
+        field.press(backslash)
+        clock += 0.040
+        field.press(enter)
+        XCTAssertEqual(String(field.text), "\n", "the tail is just the stray")
     }
 
     func testRouterModifiersNeverDropped() {
