@@ -18,13 +18,7 @@ final class UISnapshotTests: XCTestCase {
             "Set LEANKEYS_SNAPSHOTS=1 to write review images to docs/ui/"
         )
 
-        // This file is leankeys/Tests/LeanKeysKitTests/UISnapshotTests.swift, so four levels up is the repo root.
-        let outDir = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("docs/ui", isDirectory: true)
+        let outDir = Self.outDir()
         try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
         let appearances: [(label: String, appearance: NSAppearance.Name)] = [
@@ -103,6 +97,40 @@ final class UISnapshotTests: XCTestCase {
                 to: outDir.appendingPathComponent("settings-root-\(label).png")
             )
         }
+    }
+
+    /// 4C: the "Tự sửa và tự học" card with fake rules (a memory-only book, never the real store).
+    @MainActor
+    func testRenderUndoLearningImages() throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["LEANKEYS_SNAPSHOTS"] == "1",
+            "Set LEANKEYS_SNAPSHOTS=1 to write review images to docs/ui/"
+        )
+        let outDir = Self.outDir()
+        try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+
+        let model = UndoLearning.preview(records: [("its", "about"), ("cos", ""), ("cos", ""), ("user", "new")])
+        XCTAssertEqual(model.rules.count, 3)
+        for (label, name) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let appearance = try XCTUnwrap(NSAppearance(named: name))
+            let card = UndoLearningSection(model: model)
+                .padding(20)
+                .background(Color(NSColor.windowBackgroundColor))
+            let url = outDir.appendingPathComponent("settings-undo-learning-\(label).png")
+            try? FileManager.default.removeItem(at: url)
+            try Self.render(card, width: 520, height: nil, appearance: appearance, to: url)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "\(url.lastPathComponent) was not written")
+        }
+    }
+
+    /// docs/ui/: this file is leankeys/Tests/LeanKeysKitTests/UISnapshotTests.swift, so four levels up is the repo root.
+    private static func outDir() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("docs/ui", isDirectory: true)
     }
 
     private static func popoverActions(_ snapshot: StatusSnapshot, suggestions: Int = 0) -> StatusPopoverActions {

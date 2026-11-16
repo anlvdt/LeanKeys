@@ -40,5 +40,9 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | S3 | Đề xuất gõ tắt | Gõ cùng một chuỗi 3 lần trong ô mật khẩu của Safari (Return sau mỗi lần): không có gợi ý nào. | — | [ ] |
 | S4 | Đề xuất gõ tắt | Cài đặt → Nâng cao → "Xoá dữ liệu đã học" → Xoá: ô nổi không còn dòng gợi ý, danh sách gợi ý trống. | — | [ ] |
 | S5 | Chữ hoa với Shift | Gõ `DDaif Loan` trong Notes, giữ Shift (không bật Caps Lock) khi gõ `DD` và `L`: ra "Đài Loan", không ra "đài Loan". | [ ] | [ ] |
+| C1 | 4C · ⌫ sau phím gõ đúp | Vikey, tiếng Việt: gõ `hocjj` rồi ⌫ trong Notes: ra "học", biểu tượng vẫn là V. | — | [ ] |
+| C2 | 4C · Tự học có ngữ cảnh | Trong một câu tiếng Anh (`about its`), gõ "its" rồi ⌫⌫ để giữ nguyên. Lần sau gõ lại `about its`: "its" được giữ nguyên ngay. | — | [ ] |
+| C3 | 4C · Tự học không ngữ cảnh | Gõ "cos" ở hai câu khác nhau, mỗi lần ⌫⌫ để giữ nguyên. Lần thứ ba, ở một câu khác nữa, "cos" được giữ nguyên ngay. Cài đặt → Nâng cao → "Từ đã học" có dòng "cos". | — | [ ] |
+| C4 | 4C · Ô mật khẩu | Trong ô mật khẩu của Safari, gõ "its" rồi ⌫⌫ hai lần: "Từ đã học" không có thêm dòng nào. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 46 ô đều đạt.
+Chỉ gõ `yes` khi cả 50 ô đều đạt.
