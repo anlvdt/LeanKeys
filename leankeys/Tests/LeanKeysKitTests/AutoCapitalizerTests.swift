@@ -367,6 +367,16 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(router).type("tooi owr haf nooij a⌫⌫s"), "tôi ở Hà Nối")
     }
 
+    /// Review M3: a capitalisation made with a learned name marks it used (most recent first in "Tên đã học").
+    func testAppliedLearnedNameIsMarkedUsed() {
+        let names = permissiveNames()
+        let router = makeRouter(names: names)
+        for line in ["mua Tiki ", "mua Tiki ", "mua Lazada ", "mua Lazada "] { self.line(router).type(line) }
+        XCTAssertEqual(names.names.first?.form, "Lazada")
+        XCTAssertEqual(line(router).type("mua tiki "), "mua Tiki ")
+        XCTAssertEqual(names.names.first?.form, "Tiki")
+    }
+
     func testSwitchOff() {
         let names = permissiveNames()
         let router = makeRouter(names: names)

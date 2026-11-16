@@ -188,10 +188,51 @@ final class LearnedNamesTests: XCTestCase {
             n.observe(word: word, previous: nil)
         }
         XCTAssertEqual(n.name(after: nil, word: "namea"), "Namea")
+        n.markUsed(word: "namea")
         n.observe(word: "Extra", previous: nil)
         n.observe(word: "Extra", previous: nil)
-        XCTAssertEqual(n.name(after: nil, word: "namea"), "Namea", "a lookup counts as use")
+        XCTAssertEqual(n.name(after: nil, word: "namea"), "Namea", "a capitalisation made with it counts as use")
         XCTAssertNil(n.name(after: nil, word: "nameb"))
+    }
+
+    /// Review M3: a lookup alone (which the rules or a cap: rule may still reject) does not count as use.
+    func testLookupAloneIsNoUse() {
+        let n = LearnedNames(store: nil, hmacKey: Self.key, titles: Self.titles,
+                             isDictionaryWord: { _ in false }, now: { [clock] in clock!.now() })
+        for word in ["Tiki", "Lazada"] {
+            n.observe(word: word, previous: nil)
+            n.observe(word: word, previous: nil)
+        }
+        XCTAssertEqual(n.names.map(\.form), ["Lazada", "Tiki"])
+        XCTAssertEqual(n.name(after: nil, word: "tiki"), "Tiki")
+        XCTAssertEqual(n.names.map(\.form), ["Lazada", "Tiki"], "unchanged by the lookup")
+        n.markUsed(word: "tiki")
+        XCTAssertEqual(n.names.map(\.form), ["Tiki", "Lazada"])
+    }
+
+    /// Review M2: after "Xoá tất cả" erased an unreadable file (and the store's HMAC key with it), hidden counts are
+    /// digested with the store's new key, so they still match after a restart.
+    func testRemoveAllTakesTheStoresNewKey() {
+        final class KeyedStore: LearnStore, LearnKeyProvider {
+            private let lock = NSLock()
+            private var data: Data? = Data("not json".utf8)
+            private var keyByte: UInt8 = 1
+            func load() throws -> Data? { lock.withLock { data } }
+            func save(_ data: Data) throws { lock.withLock { self.data = data } }
+            func erase() throws { lock.withLock { data = nil; keyByte += 1 } }
+            func hmacKey() throws -> Data { lock.withLock { Data(repeating: keyByte, count: 32) } }
+        }
+        let store = KeyedStore()
+        let first = LearnedNames(store: store, hmacKey: try? store.hmacKey(), titles: Self.titles,
+                                 isDictionaryWord: { _ in false })
+        first.removeAll()
+        first.flush()
+        first.observe(word: "Shopee", previous: nil)
+        first.flush()
+        let second = LearnedNames(store: store, hmacKey: try? store.hmacKey(), titles: Self.titles,
+                                  isDictionaryWord: { _ in false })
+        second.observe(word: "Shopee", previous: nil)
+        XCTAssertEqual(second.name(after: nil, word: "shopee"), "Shopee", "the hidden count matched after a restart")
     }
 
     func testBelowThresholdNotStoredInClear() throws {

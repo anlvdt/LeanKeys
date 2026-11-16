@@ -47,7 +47,8 @@ public final class LearnedNames: LearnedNameLookup {
     }
 
     private let store: LearnStore?
-    private let key: SymmetricKey
+    /// Guarded by `lock`: a "Xoá tất cả" that erased an unreadable file takes the store's new key.
+    private var key: SymmetricKey
     private let titles: Set<String>
     private let isDictionaryWord: (String) -> Bool
     private let now: () -> Date
@@ -139,9 +140,8 @@ public final class LearnedNames: LearnedNameLookup {
     /// The second half of `observe`: counts `sighting`. Any thread (one lock; the save is queued).
     public func record(_ sighting: Sighting) {
         let (form, id, afterTitle, anywhere) = (sighting.form, sighting.id, sighting.afterTitle, sighting.anywhere)
-        let digest = Self.digest(id, key: key)
-
         let namesChanged: Bool = lock.withLock {
+            let digest = Self.digest(id, key: key)
             let date = now()
             if var name = learned[id] {
                 name.count += 1
@@ -166,20 +166,28 @@ public final class LearnedNames: LearnedNameLookup {
         if namesChanged { didChange() } else { scheduleSave() }
     }
 
-    /// The learned form of `word` when it is learned and either holds anywhere or `previous` is a title. A hit marks
-    /// the name used. Key-handling thread: one short lock, no I/O.
+    /// The learned form of `word` when it is learned and either holds anywhere or `previous` is a title.
+    /// Key-handling thread: one short lock, no I/O. A lookup is no use yet: the rules or a `cap:` rule may still
+    /// reject it (`markUsed` once a capitalisation is made with it; review M3).
     public func name(after previous: String?, word: String) -> String? {
         let id = Self.normalized(word)
         let isTitle = previous.map { titles.contains(Self.normalized($0)) } ?? false
-        let form: String? = lock.withLock {
-            guard var name = learned[id], !name.afterTitleOnly || isTitle else { return nil }
-            name.lastUsed = now()
-            learned[id] = name
+        return lock.withLock {
+            guard let name = learned[id], !name.afterTitleOnly || isTitle else { return nil }
             return name.form
         }
-        // The new `lastUsed` rides along with the next save (no write of the whole file per name typed), and the UI
-        // is not told: only the order of `names` moved.
-        return form
+    }
+
+    /// A capitalisation was made with the learned name `word`: it is the most recently used. Key-handling thread:
+    /// one short lock. The new `lastUsed` rides along with the next save (no write of the whole file per name
+    /// typed), and the UI is not told: only the order of `names` moved.
+    public func markUsed(word: String) {
+        let id = Self.normalized(word)
+        lock.withLock {
+            guard var name = learned[id] else { return }
+            name.lastUsed = now()
+            learned[id] = name
+        }
     }
 
     /// The user undid a capitalisation of `word`; the second undo of a learned name (anywhere) removes it.
@@ -226,7 +234,13 @@ public final class LearnedNames: LearnedNameLookup {
         if eraseUnreadable {
             saveQueue.async { [self] in
                 guard (try? store?.erase()) != nil else { return }
-                lock.withLock { persistent = true }
+                // The erase removed the store's HMAC key too: digest new hidden counts with its new one, so they
+                // still match after a restart (review M2).
+                let newKey = (store as? LearnKeyProvider).flatMap { try? $0.hmacKey() }
+                lock.withLock {
+                    persistent = true
+                    if let newKey, newKey.count == 32 { key = SymmetricKey(data: newKey) }
+                }
             }
         }
         didChange()

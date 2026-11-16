@@ -250,6 +250,8 @@ public final class EngineRouter {
               // Not in a terminal or code editor (ruling R12). Asked only once a rule fired, not at every Space.
               !CodeApps.contains(frontmostBundleID())
         else { return nil }
+        // A learned name that made it is now in use (review M3: not at lookup, which the rules may still reject).
+        if let name = capitalizer.learnedName(in: replacement) { undoLearning.learnedNames.markUsed(word: name) }
         let isSpace = keyCode == Self.spaceKey
         let result = (replacement.original.count, Array(replacement.capitalized) + (isSpace ? [" "] : []), isSpace)
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
