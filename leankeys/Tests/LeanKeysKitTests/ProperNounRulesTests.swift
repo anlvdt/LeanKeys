@@ -165,9 +165,13 @@ final class ProperNounRulesTests: XCTestCase {
     func testKeepsUserCapitals() {
         XCTAssertEqual(cap(["Hà", "nội"]), expect(2, ["Hà", "Nội"]))
         XCTAssertNil(cap(["Hà", "Nội"]))
-        XCTAssertNil(cap(["iphone"]))
         XCTAssertNil(cap(["iPhone"]))
         XCTAssertNil(cap(["NGUYỄN"]))
+        // Task 1 minor 3: an earlier word not all lowercase or capitalised stays exactly as typed while the rule
+        // still capitalises the rest (the guard in `capitalized`, not just a word in no list).
+        XCTAssertEqual(cap(["NGUYỄN", "văn"]), expect(2, ["NGUYỄN", "Văn"]))
+        XCTAssertEqual(cap(["HÀ", "nội"]), expect(2, ["HÀ", "Nội"]))
+        XCTAssertEqual(cap(["hÀ", "nội"]), expect(2, ["hÀ", "Nội"]))
     }
 
     func testLearnedLookupUsed() {

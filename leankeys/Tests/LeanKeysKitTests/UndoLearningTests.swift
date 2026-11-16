@@ -395,6 +395,14 @@ final class UndoLearningTests: XCTestCase {
         XCTAssertTrue(names.names.isEmpty)
     }
 
+    /// Task 4 minor 8: one terminal list. Every terminal the stray-key filter and capitalisation skip is also
+    /// excluded from learning; editors are not (4B and 4C keep learning there).
+    func testOneTerminalList() {
+        XCTAssertTrue(Exclusions.defaultBundleIDs.isSuperset(of: CodeApps.terminals))
+        XCTAssertTrue(CodeApps.bundleIDs.isSuperset(of: CodeApps.terminals))
+        XCTAssertFalse(Exclusions.defaultBundleIDs.contains("com.microsoft.VSCode"))
+    }
+
     /// The live reader's key-thread half reads no AX: it only fills in what NSWorkspace and the Secure Input flag say.
     func testLiveProbeIsCheap() {
         let probe = LearnContextReader.probe()
