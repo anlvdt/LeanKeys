@@ -544,7 +544,8 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 - Tên tỉnh cũ: Hà Giang, Yên Bái, Bắc Kạn, Hòa Bình, Vĩnh Phúc, Bắc Giang, Hải Dương, Thái Bình, Hà Nam, Nam Định, Quảng Bình, Thừa Thiên Huế, Quảng Nam, Bình Định, Phú Yên, Ninh Thuận, Bình Thuận, Kon Tum, Đắk Nông, Bình Phước, Bình Dương, Bà Rịa, Vũng Tàu, Long An, Tiền Giang, Bến Tre, Trà Vinh, Hậu Giang, Sóc Trăng, Bạc Liêu, Kiên Giang.
 - Địa danh quen thuộc: Sài Gòn, Hội An, Phú Quốc, Đà Lạt, Nha Trang, Hạ Long, Sa Pa, Mũi Né, Quy Nhơn, Buôn Ma Thuột, Pleiku, Biên Hòa, Thủ Đức, Côn Đảo, Tam Đảo, Mộc Châu, Phan Thiết, Rạch Giá, Hà Tiên, Châu Đốc, Mỹ Tho, Long Xuyên, Cát Bà, Tân Sơn Nhất, Nội Bài, Hoàn Kiếm, Ba Đình, Cầu Giấy, Gò Vấp, Bình Thạnh, Tân Bình, Phú Nhuận.
 - Tên nước và vùng: Việt Nam, Trung Quốc, Nhật Bản, Hàn Quốc, Hoa Kỳ, Thái Lan, Campuchia, Singapore, Malaysia, Indonesia, Philippines, Ấn Độ, Canada, Đài Loan, Hồng Kông, Triều Tiên, Châu Âu, Châu Á, Châu Phi, Châu Mỹ, Đông Nam Á, Liên Hợp Quốc, Myanmar.
-- Từ đơn: Tết.
+- Không thêm "Tết": kho câu viết cả "Tết" lẫn "tết" (11 lần chữ thường), nên viết hoa sẽ bị tính là sai.
+- So khớp không phân biệt kiểu đặt dấu (`Thanh Hoá` và `Thanh Hóa`, `Khánh Hoà` và `Khánh Hòa`). Kết quả là chính các từ người dùng đã gõ, chỉ viết hoa chữ cái đầu, giữ nguyên kiểu đặt dấu của họ.
 - **Cụm trùng từ thường** chỉ được viết hoa khi từ (hoặc cặp từ) ngay trước là một từ chỉ nơi chốn: `tỉnh`, `thành phố`, `tp`, `ở`, `tại`, `về`, `đến`, `quê`, `từ`, `ra`, `vào`, `đi`. Các cụm đó là: hòa bình, thái bình, cao bằng, hải dương, phú thọ, vĩnh phúc, bình định, an giang, long an, hà nam, quảng nam, gia lai, bình dương, nam định, tân bình, bình thạnh, phú nhuận, cầu giấy, ba đình, bà rịa, thanh hóa, phú yên, hưng yên, vĩnh long, châu á, châu âu, châu phi, châu mỹ, hoa kỳ.
 - Cụm dài được ưu tiên: "thừa thiên huế" thắng "huế"; "hồ chí minh" thắng họ "hồ".
 
