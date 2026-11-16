@@ -42,8 +42,8 @@ public final class ShortcutSuggestionsModel: ObservableObject {
     public static let defaultThreshold = 3
     public static let thresholdChoices = [2, 3, 4, 5]
 
-    static let takenMessage = "Tên tắt này đã có"
-    static let invalidMessage = "Tên tắt không được trống hay có dấu cách"
+    static let takenMessage = "Từ viết tắt này đã có trong Bảng gõ tắt"
+    static let invalidMessage = "Từ viết tắt không được để trống hoặc chứa dấu cách"
 
     /// Learning is on (consent given). Mirrored on main so a phrase costs nothing while it is off.
     @Published public private(set) var enabled: Bool
