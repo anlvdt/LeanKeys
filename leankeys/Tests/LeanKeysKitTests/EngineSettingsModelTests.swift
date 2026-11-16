@@ -77,7 +77,7 @@ final class EngineSettingsModelTests: XCTestCase {
         let router = makeRouter(failingVikey: true)
         let model = EngineSettingsModel(router: router)
         model.selected = .vikey
-        XCTAssertEqual(model.vikeyDisabledReason, "Không khởi động được engine Vikey — đang dùng Gõ Nhanh")
+        XCTAssertEqual(model.vikeyDisabledReason, "Không khởi động được lõi gõ Vikey — đang dùng Gõ Nhanh")
     }
 
     func testDefaultsChangeAsksViewToRerender() {
@@ -106,7 +106,7 @@ final class EngineSettingsModelTests: XCTestCase {
     }
 
     func testPickerCopy() {
-        XCTAssertEqual(EngineSettingsSection.title, "Engine gõ")
+        XCTAssertEqual(EngineSettingsSection.title, "Lõi gõ")
         XCTAssertEqual(EngineSettingsSection.automaticLabel, "Tự động (khuyên dùng)")
         XCTAssertEqual(EngineSettingsSection.goNhanhOnlyLabel, "Chỉ dùng Gõ Nhanh")
     }
@@ -127,12 +127,12 @@ final class EngineSettingsModelTests: XCTestCase {
         XCTAssertEqual(model.selected, .vikey)
         XCTAssertEqual(router.active, .gonhanh)
         XCTAssertTrue(model.showsVikeyNote)
-        XCTAssertEqual(model.vikeyDisabledReason, "Không khởi động được engine Vikey — đang dùng Gõ Nhanh")
+        XCTAssertEqual(model.vikeyDisabledReason, "Không khởi động được lõi gõ Vikey — đang dùng Gõ Nhanh")
     }
 
     func testVikeyNoteIsOneLineWithDetailInTooltip() {
         let note = "Ở chế độ Tự động, các mục chỉ dành cho Gõ Nhanh được ẩn."
-        let detail = "Các mục chỉ dành cho Gõ Nhanh: Tự khôi phục tiếng Anh, VNI, gõ tắt, tự viết hoa đầu câu, phím W→Ư và phím [ ]."
+        let detail = "Ẩn ở chế độ Tự động vì chỉ Gõ Nhanh có: Gõ W thành Ư, Gõ [ ] thành Ơ Ư, Tự khôi phục tiếng Anh, Tự viết hoa đầu câu. Chọn kiểu gõ VNI thì LeanKeys tự dùng Gõ Nhanh."
         XCTAssertEqual(EngineSettingsSection.vikeyNote, note)
         XCTAssertFalse(EngineSettingsSection.vikeyNote.contains("\n"))
         XCTAssertEqual(EngineSettingsSection.vikeyNoteDetail, detail)

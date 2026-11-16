@@ -108,7 +108,7 @@ Mọi chỗ sửa trong file gốc phải có chú thích `// LEANKEYS-HOOK: <t�
 ### 3.5 Quy tắc khi chọn engine
 
 - Mặc định dùng engine **Vikey** (đổi ngày 2026-11-15, xem mục 13). Gõ Nhanh chọn được trong Cài đặt, và là engine dự phòng khi Vikey lỗi hoặc khi dùng VNI.
-- Kiểu gõ VNI chỉ chạy với engine Gõ Nhanh. Khi chọn engine Vikey, mục VNI bị khoá và có ghi chú giải thích.
+- Kiểu gõ VNI chỉ chạy với Gõ Nhanh: chọn VNI thì LeanKeys tự dùng Gõ Nhanh và ghi chú lý do dưới mục Lõi gõ.
 - Khi dùng engine Vikey, "tự khôi phục từ tiếng Anh" của Gõ Nhanh bị ẩn hoặc tắt, vì Vikey có cơ chế tự chuyển riêng.
 - Các cài đặt chung (dấu kiểu mới, viết hoa đầu câu…) được chuyển cho engine nào có hỗ trợ. Engine không hỗ trợ thì mục đó bị làm mờ.
 
@@ -193,7 +193,7 @@ Từ mục 15 (2026-11-15): app được ký bằng một chứng chỉ tự c�
    - **Chung:** `vieejt`→`việt`, `truowfng`→`trường`, Backspace, ESC.
    - **Vikey:** `treen`→`trên`, `more` giữ nguyên, undo ⌫⌫.
    - **Gõ Nhanh:** `push`+Space giữ `push`.
-   - **Router:** đổi engine giữa chừng không làm hỏng ô nhập. VNI bị khoá khi dùng Vikey.
+   - **Router:** đổi engine giữa chừng không làm hỏng ô nhập. Chọn VNI khi đang dùng Vikey thì router chuyển sang Gõ Nhanh.
 4. `check-divergence.sh` và `xcodebuild` bản Release.
 5. GĐ3: test bảng mã và chuyển mã, đối chiếu với bảng của OpenKey.
 
@@ -440,7 +440,7 @@ Thêm ngày 2026-11-15, người dùng đã duyệt cả ba phương án A, B, C
   - `Kiểu gõ`.
   - Các mục chỉ dành cho Gõ Nhanh (`Gõ W thành Ư`, `Gõ [ ] thành Ơ Ư`, `Tự khôi phục tiếng Anh`, `Tự viết hoa đầu câu`) **chỉ hiện khi** engine là "Chỉ dùng Gõ Nhanh". Ở chế độ "Tự động", chúng không xuất hiện.
 - **Phím tắt:** các dòng phím tắt bật/tắt hiện có của Gõ Nhanh, chuyển nguyên sang trang này.
-- **Nâng cao:** thẻ thu gọn `Engine gõ` (mục 13), rồi các phần hiệu năng, tương thích và tuỳ chỉnh theo app hiện có của Gõ Nhanh.
+- **Nâng cao:** thẻ thu gọn `Lõi gõ` (mục 13; trên giao diện, engine gọi là "lõi gõ"), rồi các phần hiệu năng, tương thích và tuỳ chỉnh theo app hiện có của Gõ Nhanh.
 - **Giới thiệu:** giữ như hiện tại, có ghi công.
 - **Ghi chú trên giao diện tối đa một dòng.** Giải thích dài hơn nằm trong tooltip của biểu tượng ⓘ. Không đưa chữ kỹ thuật như "giai đoạn 4" ra giao diện.
 - **Màu:** chữ phụ phải đạt tương phản ≥ 4.5:1 ở cả chế độ sáng và tối; dùng màu hệ thống `secondaryLabelColor`, không dùng xám tự chọn.
