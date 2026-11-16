@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// What the router did with a key. `.handled` carries `RustBridge.processKey`'s return value as is; its third
@@ -30,6 +31,17 @@ public final class EngineRouter {
     /// `vikey` when it is the real engine, with the undo learner (spec 12.2) that drains its undo events.
     private var vikeyEngine: VikeyEngine?
     private var undoLearning: UndoLearning?
+    /// Spec 17.1, with the real engine only (built with `undoLearning`).
+    private var capitalizer: AutoCapitalizer?
+    /// The word being typed began with a letter key the user typed as a capital (Shift or Caps Lock).
+    private var wordStartsWithUserCapital = false
+    /// The phrase text right after a ⌫ undo of a capitalisation: while it stands unchanged, the words it gave back
+    /// are not capitalised again at the next break, whatever the rule book says (like Vikey's own undone word).
+    private var restoredByUndo: String?
+    /// Spec 17.2, with the real engine only (its switch lives on `undoLearning`).
+    private var strayEnter = StrayEnterFilter()
+    private let now: () -> TimeInterval
+    private let frontmostBundleID: () -> String?
     private var vikeyAttempted = false
     private var method = 0
     private var vietnamese = true
@@ -51,12 +63,20 @@ public final class EngineRouter {
 
     /// `makeVikey` runs at most once, the first time Vikey is needed. `undoLearning` runs at most once too, and only
     /// when that engine is the real `VikeyEngine`: the default (`UndoLearning.shared`, which opens the saved rules)
-    /// is never built for a stub engine or a router that never uses Vikey.
+    /// is never built for a stub engine or a router that never uses Vikey. `now` (seconds, monotonic) and
+    /// `frontmostBundleID` serve the stray-key filter (spec 17.2); `frontmostBundleID` also keeps capitals out of
+    /// terminals and code editors (spec 17.1).
     public init(defaults: UserDefaults = .standard, makeVikey: @escaping () -> TypingEngine? = { VikeyEngine() },
-                undoLearning: @escaping () -> UndoLearning = { UndoLearning.shared }) {
+                undoLearning: @escaping () -> UndoLearning = { UndoLearning.shared },
+                now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+                frontmostBundleID: @escaping () -> String? = {
+                    NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                }) {
         settings = LeanSettings(defaults: defaults)
         self.makeVikey = makeVikey
         makeUndoLearning = undoLearning
+        self.now = now
+        self.frontmostBundleID = frontmostBundleID
         refresh()
     }
 
@@ -66,6 +86,7 @@ public final class EngineRouter {
         set {
             guard newValue != settings.engine else { return }
             vikey?.resetContext()
+            forgetWord()
             settings.engine = newValue
             refresh()
             vikey?.resetContext()
@@ -77,24 +98,61 @@ public final class EngineRouter {
         selected == .vikey && fallbackReason == nil ? .vikey : .gonhanh
     }
 
-    public func intercept(keyCode: UInt16, caps: Bool, ctrl: Bool, shift: Bool) -> InterceptResult {
+    /// `ctrl` is ⌘ or ⌃, and ⌥ outside Return/Enter (the macOS key handler sends ⌥+key as `ctrl`). `option` is ⌥,
+    /// which reaches here without `ctrl` only on Return/Enter.
+    public func intercept(keyCode: UInt16, caps: Bool, ctrl: Bool, shift: Bool,
+                          option: Bool = false) -> InterceptResult {
         guard active == .vikey, let vikey else { return .passToGoNhanh }
+        // Only the very next key may undo a capitalisation (spec 17.1.4).
+        let capitalized = capitalizer?.last
+        capitalizer?.last = nil
         // A Ctrl chord is a shortcut, not typing: the word ends and the key goes through untouched.
         if ctrl {
             vikey.resetContext()
             mirror.discard()
+            wordStartsWithUserCapital = false
+            strayEnter = StrayEnterFilter()
             return .handled(nil)
         }
+        let wordWasEmpty = mirror.currentWord.isEmpty
+        let result = dropStrayKey(vikey, keyCode: keyCode, caps: caps, shift: shift, option: option)
+            ?? interceptVikey(vikey, keyCode: keyCode, caps: caps, shift: shift, capitalized: capitalized)
+        // The words a ⌫ undo gave back stay as typed only until they change or the break after them is typed.
+        if let restored = restoredByUndo, mirror.phraseText != restored { restoredByUndo = nil }
+        // Whether the word now being typed began with the user's own capital (spec 17.1.3).
+        if mirror.currentWord.isEmpty {
+            wordStartsWithUserCapital = false
+        } else if wordWasEmpty {
+            wordStartsWithUserCapital = caps
+                && VikeyEngine.typedCharacter(keyCode: keyCode, shift: shift, caps: caps)?.isLetter == true
+        }
+        return .handled(result)
+    }
+
+    private func interceptVikey(_ vikey: TypingEngine, keyCode: UInt16, caps: Bool, shift: Bool,
+                                capitalized: AutoCapitalizer.Made?) -> (Int, [Character], Bool)? {
+        if keyCode == Self.backspaceKey, let capitalized {
+            return undoCapitalization(capitalized, vikey: vikey, keyCode: keyCode, caps: caps, shift: shift)
+        }
+        // Read before anything changes the mirror: the break key commits the word, and may end the phrase.
+        let isSpace = keyCode == Self.spaceKey
+        let committed = isSpace || Self.triggersShortcut(keyCode, shift: shift) ? committedWord() : nil
         if let result = expandShortcut(keyCode: keyCode, shift: shift) {
             vikey.resetContext()
             observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
-            return .handled(result)
+            return result
         }
         let processed = vikey.process(keyCode: keyCode, caps: caps, shift: shift)
         if let vikeyEngine { undoLearning?.afterPress(engine: vikeyEngine) }
         guard let edit = processed else {
+            // Vikey left the word as typed: LeanKeys may capitalise it (spec 17.1). After a fix of Vikey's own at
+            // this key it does not, so Vikey's ⌫⌫ undo still finds its word.
+            if let committed {
+                learnName(committed)
+                if let result = capitalize(committed, keyCode: keyCode, shift: shift, caps: caps) { return result }
+            }
             observe(keyCode: keyCode, shift: shift, caps: caps, result: nil)
-            return .handled(nil)
+            return nil
         }
         if edit.languageChanged {
             let on = vikey.isVietnamese
@@ -106,7 +164,115 @@ public final class EngineRouter {
         }
         let result = (edit.deleteCount, edit.text, !edit.keyPassesThrough)
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
-        return .handled(result)
+        return result
+    }
+
+    // MARK: Stray key at Enter (spec 17.2)
+
+    /// The edit that drops a key next to Enter hit together with Enter, or nil to go on as usual. Before Enter: the
+    /// stray character is deleted and Enter follows (not consumed); Vikey never sees this Enter, so its word ends
+    /// here. After Enter: the key is consumed and Vikey never sees it. The mirror follows the screen either way.
+    private func dropStrayKey(_ vikey: TypingEngine, keyCode: UInt16, caps: Bool, shift: Bool,
+                              option: Bool) -> (Int, [Character], Bool)? {
+        guard let undoLearning, undoLearning.strayEnter else { return nil }
+        // Only Enter and the keys next to it can be acted on: the frontmost app is asked for those only.
+        let mayAct = StrayEnterFilter.enterKeys.contains(keyCode) || StrayEnterFilter.adjacentKeys[keyCode] != nil
+        let decision = strayEnter.decide(keyCode: keyCode, shift: shift, otherModifiers: option, time: now(),
+                                         lineBeforeCursor: mirror.typedTail,
+                                         lineStartKnown: mirror.lineBeforeCursor != nil,
+                                         bundleID: mayAct ? frontmostBundleID() : nil,
+                                         bracketTypesLetter: vikey.isVietnamese)
+        let result: (Int, [Character], Bool)
+        switch decision {
+        case .none: return nil
+        case .deleteBeforeEnter:
+            vikey.resetContext()
+            result = (1, [], false)
+        case .dropKey:
+            // The macOS handler still runs an empty injection for this (U+202F and a ⌫ under `.emptyCharPrefix`,
+            // plus the settle delay): net-neutral. Skipping it needs a new upstream hook in `keyboardCallback`,
+            // which 4D avoids (global constraints; ruling R14, final review M1).
+            result = (0, [], true)
+        }
+        observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+        return result
+    }
+
+    // MARK: Capitalisation (spec 17.1)
+
+    /// The word a break key is about to commit, read from the mirror before the key.
+    private struct CommittedWordContext {
+        let word: String
+        let phraseText: String
+        /// The phrase's word before `word`, lowercased.
+        let previous: String?
+        let atPhraseStart: Bool
+        let userCapital: Bool
+    }
+
+    /// nil when there is no whole word to commit, or it follows punctuation (`gov.vn`, `3.5`). A word glued to a
+    /// symbol that is no word break (`an@vidu`, `~/src`) is returned whole: learning reads it (`Ê-đê`), while
+    /// `capitalize` skips it.
+    private func committedWord() -> CommittedWordContext? {
+        guard capitalizer != nil else { return nil }
+        let word = mirror.currentWord
+        guard !word.isEmpty, !mirror.currentWordFollowsBreak, let phraseText = mirror.phraseText else { return nil }
+        return CommittedWordContext(word: word, phraseText: phraseText,
+                                    previous: mirror.phraseWords.dropLast().last?.lowercased(),
+                                    atPhraseStart: mirror.atPhraseStart, userCapital: wordStartsWithUserCapital)
+    }
+
+    /// Spec 17.1.3: a word the user typed with a capital, mid-phrase, goes to the learned names. Words LeanKeys
+    /// wrote (capitalisation, gõ tắt, Vikey's edits) never start with the user's capital key, so they never count.
+    private func learnName(_ committed: CommittedWordContext) {
+        guard committed.userCapital, !committed.atPhraseStart, committed.word.first?.isUppercase == true else { return }
+        undoLearning?.userCapitalized(committed.word, previous: committed.previous)
+    }
+
+    /// The edit that capitalises the committed words, with the break key: Space rides in the text (consumed), while
+    /// Return and punctuation are typed by the key itself after the edit, as in `expandShortcut`.
+    private func capitalize(_ committed: CommittedWordContext, keyCode: UInt16, shift: Bool,
+                            caps: Bool) -> (Int, [Character], Bool)? {
+        // Only a word of letters and digits: not one glued to a symbol, an address, a path or a tag
+        // (`an@tiki`, `~/tiki`, `#tiki`, `ten-tiki`; ruling R13).
+        guard committed.word.allSatisfy(TextMirror.isWordCharacter), committed.phraseText != restoredByUndo,
+              let undoLearning, undoLearning.autoCapitalize, let capitalizer,
+              let replacement = capitalizer.replacement(phraseText: committed.phraseText,
+                                                        keepsLowercase: undoLearning.keepsLowercase),
+              // Not in a terminal or code editor (ruling R12). Asked only once a rule fired, not at every Space.
+              !CodeApps.contains(frontmostBundleID())
+        else { return nil }
+        let isSpace = keyCode == Self.spaceKey
+        let result = (replacement.original.count, Array(replacement.capitalized) + (isSpace ? [" "] : []), isSpace)
+        observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+        // Not after Return/Enter: in a chat app the text has been sent by now, so ⌫ there must stay a plain ⌫.
+        if !Self.returnKeys.contains(keyCode) {
+            capitalizer.last = AutoCapitalizer.Made(replacement: replacement, breakLength: 1)
+        }
+        return result
+    }
+
+    /// Spec 17.1.4: ⌫ right after a capitalisation removes the break character and gives the words back as typed.
+    /// Vikey sees the ⌫ too, so its buffer follows the screen back into the word; its own edit, if any, is dropped.
+    private func undoCapitalization(_ made: AutoCapitalizer.Made, vikey: TypingEngine, keyCode: UInt16, caps: Bool,
+                                    shift: Bool) -> (Int, [Character], Bool) {
+        if vikey.process(keyCode: keyCode, caps: caps, shift: shift) != nil { vikey.resetContext() }
+        if let vikeyEngine { undoLearning?.afterPress(engine: vikeyEngine) }
+        let replacement = made.replacement
+        undoLearning?.capitalizationUndone(replacement.rule, previous: replacement.previous,
+                                           learnedName: capitalizer?.learnedName(in: replacement))
+        let result = (replacement.capitalized.count + made.breakLength, Array(replacement.original), true)
+        observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+        restoredByUndo = mirror.phraseText
+        return result
+    }
+
+    /// The word and any capitalisation to undo are gone: the cursor moved, or the text changed out of sight.
+    private func forgetWord() {
+        strayEnter = StrayEnterFilter()
+        capitalizer?.last = nil
+        wordStartsWithUserCapital = false
+        restoredByUndo = nil
     }
 
     /// The user's gõ tắt, for Vikey only: Gõ Nhanh expands its own copy (`RustBridge.syncShortcuts`), so the
@@ -167,6 +333,7 @@ public final class EngineRouter {
     private static let digitKeys: Set<UInt16> = [29, 18, 19, 20, 21, 23, 22, 26, 28, 25]
 
     private static let spaceKey: UInt16 = 49
+    private static let returnKeys: Set<UInt16> = [36, 76]
     /// Keys besides Space that end a word for shortcuts in Gõ Nhanh (core/src/engine/mod.rs: Return/Enter and
     /// `break_key_to_char`): `breakKeys` without Tab, Esc and the arrows; digits with Shift.
     private static let shortcutBreakKeys = breakKeys.subtracting([48, 53, 123, 124, 125, 126])
@@ -183,6 +350,7 @@ public final class EngineRouter {
     /// restore shortcut, Secure Input, other input sources, an app switch (ruling R20).
     public func discardPending() {
         mirror.discard()
+        forgetWord()
     }
 
     /// Gõ Nhanh's input method: 0 = Telex, 1 = VNI.
@@ -190,6 +358,7 @@ public final class EngineRouter {
         guard method != self.method else { return }
         self.method = method
         vikey?.resetContext()
+        forgetWord()
         refresh()
     }
 
@@ -226,6 +395,7 @@ public final class EngineRouter {
     public func clear() {
         vikey?.resetContext()
         mirror.reset()
+        forgetWord()
     }
 
     /// Recomputes `fallbackReason`, building Vikey the first time it is needed.
@@ -237,8 +407,10 @@ public final class EngineRouter {
             vikey = makeVikey()
             if let engine = vikey as? VikeyEngine {
                 vikeyEngine = engine
-                undoLearning = makeUndoLearning()
-                undoLearning?.install()
+                let learning = makeUndoLearning()
+                undoLearning = learning
+                learning.install()
+                capitalizer = AutoCapitalizer(learned: learning.learnedNames)
             }
             vikey?.setVietnamese(vietnamese)
             vikey?.setAutoSwitch(autoSwitch)

@@ -56,6 +56,28 @@ final class TextMirrorTests: XCTestCase {
         XCTAssertEqual(rec.phrases, ["Xin chào, bạn", "Dòng hai"])
     }
 
+    /// Spec 17.1: the phrase's words before the cursor, and whether the current word starts the phrase.
+    func testPhraseWordsAndPhraseStart() {
+        let mirror = TextMirror()
+        XCTAssertEqual(mirror.phraseWords, [])
+        XCTAssertTrue(mirror.atPhraseStart)
+        type("Hùng", into: mirror)
+        XCTAssertEqual(mirror.phraseWords, ["Hùng"])
+        XCTAssertTrue(mirror.atPhraseStart)
+        type(", anh  Hùng", into: mirror)
+        XCTAssertEqual(mirror.phraseWords, ["Hùng", "anh", "Hùng"], "punctuation and extra spaces dropped")
+        XCTAssertFalse(mirror.atPhraseStart)
+        type(". Lan", into: mirror)
+        XCTAssertEqual(mirror.phraseWords, ["Lan"], "a new phrase after '. '")
+        XCTAssertTrue(mirror.atPhraseStart)
+        type(".vn", into: mirror)
+        XCTAssertEqual(mirror.phraseWords, ["Lan", "vn"], "'.' inside a token stays in the phrase")
+        XCTAssertFalse(mirror.atPhraseStart)
+        mirror.apply(deleteCount: 50, insert: Array("an"))
+        XCTAssertEqual(mirror.phraseWords, [], "unknown text before the cursor")
+        XCTAssertTrue(mirror.atPhraseStart, "unknown counts as the start")
+    }
+
     func testAppliesEngineEdits() {
         let mirror = TextMirror()
         let rec = Recorder(mirror)

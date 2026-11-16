@@ -51,5 +51,11 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | K1 | Phím đi thẳng · ô đăng nhập | Safari, một trang đăng nhập: gõ `nguyenvana` vào ô Email hoặc Username khi đang bật tiếng Việt: chữ giữ nguyên, không thành "nguyễnvana". | — | [ ] |
 | K2 | Phím đi thẳng · điều khiển từ xa | Điều khiển một máy Windows qua MacViewer, TeamViewer hoặc AnyDesk, bật bộ gõ bên Windows: gõ `tieengs vieejt` ra "tiếng việt" một lần, không bị lỗi hay bỏ dấu hai lần. | — | [ ] |
 | K3 | Không học mật khẩu | Bật "Đề xuất gõ tắt". Trong Terminal chạy `sudo -k; sudo true` ba lần, gõ mật khẩu rồi Enter; trong TextEdit gõ một từ trộn chữ và số (ví dụ `Thu@2024`) rồi Enter ba lần: không có gợi ý gõ tắt nào. | — | [ ] |
+| D1 | 4D · Tự viết hoa tên riêng | Vikey, tiếng Việt, Notes: gõ `tooi owr haf nooij ` ra "tôi ở Hà Nội". | — | [ ] |
+| D2 | 4D · Tự viết hoa tên riêng | Vikey, Notes: gõ `nguyeenx vawn an ` ra "Nguyễn Văn An". | — | [ ] |
+| D3 | 4D · Tên tự học | Vikey, Notes: gõ `anh Hufng ` (tự gõ chữ H hoa) ở hai câu khác nhau, rồi gõ `anh hufng ` (chữ thường): ra "anh Hùng". Cài đặt → Nâng cao → "Tên đã học" có dòng "Hùng". | — | [ ] |
+| D4 | 4D · Hoàn tác viết hoa | Vikey, Notes: gõ `owr haf nooij ` (LeanKeys viết thành "ở Hà Nội"), bấm ⌫ ngay: trả lại chữ thường "ở hà nội". | — | [ ] |
+| D5 | 4D · Ký tự gõ dính khi Enter | Vikey, Notes: gõ "xong." rồi bấm `\` và Enter gần như cùng lúc: dòng kết thúc ở "xong.", không có `\`. | — | [ ] |
+| D6 | 4D · Ký tự gõ dính khi Enter | Vikey, Terminal: gõ `\` rồi Enter: `\` vẫn được giữ. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 57 ô đều đạt.
+Chỉ gõ `yes` khi cả 63 ô đều đạt.

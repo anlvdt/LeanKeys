@@ -115,7 +115,8 @@ final class UISnapshotTests: XCTestCase {
         }
     }
 
-    /// 4C: the "Tự sửa và tự học" card with fake rules (a memory-only book, never the real store).
+    /// 4C + 4D: the "Tự sửa và tự học" card with fake rules, a capitalisation rule and fake learned names (memory
+    /// only, never the real stores).
     @MainActor
     func testRenderUndoLearningImages() throws {
         try XCTSkipUnless(
@@ -125,8 +126,13 @@ final class UISnapshotTests: XCTestCase {
         let outDir = Self.outDir()
         try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
-        let model = UndoLearning.preview(records: [("its", "about"), ("cos", ""), ("cos", ""), ("user", "new")])
-        XCTAssertEqual(model.rules.count, 3)
+        let model = UndoLearning.preview(
+            records: [("its", "about"), ("cos", ""), ("cos", ""), ("cap:hà nội", "ở"), ("user", "new")],
+            names: [("Hùng", "anh"), ("Hùng", "anh"), ("Thảo", nil), ("Thảo", nil), ("Thảo", nil)]
+        )
+        XCTAssertEqual(model.rules.count, 4)
+        XCTAssertEqual(model.names.map(\.form), ["Thảo", "Hùng"])
+        XCTAssertTrue(model.rules.contains { $0.text == "cap:hà nội" })
         for (label, name) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let appearance = try XCTUnwrap(NSAppearance(named: name))
             let card = UndoLearningSection(model: model)

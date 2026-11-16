@@ -9,15 +9,25 @@ import VikeyShim
 /// engine; the switches and `rules` live on main too. The key path does no I/O: the filter is one `shouldKeep`
 /// lookup, and `afterPress` hands records to a serial background queue (`UndoRuleBook.record` may be O(n) under its
 /// lock). Learned rules apply everywhere; only learning skips Secure Input, password fields and excluded apps.
+///
+/// Spec 17.1 for the router: the "Tự viết hoa tên riêng" switch, the learned names, and capitalisation undos, which
+/// go into the same rule book as "cap:" rules. Learning a name runs on the key-handling thread (ruling R4: its
+/// dictionary check replays the engine) and reads the context only for a word the user capitalised.
 /// Nothing typed is logged.
 public final class UndoLearning: ObservableObject {
     public static let doubleKeyFixKey = "LeanKeys.doubleKeyFix", learningKey = "LeanKeys.undoLearning"
+    /// Spec 17.3: "Tự viết hoa tên riêng".
+    public static let autoCapitalizeKey = "LeanKeys.autoCapitalize"
+    /// Spec 17.3: "Bỏ ký tự gõ dính khi Enter".
+    public static let strayEnterKey = "LeanKeys.strayEnter"
 
-    /// The app's instance: rules in `undo-rules.bin`, switches in `UserDefaults.standard`.
+    /// The app's instance: rules in `undo-rules.bin`, learned names in `learned-names.bin`, switches in
+    /// `UserDefaults.standard`.
     public static let shared = UndoLearning(
         book: UndoRuleBook(store: KeychainEncryptedFileStore(url: storeURL, keychainService: keychainService)),
         defaults: .standard,
-        context: LearnContextReader.current)
+        context: LearnContextReader.current,
+        names: .shared)
 
     static let keychainService = "io.github.anlvdt.leankeys.undo"
     static var storeURL: URL {
@@ -41,6 +51,22 @@ public final class UndoLearning: ObservableObject {
         didSet { defaults.set(learning, forKey: Self.learningKey) }
     }
 
+    /// Spec 17.1. Off: nothing is capitalised and no name is learned; learned names and rules stay.
+    @Published public var autoCapitalize: Bool {
+        didSet { defaults.set(autoCapitalize, forKey: Self.autoCapitalizeKey) }
+    }
+
+    /// Spec 17.2, read by the router on the key-handling thread. Off: no key next to Enter is deleted or dropped.
+    @Published public var strayEnter: Bool {
+        didSet { defaults.set(strayEnter, forKey: Self.strayEnterKey) }
+    }
+
+    /// Names learned from the user's own capitals (spec 17.1.3).
+    public let learnedNames: LearnedNames
+
+    /// `learnedNames.names` for the settings card (spec 17.3), most recently used first; updated on main.
+    @Published public private(set) var names: [LearnedName]
+
     private let book: UndoRuleBook
     private let defaults: UserDefaults
     private let context: () -> LearnContext
@@ -49,17 +75,29 @@ public final class UndoLearning: ObservableObject {
     /// The instance the C filter asks. Set by `install()`; read on the key-handling thread, which also installs.
     fileprivate static var installed: UndoLearning?
 
-    /// - Parameter context: where the user is typing; called on the key-handling thread, only when an undo arrives.
-    init(book: UndoRuleBook, defaults: UserDefaults, context: @escaping () -> LearnContext) {
+    /// - Parameters:
+    ///   - context: where the user is typing; called on the key-handling thread, only when an undo arrives or a
+    ///     word the user capitalised could be learned.
+    ///   - names: memory only unless given (only `shared` opens `learned-names.bin`).
+    init(book: UndoRuleBook, defaults: UserDefaults, context: @escaping () -> LearnContext,
+         names: LearnedNames = UndoLearning.memoryNames()) {
         self.book = book
         self.defaults = defaults
         self.context = context
+        learnedNames = names
+        self.names = names.names
         rules = book.rules
         doubleKeyFix = defaults.object(forKey: Self.doubleKeyFixKey) as? Bool ?? true
         learning = defaults.object(forKey: Self.learningKey) as? Bool ?? true
+        autoCapitalize = defaults.object(forKey: Self.autoCapitalizeKey) as? Bool ?? true
+        strayEnter = defaults.object(forKey: Self.strayEnterKey) as? Bool ?? true
         book.onChange = { [weak self] in
             guard let self else { return }
             rules = self.book.rules
+        }
+        names.onChange = { [weak self] in
+            guard let self else { return }
+            self.names = self.learnedNames.names
         }
     }
 
@@ -94,14 +132,58 @@ public final class UndoLearning: ObservableObject {
         }
     }
 
+    // MARK: Capitalisation (spec 17.1)
+
+    /// Whether to leave the capitalisation rule text `text` ("cap:" + lowercased phrase) alone after `previous`:
+    /// the 4C rule book, under the 4C switch, as `filterDecision`.
+    func keepsLowercase(_ text: String, previous: String) -> Bool {
+        learning && book.shouldKeep(before: text, previous: previous)
+    }
+
+    /// The user undid a capitalisation with ⌫: one undo of `text` after `previous` in the rule book (unless
+    /// learning is off or the user is typing somewhere excluded), and one undo of `learnedName` when a learned
+    /// name made it. Key-handling thread; the record runs on the background queue, as in `afterPress`.
+    func capitalizationUndone(_ text: String, previous: String, learnedName: String?) {
+        if let learnedName { learnedNames.undone(word: learnedName) }
+        guard learning, !isExcluded(context()) else { return }
+        // A secret-shaped word before the phrase is never kept as its context (ruling R14).
+        let previous = Exclusions.looksLikeSecret(previous) ? "" : previous
+        recordQueue.async { [book] in
+            book.record(before: text, previous: previous, reverse: false)
+        }
+    }
+
+    /// A word the user typed with a capital mid-phrase, as the router saw it: learned unless capitalisation is off
+    /// or the user is typing somewhere excluded. Key-handling thread (ruling R4: the dictionary check replays the
+    /// engine); the context (up to 2 × 25 ms of AX IPC) is read only here, once per such word, and only for a word
+    /// `LearnedNames` could count (ruling R14).
+    func userCapitalized(_ word: String, previous: String?) {
+        guard autoCapitalize, LearnedNames.looksLikeTypedName(word.precomposedStringWithCanonicalMapping),
+              !isExcluded(context()) else { return }
+        learnedNames.observe(word: word, previous: previous)
+    }
+
+    /// Learned names kept in memory only, with the real dictionary check and the bundled titles.
+    static func memoryNames() -> LearnedNames {
+        LearnedNames(store: nil, hmacKey: nil, titles: Set(ProperNounData.bundled.titles),
+                     isDictionaryWord: LearnedNames.isDictionaryWord)
+    }
+
     public func remove(_ rule: UndoRule) { book.remove(rule) }
 
-    public func removeAll() { book.removeAll() }
+    public func remove(_ name: LearnedName) { learnedNames.remove(name) }
+
+    /// "Xoá tất cả" (spec 17.3): every rule, capitalisation rules included, and every learned name.
+    public func removeAll() {
+        book.removeAll()
+        learnedNames.removeAll()
+    }
 
     /// Waits for queued records and the saves they started, for tests.
     func flush() {
         recordQueue.sync {}
         book.flush()
+        learnedNames.flush()
     }
 
     private func isExcluded(_ context: LearnContext) -> Bool {
@@ -109,6 +191,20 @@ public final class UndoLearning: ObservableObject {
         guard let bundleID = context.bundleID else { return false }
         return Exclusions.defaultBundleIDs.contains(bundleID)
             || (defaults.stringArray(forKey: ShortcutSuggestionsModel.excludedAppsKey) ?? []).contains(bundleID)
+    }
+}
+
+public extension LearnedNames {
+    /// The app's learned names, in `learned-names.bin` with their own Keychain item (spec 17.1.3).
+    static let shared: LearnedNames = {
+        let store = KeychainEncryptedFileStore(url: namesURL, keychainService: "io.github.anlvdt.leankeys.names")
+        return LearnedNames(store: store, hmacKey: try? store.hmacKey(), titles: Set(ProperNounData.bundled.titles),
+                            isDictionaryWord: LearnedNames.isDictionaryWord)
+    }()
+
+    private static var namesURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/LeanKeys/learned-names.bin")
     }
 }
 

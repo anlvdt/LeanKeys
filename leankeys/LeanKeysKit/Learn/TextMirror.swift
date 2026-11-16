@@ -36,8 +36,28 @@ public final class TextMirror {
     /// not known to be whole (no `onWord`, empty `currentWord`) until the next break; the phrase is dropped.
     private var wordUnknown = false
     private var phraseUnknown = false
+    /// What was typed on the current line, as on screen: since the last newline, or since the line's start became
+    /// unknown (before the first newline, after a cursor move or a bypass, a delete past what is held, an overflow).
+    /// Sentence ends, which end the phrase, keep it.
+    private var line: [Character] = []
+    /// `line` starts at the line's start.
+    private var lineStartKnown = false
+
+    /// Longest line held; past it the oldest half is dropped and the line's start becomes unknown.
+    static let lineLimit = 2_000
 
     public init() {}
+
+    /// The current line before the cursor, as on screen; nil when its start is unknown (see `typedTail`).
+    public var lineBeforeCursor: String? {
+        lineStartKnown ? String(line) : nil
+    }
+
+    /// The end of the current line that the mirror saw typed, as on screen: the whole line when its start is known,
+    /// else what was typed since the cursor last moved (empty right after). Spec 17.2 reads it.
+    public var typedTail: String {
+        String(line)
+    }
 
     /// The word being typed: everything since the last word break. Empty right after a break or a reset.
     public var currentWord: String {
@@ -53,9 +73,46 @@ public final class TextMirror {
         return !(before == " " || before == "\n" || before == "\r" || before == "\t")
     }
 
+    /// The current phrase's words before the cursor, oldest first, ending with the word being typed: runs of
+    /// letters and digits, punctuation dropped. Empty while the word being typed is unknown.
+    public var phraseWords: [String] {
+        phraseText.map { Self.words(in: $0) } ?? []
+    }
+
+    /// The word being typed is the phrase's first, as far as the mirror knows. Also true when what comes before it
+    /// is unknown (after an overflow or an edit past the mirror's start), so a caller that skips phrase-initial words
+    /// skips those too.
+    public var atPhraseStart: Bool {
+        if overflowed || phraseUnknown || wordUnknown { return true }
+        guard pendingTerminator == nil else { return false }
+        return !buffer[..<wordStart].contains(where: Self.isWordCharacter)
+    }
+
+    /// The current phrase's text before the cursor, as on screen; nil while the word being typed is unknown. A
+    /// pending `. ! ?` is left out: it joins the phrase only if a character other than Space or Return follows.
+    var phraseText: String? {
+        wordUnknown ? nil : String(buffer)
+    }
+
+    /// Runs of letters and digits in `text`, oldest first.
+    static func words(in text: String) -> [String] {
+        text.split(whereSeparator: { !isWordCharacter($0) }).map(String.init)
+    }
+
+    static func isWordCharacter(_ c: Character) -> Bool {
+        c.isLetter || c.isNumber
+    }
+
     /// An engine edit: delete `deleteCount` characters before the cursor, then insert `insert`. Inserted breaks
     /// commit exactly like typed ones.
     public func apply(deleteCount: Int, insert: [Character]) {
+        if deleteCount > 0 {
+            if deleteCount <= line.count {
+                line.removeLast(deleteCount)
+            } else {
+                forgetLine()
+            }
+        }
         var deleteCount = deleteCount
         if deleteCount > 0, pendingTerminator != nil {
             // The pending terminator is the last character on screen: the word before it is current again.
@@ -69,11 +126,12 @@ public final class TextMirror {
 
     /// A key that reached the app by itself.
     public func typed(_ c: Character) {
+        trackLine(c)
         if let pending = pendingTerminator {
             pendingTerminator = nil
             if Self.closesPending.contains(c) {
                 emitPhrase()
-                discard()
+                clearPhrase()
                 return
             }
             append(pending)
@@ -88,7 +146,7 @@ public final class TextMirror {
             wordStart = buffer.count
         } else if c == "\n" || c == "\r" {
             emitPhrase()
-            discard()
+            clearPhrase()
         } else if c == "\t" {
             // Tab ends the word (shortcuts expand there) and moves focus in most fields: a cursor move.
             reset()
@@ -106,9 +164,21 @@ public final class TextMirror {
     }
 
     /// Bypass, Secure Input and app switch (Cmd/Ctrl chords, Option+Backspace, restore shortcut, unknown keys, the
-    /// frontmost app changing): forget the word and the phrase, emit nothing. An app switch discards (ruling R20):
-    /// by the time it is seen the phrase would be credited to the new app, past its exclusion and secure-field checks.
+    /// frontmost app changing): forget the word, the phrase and the line, emit nothing. An app switch discards
+    /// (ruling R20): by the time it is seen the phrase would be credited to the new app, past its exclusion and
+    /// secure-field checks.
     public func discard() {
+        clearPhrase()
+        forgetLine()
+    }
+
+    private func forgetLine() {
+        line.removeAll()
+        lineStartKnown = false
+    }
+
+    /// Ends the phrase on the same line: the line stays known.
+    private func clearPhrase() {
         buffer.removeAll()
         wordStart = 0
         overflowed = false
@@ -141,7 +211,7 @@ public final class TextMirror {
 
     private func delete(_ count: Int) {
         guard count <= buffer.count else {
-            discard()
+            clearPhrase()
             wordUnknown = true
             phraseUnknown = true
             return
@@ -149,6 +219,20 @@ public final class TextMirror {
         buffer.removeLast(count)
         // Deleted back into the previous word, which is current again.
         if wordStart > buffer.count { findWordStart() }
+    }
+
+    /// `line` after `c` reaches the screen. Tab is a cursor move: `typed` resets, which forgets the line.
+    private func trackLine(_ c: Character) {
+        if c == "\n" || c == "\r" {
+            line.removeAll()
+            lineStartKnown = true
+        } else {
+            line.append(c)
+            if line.count > Self.lineLimit {
+                line.removeFirst(line.count / 2)
+                lineStartKnown = false
+            }
+        }
     }
 
     private func findWordStart() {
