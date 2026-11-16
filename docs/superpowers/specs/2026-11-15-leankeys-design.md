@@ -538,6 +538,8 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 ### 17.1 Tự viết hoa tên riêng
 **Nguyên tắc: viết hoa sai còn tệ hơn không viết hoa.** Mỗi quy tắc dưới đây đã được đo trên hai kho câu của Vikey (`chat_messages` và `synthetic_val`, chữ hoa đúng chuẩn). Cách đo: hạ toàn bộ chữ về chữ thường, gõ lại từng từ, rồi so với bản gốc, không tính từ đầu câu. Bản dựng thử: quy tắc cố định viết hoa **đúng 302 lần, sai 0 lần**; thêm phần tự học (17.1.3) thì đúng 777 lần, sai 0 lần (2 lần lệch do bản gốc viết hoa toàn bộ, `FOMO`).
 
+**Sửa sau review cuối (ruling R11, 2026-11-16).** Cách đo trên hạ hết chữ về chữ thường nên không thấy hai loại lỗi: chữ hoa đầu câu của người dùng bị coi là dấu hiệu tên ("Mai anh đi đâu thế" → "Mai Anh"), và cụm từ thường chứa một mục trong danh sách ("cập nhật bản mới", "lưu văn bản", "xã hội an toàn", "bàn về hòa bình"). Đã sửa dữ liệu, từ chỉ nơi chốn và thêm các chốt chặn ghi ở 17.1.1–17.1.2. Đo thêm bằng kho câu âm `tools/capbench/negatives.txt` (55 câu thường, chữ hoa đúng chuẩn, **gõ lại đúng như viết**, kể cả chữ hoa đầu câu; mọi từ bị đổi đều tính là sai): trước khi sửa sai 39 lần, sau khi sửa **sai 0 lần**. Trên hai kho câu cũ vẫn là đúng 302, sai 0 (cố định) và đúng 777, sai 2 `FOMO` (thêm tự học).
+
 **Thời điểm.** Khi một từ được chốt bằng phím cách hoặc dấu câu, LeanKeys xét các từ vừa gõ trong `TextMirror` (cùng cụm, không vượt qua dấu câu). Nếu khớp một quy tắc, LeanKeys thay các từ đó bằng dạng viết hoa: xoá N ký tự rồi gõ lại, phím ngắt vẫn đi như thường. Gõ tắt (4B) vẫn được xét trước.
 
 **Không viết hoa trong terminal và trình soạn code** (cùng một danh sách app với 17.2, ruling R12): ở đó chữ là lệnh hay mã, phân biệt hoa thường (tên nhánh, đường dẫn, tên biến), và trong terminal lệnh chạy ngay khi Enter nên không kịp ⌫. Cũng không viết hoa một từ dính với ký hiệu (`an@tiki.vn`, `~/tiki/`, `#tiki`, `ten-tiki`): chỉ xét từ gồm toàn chữ và số (ruling R13).
@@ -549,13 +551,15 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 - Tên nước và vùng: Việt Nam, Trung Quốc, Nhật Bản, Hàn Quốc, Hoa Kỳ, Thái Lan, Campuchia, Singapore, Malaysia, Indonesia, Philippines, Ấn Độ, Canada, Đài Loan, Hồng Kông, Triều Tiên, Châu Âu, Châu Á, Châu Phi, Châu Mỹ, Đông Nam Á, Liên Hợp Quốc, Myanmar.
 - Không thêm "Tết": kho câu viết cả "Tết" lẫn "tết" (11 lần chữ thường), nên viết hoa sẽ bị tính là sai.
 - So khớp không phân biệt kiểu đặt dấu (`Thanh Hoá` và `Thanh Hóa`, `Khánh Hoà` và `Khánh Hòa`). Kết quả là chính các từ người dùng đã gõ, chỉ viết hoa chữ cái đầu, giữ nguyên kiểu đặt dấu của họ.
-- **Cụm trùng từ thường** chỉ được viết hoa khi từ (hoặc cặp từ) ngay trước là một từ chỉ nơi chốn: `tỉnh`, `thành phố`, `tp`, `ở`, `tại`, `về`, `đến`, `quê`, `từ`, `ra`, `vào`, `đi`. Các cụm đó là: hòa bình, thái bình, cao bằng, hải dương, phú thọ, vĩnh phúc, bình định, an giang, long an, hà nam, quảng nam, gia lai, bình dương, nam định, tân bình, bình thạnh, phú nhuận, cầu giấy, ba đình, bà rịa, thanh hóa, phú yên, hưng yên, vĩnh long, châu á, châu âu, châu phi, châu mỹ, hoa kỳ.
+- **Cụm trùng từ thường** chỉ được viết hoa khi từ (hoặc cặp từ) ngay trước là một từ chỉ nơi chốn: `tỉnh`, `thành phố`, `tp`, `ở`, `tại`, `đến`, `quê`, `từ`, `ra`, `vào`, `đi`. Không có `về` (ruling R11): trong "bàn về hòa bình", "về" nghĩa là "liên quan đến". Các cụm đó là: hòa bình, thái bình, cao bằng, hải dương, phú thọ, vĩnh phúc, bình định, an giang, long an, hà nam, quảng nam, gia lai, bình dương, nam định, tân bình, bình thạnh, phú nhuận, cầu giấy, ba đình, bà rịa, thanh hóa, phú yên, hưng yên, vĩnh long, châu á, châu âu, châu phi, châu mỹ, hoa kỳ.
 - Cụm dài được ưu tiên: "thừa thiên huế" thắng "huế"; "hồ chí minh" thắng họ "hồ".
+- **Không viết hoa sau một số từ** (ruling R11; `placeNotAfter` trong `ProperNouns.json`), vì khi đó là cụm từ thường: "nhật bản" sau `cập` ("cập nhật bản mới"); "hội an" sau `hiệp`, `xã`, `đại`, `quốc`, `đoàn`, `học`, `nội`, `lễ`, `cơ`, `giáo` ("xã hội an toàn", "hiệp hội an ninh"; luật chạy khi chốt "an", trước khi gõ từ sau).
 
 **17.1.2 Họ tên.**
 - **Họ:** nguyễn, trần, lê, phạm, hoàng, huỳnh, phan, vũ, võ, đặng, bùi, đỗ, hồ, ngô, dương, lý, đinh, đoàn, trương, lâm, mai, tô, trịnh, đào, cao, lương, hà, lưu, tạ, châu, quách, thái, vương, kiều.
-- **Họ luôn viết hoa** (không trùng từ thường): nguyễn, huỳnh, trịnh, quách. Không thêm phạm (vi phạm), trương (khai trương), đặng: đo thấy viết hoa sai.
-- **Tên lót:** văn, thị. Khi đứng ngay sau một họ, cả họ và tên lót được viết hoa.
+- **Họ luôn viết hoa** (không trùng từ thường): chỉ nguyễn. Không thêm phạm (vi phạm), trương (khai trương), đặng: đo thấy viết hoa sai. Bỏ quách ("bỏ quách đi"), trịnh ("trịnh trọng"), huỳnh ("đèn huỳnh quang") theo ruling R11: ba họ này giờ cần chữ hoa có sẵn như các họ khác.
+- **Chữ hoa đầu cụm không phải dấu hiệu tên** (ruling R11): từ đầu tiên của cụm (sau `.` `!` `?`, xuống dòng, hoặc khi không biết gì đứng trước) được viết hoa vì là đầu câu, nên ở mọi quy tắc dưới đây "đã viết hoa" không tính chữ hoa đó, trừ khi từ đó là họ luôn viết hoa. "Mai anh đi đâu thế", "Lương tâm", "Thái bình", "Vương quốc Anh" giữ nguyên.
+- **Tên lót:** văn, thị. Khi đứng ngay sau một họ luôn viết hoa, hoặc một họ đã viết hoa (không tính chữ hoa đầu cụm), cả họ và tên lót được viết hoa (ruling R11: "lưu văn bản", "trần thị" gõ thường giữ nguyên).
 - **Sau "Họ Văn/Thị",** từ kế tiếp luôn được viết hoa ("Nguyễn Văn Tèo").
 - **Tên phổ biến** (danh sách khoảng 130 tên trong bản dựng thử `data.py`, ví dụ an, anh, bình, dũng, hùng, lan, linh, mai, minh, nam, ngọc, phương, quân, thảo, trang, tuấn, vân, yến…):
   - đứng sau một họ đã viết hoa, hoặc sau một họ luôn viết hoa: viết hoa cả hai;
@@ -592,11 +596,11 @@ Thẻ "Tự sửa và tự học" (mục 12.3) có thêm:
 
 ### 17.4 Test
 - **Đơn vị:**
-  - Mỗi quy tắc ở 17.1.1–17.1.2, kèm các ca phải giữ chữ thường: "vi phạm", "khai trương", "hòa bình thế giới", "nguyễn đi chợ" → "Nguyễn đi chợ", "anh hùng" khi chưa học.
+  - Mỗi quy tắc ở 17.1.1–17.1.2, kèm các ca phải giữ chữ thường: "vi phạm", "khai trương", "hòa bình thế giới", "nguyễn đi chợ" → "Nguyễn đi chợ", "anh hùng" khi chưa học, và các câu của ruling R11 ("Mai anh đi đâu thế", "cập nhật bản mới", "lưu văn bản", "bỏ quách đi", "trịnh trọng", "đèn huỳnh quang", "hiệp hội an ninh", "xã hội an toàn", "bàn về hòa bình").
   - Tên tự học: ngưỡng 2 lần; không học từ đầu câu, từ do LeanKeys viết hoa, hay trong ô mật khẩu; file lưu không chứa tên chưa đạt ngưỡng; LRU 2.000.
   - Hoàn tác bằng ⌫.
   - Ký tự gõ dính: trước Enter, sau Enter, đúng 100 ms (có) và 101 ms (không); cặp đang mở; app bị loại; chế độ Gõ Nhanh.
-- **Đo lại** bằng `tools/capbench/` (bản dựng thử, chuyển vào repo): quy tắc cố định không có lần viết hoa sai nào trên hai kho câu.
+- **Đo lại** bằng `tools/capbench/` (bản dựng thử, chuyển vào repo): quy tắc cố định không có lần viết hoa sai nào trên hai kho câu, và không đổi từ nào trong kho câu âm `negatives.txt` (gõ lại đúng như viết).
 - **Thử tay:**
   - gõ "toi o ha noi" → "tôi ở Hà Nội";
   - gõ "nguyen van an" → "Nguyễn Văn An";

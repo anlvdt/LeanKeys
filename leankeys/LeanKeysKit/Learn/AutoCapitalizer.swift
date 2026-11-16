@@ -19,6 +19,7 @@ final class AutoCapitalizer {
         let previous: String
         /// What the rules were asked, and what they answered.
         let words: [String]
+        let firstWordStartsPhrase: Bool
         let capitalization: Capitalization
     }
 
@@ -52,7 +53,9 @@ final class AutoCapitalizer {
         let run = phraseText[runStart...]
         let ranges = Self.wordRanges(in: run)
         let words = ranges.map { String(run[$0]) }
-        guard let capitalization = rules.capitalization(for: words),
+        // The run's first word is the phrase's first when no word comes before it (an opening quote or bracket may).
+        let firstWordStartsPhrase = !phraseText[..<runStart].contains(where: TextMirror.isWordCharacter)
+        guard let capitalization = rules.capitalization(for: words, firstWordStartsPhrase: firstWordStartsPhrase),
               capitalization.wordCount > 0, capitalization.wordCount <= words.count,
               capitalization.words.count == capitalization.wordCount else { return nil }
 
@@ -72,12 +75,15 @@ final class AutoCapitalizer {
         let original = String(run[ranges[first].lowerBound...])
         guard capitalized != original else { return nil }
         return Replacement(original: original, capitalized: capitalized, rule: rule, previous: previous,
-                           words: words, capitalization: capitalization)
+                           words: words, firstWordStartsPhrase: firstWordStartsPhrase,
+                           capitalization: capitalization)
     }
 
     /// The learned name that made `replacement`, lowercased, or nil when the fixed rules alone made it.
     func learnedName(in replacement: Replacement) -> String? {
-        guard fixedRules.capitalization(for: replacement.words) != replacement.capitalization else { return nil }
+        guard fixedRules.capitalization(for: replacement.words,
+                                        firstWordStartsPhrase: replacement.firstWordStartsPhrase)
+                != replacement.capitalization else { return nil }
         return replacement.words.last?.lowercased()
     }
 

@@ -177,8 +177,8 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(router).type("nguyeenx ⌫."), "nguyễn.")
         XCTAssertEqual(line(router).type("tooi o haf nooij ⌫ "), "tôi o hà nội ")
         XCTAssertEqual(line(router).type("tooi o haf nooij ⌫ ddi "), "tôi o hà nội đi ", "the break ends it")
-        // Edited after the undo: judged again (no rule keeps "huỳnh" after one contextless undo).
-        XCTAssertEqual(line(router).type("huyfnh ⌫a⌫ "), "Huỳnh ")
+        // Edited after the undo: judged again (no rule keeps "sa pa" after one contextless undo).
+        XCTAssertEqual(line(router).type("sa pa ⌫k⌫ "), "Sa Pa ")
         // The next occurrence after one contextless undo (a rule needs two) is capitalised again.
         let fresh = makeRouter()
         XCTAssertEqual(line(fresh).type("nguyeenx ⌫ "), "nguyễn ")
@@ -202,6 +202,9 @@ final class AutoCapitalizerTests: XCTestCase {
 
     func testNameChain() {
         let router = makeRouter()
+        // Ruling R11: a sentence-initial capital typed with Shift is sentence case, not a name; mid-phrase it is.
+        XCTAssertEqual(line(router).type("Mai anh "), "Mai anh ")
+        XCTAssertEqual(line(router).type("gawpj Mai anh "), "gặp Mai Anh ")
         XCTAssertEqual(line(router).type("nguyeenx vawn an "), "Nguyễn Văn An ")
         XCTAssertEqual(line(router).type("nguyeenx ddi chowj "), "Nguyễn đi chợ ")
     }

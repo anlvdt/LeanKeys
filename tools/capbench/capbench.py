@@ -6,15 +6,21 @@ exactly as ProperNounRules does. The result is compared with the original casing
   TP  capitalised and capitalised in the original
   FP  capitalised but lowercase in the original (all-caps originals such as FOMO count here too)
   missed  capitalised in the original but not by the rules
+Then the negatives corpus (ordinary sentences, tools/capbench/negatives.txt) is retyped as written, sentence-initial
+capitals included, with the fixed rules: any word the rules change there is an FP.
 The lists come from leankeys/LeanKeysKit/Resources/ProperNouns.json, the file the app ships.
 
+  python3 tools/capbench/capbench.py      # the two Vikey corpora below, then the negatives
   python3 tools/capbench/capbench.py vendor/vikey/Tools/autoswitch/sim/corpus/chat_messages.txt \
       vendor/vikey/Tools/autoswitch/sim/corpus/synthetic_val.txt
 """
 import argparse, collections, json, os, re, sys, unicodedata
 
-DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "leankeys", "LeanKeysKit", "Resources",
-                    "ProperNouns.json")
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = os.path.join(HERE, "..", "..", "leankeys", "LeanKeysKit", "Resources", "ProperNouns.json")
+CORPORA = [os.path.join(HERE, "..", "..", "vendor", "vikey", "Tools", "autoswitch", "sim", "corpus", f)
+           for f in ("chat_messages.txt", "synthetic_val.txt")]
+NEGATIVES = os.path.join(HERE, "negatives.txt")
 
 
 TONES = {"\u0300", "\u0301", "\u0303", "\u0309", "\u0323"}  # grave, acute, tilde, hook above, dot below
@@ -31,31 +37,52 @@ def load(path):
     d = json.load(open(path, encoding="utf-8"))
     n = lambda xs: {" ".join(key(w) for w in x.split()) for x in xs}
     places = {tuple(key(w) for w in p.split()) for p in d["places"] + d["singleWords"]}
+    not_after = {" ".join(key(w) for w in p.split()): n(ws) for p, ws in d["placeNotAfter"].items()}
     return dict(places=places, longest=max(len(k) for k in places), ambiguous=n(d["ambiguousPlaces"]),
-                cues=n(d["placeCues"]), surnames=n(d["surnames"]), sure=n(d["sureSurnames"]),
+                cues=n(d["placeCues"]), not_after=not_after, surnames=n(d["surnames"]), sure=n(d["sureSurnames"]),
                 middle=n(d["middleNames"]), given=n(d["givenNames"]), titles=n(d["titles"]))
 
 
 def cap(w):
-    return w[:1].upper() + w[1:]
+    """As ProperNounRules.capitalized: only an all-lowercase word gets a capital; any other is left as typed."""
+    return w[:1].upper() + w[1:] if w == w.lower() else w
 
 
-def run(lines, D, learned=None, show=0, label=""):
+def touchable(w):
+    """As ProperNounRules.isTouchable: all lowercase, or capitalised (`iPhone`, `FOMO` are never touched)."""
+    return w == w.lower() or (w[:1].isupper() and w[1:] == w[1:].lower())
+
+
+def run(lines, D, learned=None, show=0, label="", as_typed=False):
+    """as_typed: retype each word as written (the negatives) instead of lowercased; then every word the rules
+    change is an FP, sentence-initial words included."""
     learned = learned or {}
-    PL, MAXN, AMBIGUOUS, CUES = D["places"], D["longest"], D["ambiguous"], D["cues"]
+    PL, MAXN, AMBIGUOUS, CUES, NOT_AFTER = D["places"], D["longest"], D["ambiguous"], D["cues"], D["not_after"]
     SURNAMES, SURE, MIDDLE, GIVEN, TITLES = D["surnames"], D["sure"], D["middle"], D["given"], D["titles"]
     tp = fp = fn = 0
     ex = collections.Counter(); exfn = collections.Counter()
     for line in lines:
         toks = re.findall(r"\w+|[^\w\s]", unicodedata.normalize("NFC", line))
         out = []; orig = []
+        phrase_first = None  # index of the phrase's first word: its capital is sentence case, not a name cue
         for t in toks:
             if not t[0].isalnum():
                 out.append(t); orig.append(t)
+                if t in ".!?":
+                    phrase_first = None
                 continue
-            low = t.lower(); out.append(low); orig.append(t); kw = key(low)
+            low = t.lower(); out.append(t if as_typed else low); orig.append(t); kw = key(low)
             i = len(out) - 1
+            if phrase_first is None:
+                phrase_first = i
+            if not touchable(out[i]):
+                continue
             words = [j for j in range(len(out)) if out[j][0].isalnum()]
+
+            def upper(k):
+                """A capital on screen that marks a name: not the phrase's first word's, unless a sure surname."""
+                return out[k][:1].isupper() and (k != phrase_first or key(out[k]) in SURE)
+
             # Place phrases ending here, longest first, never across punctuation.
             for n in range(MAXN, 0, -1):
                 if len(words) < n:
@@ -68,28 +95,35 @@ def run(lines, D, learned=None, show=0, label=""):
                     prev = [key(out[k]) for k in words if k < idx[0]][-2:]
                     if " ".join(phrase) in AMBIGUOUS and not (prev and (prev[-1] in CUES or " ".join(prev) in CUES)):
                         break
+                    if prev and prev[-1] in NOT_AFTER.get(" ".join(phrase), ()):
+                        break
                     for k in idx:  # the user's own words, not the list's spelling
                         out[k] = cap(out[k])
                     break
             # Names.
-            prevw = [out[k] for k in words[:-1]][-3:]
+            p1 = words[-2] if len(words) >= 2 else None
+            p2 = words[-3] if len(words) >= 3 else None
             if kw in SURE:
-                out[i] = cap(low)
-            elif kw in MIDDLE and prevw and key(prevw[-1]) in SURNAMES:
-                out[i] = cap(low); out[words[-2]] = cap(out[words[-2]])
-            elif prevw and prevw[-1][:1].isupper() and key(prevw[-1]) in MIDDLE and len(prevw) >= 2 \
-                    and key(prevw[-2]) in SURNAMES:
-                out[i] = cap(low)
-            elif kw in GIVEN and prevw and key(prevw[-1]) in SURNAMES \
-                    and (key(prevw[-1]) in SURE or prevw[-1][:1].isupper()):
-                out[i] = cap(low); out[words[-2]] = cap(out[words[-2]])
-            elif kw in GIVEN and prevw and prevw[-1][:1].isupper() and len(prevw) >= 2 and prevw[-2][:1].isupper() \
-                    and key(prevw[-2]) in SURNAMES | MIDDLE:
-                out[i] = cap(low)
-            elif low in learned.get("title", set()) and prevw and key(prevw[-1]) in TITLES:
-                out[i] = cap(low)
-            elif low in learned.get("any", {}):
+                out[i] = cap(out[i])
+            elif kw in MIDDLE and p1 is not None and key(out[p1]) in SURNAMES \
+                    and (key(out[p1]) in SURE or upper(p1)):
+                out[i] = cap(out[i]); out[p1] = cap(out[p1])
+            elif p2 is not None and upper(p1) and key(out[p1]) in MIDDLE and key(out[p2]) in SURNAMES:
+                out[i] = cap(out[i])
+            elif kw in GIVEN and p1 is not None and key(out[p1]) in SURNAMES \
+                    and (key(out[p1]) in SURE or upper(p1)):
+                out[i] = cap(out[i]); out[p1] = cap(out[p1])
+            elif kw in GIVEN and p2 is not None and upper(p1) and upper(p2) and key(out[p2]) in SURNAMES | MIDDLE:
+                out[i] = cap(out[i])
+            elif out[i] == low and low in learned.get("title", set()) and p1 is not None and key(out[p1]) in TITLES:
+                out[i] = cap(out[i])
+            elif out[i] == low and low in learned.get("any", {}):
                 out[i] = learned["any"][low]
+        if as_typed:
+            for a, b in zip(out, orig):
+                if a != b:
+                    fp += 1; ex[b] += 1
+            continue
         st = True
         for a, b in zip(out, orig):
             if not b[0].isalnum():
@@ -102,6 +136,11 @@ def run(lines, D, learned=None, show=0, label=""):
             if A and B: tp += 1
             elif A and not B: fp += 1; ex[b] += 1
             elif B and not A: fn += 1; exfn[b] += 1
+    if as_typed:
+        print(f"{label:<16} FP {fp}  (in {len(lines)} lines retyped as written)")
+        if show and fp:
+            print("  FP:", ex.most_common(show))
+        return tp, fp
     print(f"{label:<16} TP {tp}  FP {fp}  missed-capitals {fn}")
     if show:
         print("  FP:", ex.most_common(show)); print("  missed:", exfn.most_common(show))
@@ -129,7 +168,8 @@ def learn(lines, titles):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("corpus", nargs="+")
+    ap.add_argument("corpus", nargs="*", default=CORPORA, help="default: Vikey's chat_messages and synthetic_val")
+    ap.add_argument("--negatives", default=NEGATIVES, help="ordinary sentences retyped as written; must give FP 0")
     ap.add_argument("--data", default=DATA)
     ap.add_argument("--show", type=int, default=15, help="most common FP and missed words to list")
     a = ap.parse_args()
@@ -139,7 +179,9 @@ def main():
     L = learn(lines, D["titles"])
     print(f"learned: {len(L['title'])} after a title, {len(L['any'])} anywhere")
     run(lines, D, L, show=a.show, label="fixed + learned")
-    sys.exit(1 if fp else 0)
+    negatives = [l for l in open(a.negatives, encoding="utf-8") if l.strip()]
+    _, nfp = run(negatives, D, show=a.show, label="negatives", as_typed=True)
+    sys.exit(1 if fp or nfp else 0)
 
 
 if __name__ == "__main__":

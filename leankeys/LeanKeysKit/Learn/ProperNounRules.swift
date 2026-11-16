@@ -7,6 +7,9 @@ public struct ProperNounData: Decodable {
     /// Places that are also ordinary phrases ("hòa bình"): capitalised only right after a place cue.
     public let ambiguousPlaces: [String]
     public let placeCues: [String]
+    /// Places that are not capitalised right after one of these words, which make them an ordinary phrase
+    /// ("cập nhật bản" is "update the version", "xã hội an toàn" a safe society). Keys are lowercase places.
+    public let placeNotAfter: [String: [String]]
     public let surnames: [String]
     /// Surnames that are never ordinary words, so they are capitalised on their own.
     public let sureSurnames: [String]
@@ -17,11 +20,12 @@ public struct ProperNounData: Decodable {
     public let singleWords: [String]
 
     public init(places: [String] = [], ambiguousPlaces: [String] = [], placeCues: [String] = [],
-                surnames: [String] = [], sureSurnames: [String] = [], middleNames: [String] = [],
+                placeNotAfter: [String: [String]] = [:], surnames: [String] = [], sureSurnames: [String] = [], middleNames: [String] = [],
                 givenNames: [String] = [], titles: [String] = [], singleWords: [String] = []) {
         self.places = places
         self.ambiguousPlaces = ambiguousPlaces
         self.placeCues = placeCues
+        self.placeNotAfter = placeNotAfter
         self.surnames = surnames
         self.sureSurnames = sureSurnames
         self.middleNames = middleNames
@@ -64,6 +68,7 @@ public struct ProperNounRules {
     private let longestPlace: Int
     private let ambiguous: Set<String>
     private let cues: Set<String>
+    private let notAfter: [String: Set<String>]
     private let surnames: Set<String>
     private let sureSurnames: Set<String>
     private let middleNames: Set<String>
@@ -76,6 +81,8 @@ public struct ProperNounRules {
         longestPlace = phrases.map(\.count).max() ?? 0
         ambiguous = Set(data.ambiguousPlaces.map(Self.phraseKey))
         cues = Set(data.placeCues.map(Self.phraseKey))
+        notAfter = Dictionary(data.placeNotAfter.map { (Self.phraseKey($0.key), Set($0.value.map(Self.key))) },
+                              uniquingKeysWith: { $0.union($1) })
         surnames = Set(data.surnames.map(Self.key))
         sureSurnames = Set(data.sureSurnames.map(Self.key))
         middleNames = Set(data.middleNames.map(Self.key))
@@ -102,9 +109,15 @@ public struct ProperNounRules {
     /// Combining grave, acute, tilde, hook above, dot below.
     private static let toneMarks: Set<UInt32> = [0x300, 0x301, 0x303, 0x309, 0x323]
 
-    /// `words`: the current phrase's words as on screen, oldest first, ending with the word just committed
-    /// (no punctuation; the phrase starts after the last . ! ? or newline). nil = nothing to change.
-    public func capitalization(for words: [String]) -> Capitalization? {
+    /// `words`: the words no punctuation separates from the word just committed, as on screen, oldest first, ending
+    /// with that word. `firstWordStartsPhrase`: `words[0]` is the phrase's first word (after . ! ?, a newline, or
+    /// as far as the caller knows), so its capital is sentence case, not a name (ruling R11). nil = nothing to change.
+    public func capitalization(for words: [String], firstWordStartsPhrase: Bool = true) -> Capitalization? {
+        // The rules read at most a place and the two cue words before it (ruling R14: a long run costs no more).
+        let reach = max(longestPlace + 2, 3)
+        if words.count > reach {
+            return capitalization(for: Array(words.suffix(reach)), firstWordStartsPhrase: false)
+        }
         guard let last = words.last, Self.isTouchable(last) else { return nil }
         let keys = words.map(Self.key)  // case is all `out` changes, so these stay valid for `out` too
         let i = words.count - 1
@@ -122,6 +135,8 @@ public struct ProperNounRules {
                     || (!before.isEmpty && cues.contains(before.joined(separator: " ")))
                 if !cued { break }
             }
+            // An ordinary phrase after this word ("cập nhật bản", "xã hội an"): ends the search like a missing cue.
+            if start > 0, notAfter[phrase.joined(separator: " ")]?.contains(keys[start - 1]) == true { break }
             for k in start...i { out[k] = Self.capitalized(out[k]) }
             first = start
             break
@@ -130,19 +145,24 @@ public struct ProperNounRules {
         // Names, on the words as they now stand.
         let word = keys[i]
         let p1 = i >= 1 ? out[i - 1] : nil
-        let p2 = i >= 2 ? out[i - 2] : nil
         let p1Key = i >= 1 ? keys[i - 1] : nil
         let p2Key = i >= 2 ? keys[i - 2] : nil
+        // A capital on screen that marks a name: not the phrase's first word's, which is sentence case ("Mai anh đi
+        // đâu"), unless that word is a sure surname.
+        func marked(_ k: Int) -> Bool {
+            Self.startsUpper(out[k]) && (k > 0 || !firstWordStartsPhrase || sureSurnames.contains(keys[k]))
+        }
         if sureSurnames.contains(word) {
             out[i] = Self.capitalized(out[i]); first = min(first, i)
-        } else if middleNames.contains(word), let p1Key, surnames.contains(p1Key) {
+        } else if middleNames.contains(word), let p1Key, surnames.contains(p1Key),
+                  sureSurnames.contains(p1Key) || marked(i - 1) {
             out[i - 1] = Self.capitalized(out[i - 1]); out[i] = Self.capitalized(out[i]); first = min(first, i - 1)
-        } else if let p1, let p1Key, let p2Key, Self.startsUpper(p1), middleNames.contains(p1Key), surnames.contains(p2Key) {
+        } else if let p1Key, let p2Key, marked(i - 1), middleNames.contains(p1Key), surnames.contains(p2Key) {
             out[i] = Self.capitalized(out[i]); first = min(first, i)
-        } else if givenNames.contains(word), let p1, let p1Key, surnames.contains(p1Key),
-                  sureSurnames.contains(p1Key) || Self.startsUpper(p1) {
+        } else if givenNames.contains(word), let p1Key, surnames.contains(p1Key),
+                  sureSurnames.contains(p1Key) || marked(i - 1) {
             out[i - 1] = Self.capitalized(out[i - 1]); out[i] = Self.capitalized(out[i]); first = min(first, i - 1)
-        } else if givenNames.contains(word), let p1, let p2, let p2Key, Self.startsUpper(p1), Self.startsUpper(p2),
+        } else if givenNames.contains(word), let p2Key, marked(i - 1), marked(i - 2),
                   surnames.contains(p2Key) || middleNames.contains(p2Key) {
             out[i] = Self.capitalized(out[i]); first = min(first, i)
         } else if words[i] == words[i].lowercased(),
