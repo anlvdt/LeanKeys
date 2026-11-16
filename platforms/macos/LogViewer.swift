@@ -1,4 +1,5 @@
 import AppKit
+import LeanKeysKit // LEANKEYS-HOOK: debug-log
 import SwiftUI
 
 // MARK: - Log Toggle
@@ -12,9 +13,9 @@ struct LogToggleButton: View {
             .labelsHidden()
             .onChange(of: isEnabled) { newValue in
                 if newValue {
-                    FileManager.default.createFile(atPath: "/tmp/gonhanh_debug.log", contents: nil)
+                    DebugLog.setOn(true) // LEANKEYS-HOOK: debug-log
                 } else {
-                    try? FileManager.default.removeItem(atPath: "/tmp/gonhanh_debug.log")
+                    DebugLog.setOn(false) // LEANKEYS-HOOK: debug-log
                 }
             }
     }
@@ -136,7 +137,7 @@ struct LogViewerSection: View {
     }
 
     private func clearLog() {
-        try? "".write(toFile: "/tmp/gonhanh_debug.log", atomically: true, encoding: .utf8)
+        DebugLog.clear() // LEANKEYS-HOOK: debug-log
         logLines = []
         lastFileSize = 0
     }
@@ -152,7 +153,7 @@ struct LogViewerSection: View {
     }
 
     private func loadLog() {
-        let path = "/tmp/gonhanh_debug.log"
+        let path = DebugLog.path // LEANKEYS-HOOK: debug-log
         let attrs = try? FileManager.default.attributesOfItem(atPath: path)
         let size = attrs?[.size] as? UInt64 ?? 0
 

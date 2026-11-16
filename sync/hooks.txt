@@ -15,3 +15,6 @@ settings-engine	platforms/macos/MainSettingsView.swift
 settings-engine	platforms/macos/MenuBar.swift
 menubar-popover	platforms/macos/MenuBar.swift
 shortcut-store	platforms/macos/MainSettingsView.swift
+debug-log	platforms/macos/RustBridge.swift
+debug-log	platforms/macos/LogViewer.swift
+debug-log	platforms/macos/AdvancedSettingsView.swift

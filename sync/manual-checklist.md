@@ -51,6 +51,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | K1 | Phím đi thẳng · ô đăng nhập | Safari, một trang đăng nhập: gõ `nguyenvana` vào ô Email hoặc Username khi đang bật tiếng Việt: chữ giữ nguyên, không thành "nguyễnvana". | — | [ ] |
 | K2 | Phím đi thẳng · điều khiển từ xa | Điều khiển một máy Windows qua MacViewer, TeamViewer hoặc AnyDesk, bật bộ gõ bên Windows: gõ `tieengs vieejt` ra "tiếng việt" một lần, không bị lỗi hay bỏ dấu hai lần. | — | [ ] |
 | K3 | Không học mật khẩu | Bật "Đề xuất gõ tắt". Trong Terminal chạy `sudo -k; sudo true` ba lần, gõ mật khẩu rồi Enter; trong TextEdit gõ một từ trộn chữ và số (ví dụ `Thu@2024`) rồi Enter ba lần: không có gợi ý gõ tắt nào. | — | [ ] |
+| K4 | Nhật ký debug không lộ chữ gõ | Cài đặt nâng cao: bật Debug Log, gõ `xin chào bạn` rồi Enter, mở `~/Library/Logs/LeanKeys/debug.log`: không có chữ nào đã gõ, phím chữ hiện là `char`, chỉ có độ dài như `<3>`; không có tệp `/tmp/gonhanh_debug.log` mới. Tắt Debug Log: tệp bị xoá. | — | [ ] |
 | D1 | 4D · Tự viết hoa tên riêng | Vikey, tiếng Việt, Notes: gõ `tooi owr haf nooij ` ra "tôi ở Hà Nội". | — | [ ] |
 | D2 | 4D · Tự viết hoa tên riêng | Vikey, Notes: gõ `nguyeenx vawn an ` ra "Nguyễn Văn An". | — | [ ] |
 | D3 | 4D · Tên tự học | Vikey, Notes: gõ `anh Hufng ` (tự gõ chữ H hoa) ở hai câu khác nhau, rồi gõ `anh hufng ` (chữ thường): ra "anh Hùng". Cài đặt → Nâng cao → "Tên đã học" có dòng "Hùng". | — | [ ] |
@@ -58,4 +59,4 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | D5 | 4D · Ký tự gõ dính khi Enter | Vikey, Notes: gõ "xong." rồi bấm `\` và Enter gần như cùng lúc: dòng kết thúc ở "xong.", không có `\`. | — | [ ] |
 | D6 | 4D · Ký tự gõ dính khi Enter | Vikey, Terminal: gõ `\` rồi Enter: `\` vẫn được giữ. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 63 ô đều đạt.
+Chỉ gõ `yes` khi cả 64 ô đều đạt.

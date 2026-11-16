@@ -7,7 +7,7 @@ import SwiftUI
 struct AdvancedSettingsView: View {
     @ObservedObject var appState: AppState
     @State private var showAddApp = false
-    @State private var logEnabled = FileManager.default.fileExists(atPath: "/tmp/gonhanh_debug.log")
+    @State private var logEnabled = DebugLog.isOn // LEANKEYS-HOOK: debug-log
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -63,7 +63,7 @@ struct AdvancedSettingsView: View {
             SettingsRow {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Debug Log").font(.system(size: 13, weight: .medium))
-                    Text("Ghi log xử lý phím vào /tmp/gonhanh_debug.log")
+                    Text("Ghi log xử lý phím vào ~/Library/Logs/LeanKeys (không ghi chữ đã gõ)") // LEANKEYS-HOOK: debug-log
                         .font(.system(size: 11))
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
                 }
