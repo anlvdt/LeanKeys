@@ -650,8 +650,13 @@ class RustBridge {
         guard isInitialized else { return nil }
         // LEANKEYS-HOOK-BEGIN: engine-dispatch
         // Vikey runs only on an allowed input source; elsewhere stock Gõ Nhanh (gated off by ime_enabled) decides.
+        // ⌥+Return/Enter arrives without `ctrl` (the Return branch runs before the Option one): pass ⌥ so the
+        // stray-key filter (spec 17.2) leaves it alone.
+        let option = (keyCode == 0x24 || keyCode == 0x4C)
+            && CGEventSource.flagsState(.combinedSessionState).contains(.maskAlternate)
         if InputSourceObserver.shared.isAllowedInputSource,
-           case .handled(let r) = EngineRouter.shared.intercept(keyCode: keyCode, caps: caps, ctrl: ctrl, shift: shift) {
+           case .handled(let r) = EngineRouter.shared.intercept(keyCode: keyCode, caps: caps, ctrl: ctrl, shift: shift,
+                                                                option: option) {
             return r
         }
         // Gõ Nhanh decides from here: its result (nil on every early return) feeds the mirror. Ctrl chords (and

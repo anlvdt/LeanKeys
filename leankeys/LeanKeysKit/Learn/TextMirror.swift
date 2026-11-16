@@ -36,8 +36,19 @@ public final class TextMirror {
     /// not known to be whole (no `onWord`, empty `currentWord`) until the next break; the phrase is dropped.
     private var wordUnknown = false
     private var phraseUnknown = false
+    /// Text since the last newline, as on screen; nil when unknown: before the first newline, after a cursor move,
+    /// a bypass, or a delete past the line's start. Sentence ends, which end the phrase, keep it.
+    private var line: [Character]?
+
+    /// Longest line held; a longer one becomes unknown.
+    static let lineLimit = 2_000
 
     public init() {}
+
+    /// The current line before the cursor, as on screen; nil when unknown (see `line`). Spec 17.2 reads it.
+    public var lineBeforeCursor: String? {
+        line.map { String($0) }
+    }
 
     /// The word being typed: everything since the last word break. Empty right after a break or a reset.
     public var currentWord: String {
@@ -86,6 +97,9 @@ public final class TextMirror {
     /// An engine edit: delete `deleteCount` characters before the cursor, then insert `insert`. Inserted breaks
     /// commit exactly like typed ones.
     public func apply(deleteCount: Int, insert: [Character]) {
+        if deleteCount > 0, let held = line {
+            line = deleteCount <= held.count ? Array(held.dropLast(deleteCount)) : nil
+        }
         var deleteCount = deleteCount
         if deleteCount > 0, pendingTerminator != nil {
             // The pending terminator is the last character on screen: the word before it is current again.
@@ -99,11 +113,12 @@ public final class TextMirror {
 
     /// A key that reached the app by itself.
     public func typed(_ c: Character) {
+        trackLine(c)
         if let pending = pendingTerminator {
             pendingTerminator = nil
             if Self.closesPending.contains(c) {
                 emitPhrase()
-                discard()
+                clearPhrase()
                 return
             }
             append(pending)
@@ -118,7 +133,7 @@ public final class TextMirror {
             wordStart = buffer.count
         } else if c == "\n" || c == "\r" {
             emitPhrase()
-            discard()
+            clearPhrase()
         } else if c == "\t" {
             // Tab ends the word (shortcuts expand there) and moves focus in most fields: a cursor move.
             reset()
@@ -136,9 +151,16 @@ public final class TextMirror {
     }
 
     /// Bypass, Secure Input and app switch (Cmd/Ctrl chords, Option+Backspace, restore shortcut, unknown keys, the
-    /// frontmost app changing): forget the word and the phrase, emit nothing. An app switch discards (ruling R20):
-    /// by the time it is seen the phrase would be credited to the new app, past its exclusion and secure-field checks.
+    /// frontmost app changing): forget the word, the phrase and the line, emit nothing. An app switch discards
+    /// (ruling R20): by the time it is seen the phrase would be credited to the new app, past its exclusion and
+    /// secure-field checks.
     public func discard() {
+        clearPhrase()
+        line = nil
+    }
+
+    /// Ends the phrase on the same line: the line stays known.
+    private func clearPhrase() {
         buffer.removeAll()
         wordStart = 0
         overflowed = false
@@ -171,7 +193,7 @@ public final class TextMirror {
 
     private func delete(_ count: Int) {
         guard count <= buffer.count else {
-            discard()
+            clearPhrase()
             wordUnknown = true
             phraseUnknown = true
             return
@@ -179,6 +201,16 @@ public final class TextMirror {
         buffer.removeLast(count)
         // Deleted back into the previous word, which is current again.
         if wordStart > buffer.count { findWordStart() }
+    }
+
+    /// `line` after `c` reaches the screen. Tab is a cursor move: `typed` resets, which forgets the line.
+    private func trackLine(_ c: Character) {
+        if c == "\n" || c == "\r" {
+            line = []
+        } else if line != nil {
+            line?.append(c)
+            if let held = line, held.count > Self.lineLimit { line = nil }
+        }
     }
 
     private func findWordStart() {

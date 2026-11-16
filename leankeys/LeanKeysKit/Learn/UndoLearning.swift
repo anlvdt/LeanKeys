@@ -18,6 +18,8 @@ public final class UndoLearning: ObservableObject {
     public static let doubleKeyFixKey = "LeanKeys.doubleKeyFix", learningKey = "LeanKeys.undoLearning"
     /// Spec 17.3: "Tự viết hoa tên riêng".
     public static let autoCapitalizeKey = "LeanKeys.autoCapitalize"
+    /// Spec 17.3: "Bỏ ký tự gõ dính khi Enter".
+    public static let strayEnterKey = "LeanKeys.strayEnter"
 
     /// The app's instance: rules in `undo-rules.bin`, learned names in `learned-names.bin`, switches in
     /// `UserDefaults.standard`.
@@ -54,6 +56,11 @@ public final class UndoLearning: ObservableObject {
         didSet { defaults.set(autoCapitalize, forKey: Self.autoCapitalizeKey) }
     }
 
+    /// Spec 17.2, read by the router on the key-handling thread. Off: no key next to Enter is deleted or dropped.
+    @Published public var strayEnter: Bool {
+        didSet { defaults.set(strayEnter, forKey: Self.strayEnterKey) }
+    }
+
     /// Names learned from the user's own capitals (spec 17.1.3).
     public let learnedNames: LearnedNames
 
@@ -79,6 +86,7 @@ public final class UndoLearning: ObservableObject {
         doubleKeyFix = defaults.object(forKey: Self.doubleKeyFixKey) as? Bool ?? true
         learning = defaults.object(forKey: Self.learningKey) as? Bool ?? true
         autoCapitalize = defaults.object(forKey: Self.autoCapitalizeKey) as? Bool ?? true
+        strayEnter = defaults.object(forKey: Self.strayEnterKey) as? Bool ?? true
         book.onChange = { [weak self] in
             guard let self else { return }
             rules = self.book.rules
