@@ -1753,6 +1753,7 @@ private func keyboardCallback(
 
     if let (bs, chars, keyConsumed) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
         Log.key(keyCode, "bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed)") // LEANKEYS-HOOK: debug-log
+        if EngineRouter.swallowsKeyOnly((bs, chars, keyConsumed)) { return nil } // LEANKEYS-HOOK: engine-dispatch
         sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
 
         // Break keys (punctuation, not space): pass through or post synthetically

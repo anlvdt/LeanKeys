@@ -268,8 +268,17 @@ final class StrayEnterFilterTests: XCTestCase {
         XCTAssertEqual(edit.0, 1)
         XCTAssertTrue(edit.1.isEmpty)
         XCTAssertFalse(edit.2, "Enter follows the edit")
+        XCTAssertFalse(EngineRouter.swallowsKeyOnly(edit))
         XCTAssertEqual(String(field.text), "xong.\n")
         XCTAssertEqual(router.mirror.lineBeforeCursor, "", "the mirror saw the delete and the newline")
+    }
+
+    /// Final review M1: only a consumed result with nothing to delete or type is swallowed without an injection.
+    func testSwallowsKeyOnly() {
+        XCTAssertTrue(EngineRouter.swallowsKeyOnly((0, [], true)))
+        XCTAssertFalse(EngineRouter.swallowsKeyOnly((0, [], false)), "not consumed: the key goes through")
+        XCTAssertFalse(EngineRouter.swallowsKeyOnly((1, [], true)))
+        XCTAssertFalse(EngineRouter.swallowsKeyOnly((0, ["ư"], true)))
     }
 
     func testRouterKeepsSlowBackslash() {
@@ -293,6 +302,7 @@ final class StrayEnterFilterTests: XCTestCase {
         XCTAssertEqual(edit.0, 0)
         XCTAssertTrue(edit.1.isEmpty)
         XCTAssertTrue(edit.2, "consumed: the key never reaches the app")
+        XCTAssertTrue(EngineRouter.swallowsKeyOnly(edit), "the macOS handler swallows it without an injection")
         XCTAssertEqual(String(field.text), "xong\n")
         XCTAssertEqual(router.mirror.lineBeforeCursor, "")
         // The next line types normally.

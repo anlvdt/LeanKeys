@@ -168,6 +168,13 @@ public final class EngineRouter {
 
     // MARK: Stray key at Enter (spec 17.2)
 
+    /// A result that only swallows the key: consumed, nothing to delete or type (`.dropKey`). The macOS key handler
+    /// returns it without an injection, which would only post U+202F and a ⌫ under `.emptyCharPrefix` (an
+    /// autocomplete flicker in address bars) and wait out the settle delay (final review M1).
+    public static func swallowsKeyOnly(_ result: (Int, [Character], Bool)) -> Bool {
+        result.0 == 0 && result.1.isEmpty && result.2
+    }
+
     /// The edit that drops a key next to Enter hit together with Enter, or nil to go on as usual. Before Enter: the
     /// stray character is deleted and Enter follows (not consumed); Vikey never sees this Enter, so its word ends
     /// here. After Enter: the key is consumed and Vikey never sees it. The mirror follows the screen either way.
@@ -190,9 +197,7 @@ public final class EngineRouter {
             vikey.resetContext()
             result = (1, [], false)
         case .dropKey:
-            // The macOS handler still runs an empty injection for this (U+202F and a ⌫ under `.emptyCharPrefix`,
-            // plus the settle delay): net-neutral. Skipping it needs a new upstream hook in `keyboardCallback`,
-            // which 4D avoids (global constraints; ruling R14, final review M1).
+            // The macOS handler swallows this without an injection (`swallowsKeyOnly`).
             result = (0, [], true)
         }
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
