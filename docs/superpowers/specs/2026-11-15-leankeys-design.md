@@ -259,6 +259,7 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
   - chuỗi 13–19 số đạt kiểm tra Luhn (số thẻ);
   - chuỗi 4–8 số gõ đứng riêng (mã OTP);
   - các app trong danh sách loại trừ. Mặc định danh sách có trình quản lý mật khẩu (1Password, Bitwarden, Keychain Access) và người dùng thêm được app khác.
+  - **(sửa 2026-11-16)** một dòng chỉ có một từ, hoặc có một từ trông như mật khẩu (từ 6 ký tự trở lên trộn chữ với số hay ký hiệu, hoặc trộn số với ký hiệu, không thuộc SĐT, MST, email hay địa chỉ đã nhận dạng). Mật khẩu gõ ở chỗ macOS không đánh dấu là ô mật khẩu (dấu nhắc `sudo`/`ssh` trong terminal, ô đăng nhập tự làm của một số app) cũng kết thúc bằng Enter, nên trước đây lọt vào gợi ý. Danh sách loại trừ mặc định có thêm các terminal (Terminal, iTerm2, Warp, Ghostty, Alacritty, kitty, WezTerm, Hyper, Tabby). Gợi ý đã lưu mà vi phạm quy tắc này bị xoá ở lần mở app kế tiếp.
 
 ### 11.2 4A: Gợi ý từ khi gõ
 - Khi đang gõ dở một từ, một ô nổi cạnh con trỏ hiện tối đa 3 gợi ý. **Tab** chọn gợi ý đầu, **⌥1–⌥3** chọn theo thứ tự, **Esc** ẩn ô. Mặc định tắt.

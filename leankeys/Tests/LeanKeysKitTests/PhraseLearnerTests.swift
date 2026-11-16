@@ -106,6 +106,54 @@ final class PhraseLearnerTests: XCTestCase {
         XCTAssertNil(store.lastSavedPlaintext)
     }
 
+    /// Passwords typed where macOS does not flag a password field (a sudo or ssh prompt in a terminal, an app's own
+    /// login box) end with Return like any line, so they reached the learner as a whole-line phrase.
+    func testPasswordsNeverLearned() {
+        for secret in ["Matkhau@2024", "hunter2hunter2", "P4ssw0rd!", "abcdefgh123", "correcthorsebattery",
+                       "qwerty!@#$%^", "Abc-12345-xyz"] {
+            observe(secret, times: 5)
+        }
+        // Inside a line of text, a password-shaped word keeps the whole line out.
+        observe("mat khau moi la Abc@12345 nhe", times: 5)
+        observe("pass: hunter2hunter2", times: 5)
+        XCTAssertTrue(learner.ready.isEmpty, "\(readyTexts())")
+        for secret in ["Matkhau@2024", "hunter2hunter2", "P4ssw0rd!", "Abc@12345", "correcthorsebattery"] {
+            XCTAssertFalse(store.savedString.contains(secret), secret)
+        }
+        // Ordinary lines and structured items are still learned.
+        observe("Cảm ơn anh nhiều nhé", times: 3)
+        observe("an@vidu.vn", times: 3)
+        observe("0912 345 678", times: 3)
+        observe("Liên hệ 0912.345.678 hoặc an@vidu.vn", times: 3)
+        XCTAssertTrue(readyTexts().contains("Cảm ơn anh nhiều nhé"))
+        XCTAssertTrue(readyTexts().contains("an@vidu.vn"))
+        XCTAssertTrue(learner.ready.contains { $0.kind == .phone }, "the phone, in either spelling")
+        XCTAssertTrue(readyTexts().contains("Liên hệ 0912.345.678 hoặc an@vidu.vn"))
+    }
+
+    func testTerminalsNotLearned() {
+        for bundle in ["com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "com.mitchellh.ghostty",
+                       "org.alacritty", "net.kovidgoyal.kitty", "com.github.wez.wezterm"] {
+            observe("Cảm ơn anh nhiều nhé", times: 3, ctx(bundleID: bundle))
+        }
+        XCTAssertTrue(learner.ready.isEmpty)
+        XCTAssertEqual(learner.trackedCount, 0)
+    }
+
+    /// A suggestion that reached the threshold before this fix (its text kept for the review list) is dropped on load.
+    func testStoredPasswordSuggestionPurgedOnLoad() throws {
+        let day = Int(Date().timeIntervalSince1970 / 86_400)
+        let json = """
+        {"v":1,"handled":[],"entries":{"aa":{"d":{"\(day)":3},"t":"Matkhau@2024","k":"phrase"},        "bb":{"d":{"\(day)":3},"t":"Cảm ơn anh nhiều nhé","k":"phrase"},        "cc":{"d":{"\(day)":3},"t":"0912 345 678","k":"phone"}}}
+        """
+        let old = InMemoryStore()
+        try old.save(Data(json.utf8))
+        let reloaded = PhraseLearner(store: old)
+        reloaded.enabled = true
+        XCTAssertEqual(Set(reloaded.ready.map(\.text)), ["Cảm ơn anh nhiều nhé", "0912 345 678"])
+        XCTAssertFalse(old.savedString.contains("Matkhau@2024"))
+    }
+
     func testRejectsCardAndOTP() {
         for text in ["4111 1111 1111 1111", "4111-1111-1111-1111", "Thẻ 4111 1111 1111 1111 nhé", "482913",
                      "48291357", "Thẻ 4111 1111 1111 1111 12 28"] {

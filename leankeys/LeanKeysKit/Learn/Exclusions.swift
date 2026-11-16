@@ -10,7 +10,33 @@ public enum Exclusions {
         "com.apple.keychainaccess",
         "com.apple.Passwords",
         "org.keepassxc.keepassxc",
+        // Terminals: sudo, ssh and git ask for passwords there without Secure Input or a secure text field.
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "dev.warp.Warp-Stable",
+        "com.mitchellh.ghostty",
+        "org.alacritty",
+        "net.kovidgoyal.kitty",
+        "com.github.wez.wezterm",
+        "co.zeit.hyper",
+        "org.tabby",
     ]
+
+    /// A word shaped like a password or key: at least 6 characters (sentence punctuation at its ends aside) that mix
+    /// letters with digits or symbols, or digits with symbols ("Matkhau@2024", "hunter2", "Abc-12345").
+    /// Plain words, numbers and Vietnamese words with diacritics are not. Hyphenated words ("check-in") are, which
+    /// only keeps a few harmless lines out.
+    public static func looksLikeSecret(_ word: String) -> Bool {
+        let core = word.trimmingCharacters(in: CharacterSet(charactersIn: ".,!?;:()\"'“”‘’…"))
+        guard core.count >= 6 else { return false }
+        var letters = false, digits = false, symbols = false
+        for scalar in core.unicodeScalars {
+            if CharacterSet.letters.contains(scalar) || CharacterSet.nonBaseCharacters.contains(scalar) { letters = true }
+            else if CharacterSet.decimalDigits.contains(scalar) { digits = true }
+            else { symbols = true }
+        }
+        return (letters && (digits || symbols)) || (digits && symbols)
+    }
 
     /// A number as typed: digit groups joined by single spaces, dots or dashes ("4111 1111 1111 1111",
     /// "0912.345.678", "482913").
