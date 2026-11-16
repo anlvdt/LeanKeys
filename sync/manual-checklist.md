@@ -35,10 +35,10 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | A2 | Cửa sổ chào bị che hoặc đã đóng | Đưa cửa sổ chào của LeanKeys ra sau một cửa sổ khác, hoặc đóng hẳn cửa sổ đó, rồi cấp quyền Trợ năng: LeanKeys tự mở lại đúng một lần và gõ được. | — | [ ] |
 | A3 | Cập nhật self-signed | Cập nhật từ bản self-signed sang bản self-signed khác: gõ vẫn được, không phải cấp quyền lại. | — | [ ] |
 | A4 | Từ ad-hoc lên self-signed | Máy đang chạy bản ad-hoc đã cấp quyền. Cập nhật lên bản self-signed đầu tiên: LeanKeys tự reset mục của chính nó trong Trợ năng, chỉ cần gạt một công tắc là gõ được. | — | [ ] |
-| S1 | Đề xuất gõ tắt | Cài đặt → Chung → bật "Đề xuất gõ tắt": màn giải thích hiện ra; bấm Huỷ thì công tắc vẫn tắt, bấm Bật thì công tắc bật. | — | [ ] |
-| S2 | Đề xuất gõ tắt | Làm với từng engine: gõ cùng một số điện thoại thử (`0900 000 000`) rồi Return, 3 lần trong Notes: ô nổi hiện "Có 1 gợi ý gõ tắt". Bấm vào, bấm Thêm; gõ `sdt` + cách thì ra đúng số đó, đúng một lần (với Gõ Nhanh: Gõ Nhanh tự bung, không bung đôi). Gõ `sdt` + Return thêm 3 lần: không có gợi ý mới. | [ ] | [ ] |
-| S3 | Đề xuất gõ tắt | Gõ cùng một chuỗi 3 lần trong ô mật khẩu của Safari (Return sau mỗi lần): không có gợi ý nào. | — | [ ] |
-| S4 | Đề xuất gõ tắt | Cài đặt → Nâng cao → "Xoá dữ liệu đã học" → Xoá: ô nổi không còn dòng gợi ý, danh sách gợi ý trống. | — | [ ] |
+| S1 | Gợi ý gõ tắt | Cài đặt → Chung → bật "Gợi ý gõ tắt": màn giải thích hiện ra; bấm Huỷ thì công tắc vẫn tắt, bấm Bật thì công tắc bật. | — | [ ] |
+| S2 | Gợi ý gõ tắt | Làm với từng engine: gõ cùng một số điện thoại thử (`0900 000 000`) rồi Return, 3 lần trong Notes: ô nổi hiện "Có 1 gợi ý gõ tắt". Bấm vào, bấm Thêm; gõ `sdt` + cách thì ra đúng số đó, đúng một lần (với Gõ Nhanh: Gõ Nhanh tự bung, không bung đôi). Gõ `sdt` + Return thêm 3 lần: không có gợi ý mới. | [ ] | [ ] |
+| S3 | Gợi ý gõ tắt | Gõ cùng một chuỗi 3 lần trong ô mật khẩu của Safari (Return sau mỗi lần): không có gợi ý nào. | — | [ ] |
+| S4 | Gợi ý gõ tắt | Cài đặt → Nâng cao → "Xoá dữ liệu gợi ý gõ tắt" → Xoá: ô nổi không còn dòng gợi ý, danh sách gợi ý trống; Bảng gõ tắt, "Từ giữ nguyên" và "Tên đã học" vẫn còn. | — | [ ] |
 | S5 | Chữ hoa với Shift | Gõ `DDaif Loan` trong Notes, giữ Shift (không bật Caps Lock) khi gõ `DD` và `L`: ra "Đài Loan", không ra "đài Loan". | [ ] | [ ] |
 | C1 | 4C · ⌫ sau phím gõ đúp | Vikey, tiếng Việt: gõ `hocjj` rồi ⌫ trong Notes: ra "học", biểu tượng vẫn là V. | — | [ ] |
 | C2 | 4C · Tự học có ngữ cảnh | Trong một câu tiếng Anh (`about its`), gõ "its" rồi ⌫⌫ để giữ nguyên. Lần sau gõ lại `about its`: "its" được giữ nguyên ngay. | — | [ ] |
@@ -50,7 +50,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | U4 | Cập nhật trong ô nổi | Bản mới ký ad-hoc (`leankeys/build.sh` trên máy không có chứng chỉ, đặt DMG làm bản tải về): ô nổi báo "Không cài được bản mới", app vẫn chạy bản cũ, gõ được. | — | [ ] |
 | K1 | Phím đi thẳng · ô đăng nhập | Safari, một trang đăng nhập: gõ `nguyenvana` vào ô Email hoặc Username khi đang bật tiếng Việt: chữ giữ nguyên, không thành "nguyễnvana". | — | [ ] |
 | K2 | Phím đi thẳng · điều khiển từ xa | Điều khiển một máy Windows qua MacViewer, TeamViewer hoặc AnyDesk, bật bộ gõ bên Windows: gõ `tieengs vieejt` ra "tiếng việt" một lần, không bị lỗi hay bỏ dấu hai lần. | — | [ ] |
-| K3 | Không học mật khẩu | Bật "Đề xuất gõ tắt". Trong Terminal chạy `sudo -k; sudo true` ba lần, gõ mật khẩu rồi Enter; trong TextEdit gõ một từ trộn chữ và số (ví dụ `Thu@2024`) rồi Enter ba lần: không có gợi ý gõ tắt nào. | — | [ ] |
+| K3 | Không học mật khẩu | Bật "Gợi ý gõ tắt". Trong Terminal chạy `sudo -k; sudo true` ba lần, gõ mật khẩu rồi Enter; trong TextEdit gõ một từ trộn chữ và số (ví dụ `Thu@2024`) rồi Enter ba lần: không có gợi ý gõ tắt nào. | — | [ ] |
 | K4 | Nhật ký debug không lộ chữ gõ | Cài đặt nâng cao: bật Debug Log, gõ `xin chào bạn` rồi Enter, mở `~/Library/Logs/LeanKeys/debug.log`: không có chữ nào đã gõ, phím chữ hiện là `char`, chỉ có độ dài như `<3>`; không có tệp `/tmp/gonhanh_debug.log` mới. Tắt Debug Log: tệp bị xoá. | — | [ ] |
 | D1 | 4D · Tự viết hoa tên riêng | Vikey, tiếng Việt, Notes: gõ `tooi owr haf nooij ` ra "tôi ở Hà Nội". | — | [ ] |
 | D2 | 4D · Tự viết hoa tên riêng | Vikey, Notes: gõ `nguyeenx vawn an ` ra "Nguyễn Văn An". | — | [ ] |

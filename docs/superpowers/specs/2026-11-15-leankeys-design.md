@@ -228,13 +228,14 @@ Với cả hai engine, thử trên Chrome (thanh địa chỉ và ô nhập), Sp
 
 Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ chạy trên iOS/Android. LeanKeys chỉ học ý tưởng của nó, không dùng code và không tự cập nhật theo nó. Các tính năng chỉ có ý nghĩa trên màn hình cảm ứng (vẽ dấu, vuốt để gõ, giao diện bàn phím) nằm ngoài phạm vi. GĐ4 gồm ba kế hoạch riêng, làm theo thứ tự **4C (mục 12) → 4B → 4A**. 4C đứng đầu vì gõ trộn Việt/Anh là ưu tiên số một.
 
-### 11.1 4B: Tự đề xuất gõ tắt từ nội dung lặp lại
+### 11.1 4B: Gợi ý gõ tắt từ nội dung lặp lại
 
 **Hành vi**
 - LeanKeys đếm các cụm đã gõ xong: câu, cụm từ, địa chỉ, số điện thoại, mã số thuế, email, tên riêng. Một cụm kết thúc ở dấu câu, Enter, hoặc khi con trỏ đổi chỗ.
 - **Ngưỡng đề xuất** (mặc định, chỉnh được trong Cài đặt): cụm lặp lại ≥ 3 lần trong 30 ngày và dài ≥ 8 ký tự.
 - Khi có đề xuất, menu bar hiện "Có N gợi ý gõ tắt". Màn duyệt có ba nút cho từng mục: **Thêm**, **Sửa tên tắt**, **Bỏ qua**. Mục đã bỏ qua được nhớ và không đề xuất lại. Không có gì được thêm khi người dùng chưa bấm Thêm.
 - Gõ tắt được ghi vào danh sách gõ tắt có sẵn của Gõ Nhanh, nên chạy với cả hai engine.
+- Trên giao diện, tính năng chỉ có một tên: công tắc ở Chung, thẻ ở Nâng cao và dòng trên ô nổi đều gọi là `Gợi ý gõ tắt`.
 
 **Tự đặt tên tắt**
 
@@ -253,7 +254,7 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 - Mặc định tắt. Lần đầu bật có màn giải thích tính năng làm gì.
 - Chỉ xử lý và lưu trên máy, không gửi đi đâu.
 - Cụm chưa đạt ngưỡng chỉ được lưu dưới dạng HMAC-SHA256 (khoá ngẫu nhiên giữ trong Keychain) kèm số lần và các ngày gặp. Chữ thật chỉ được giữ khi cụm đạt ngưỡng, và chỉ để hiện trong màn duyệt.
-- File dữ liệu được mã hoá bằng khoá trong Keychain. Có nút "Xoá toàn bộ dữ liệu đã học". Mục đã Thêm hay Bỏ qua thì xoá chữ thật khỏi bộ đếm.
+- File dữ liệu được mã hoá bằng khoá trong Keychain. Có nút "Xoá dữ liệu gợi ý gõ tắt" (chỉ xoá dữ liệu của 4B; Bảng gõ tắt, "Từ giữ nguyên" và "Tên đã học" vẫn còn). Mục đã Thêm hay Bỏ qua thì xoá chữ thật khỏi bộ đếm.
 - Không bao giờ học từ:
   - Secure Input và ô mật khẩu (AX subrole `AXSecureTextField`);
   - chuỗi 13–19 số đạt kiểm tra Luhn (số thẻ);
@@ -345,7 +346,7 @@ Viết ngày 2026-11-15, viết lại ngày 2026-11-16 sau khi đo. Người dù
   - Dùng lại `KeychainEncryptedFileStore` của 4B với tên file và mục Keychain riêng.
   - Không gửi đi đâu.
 - **Giới hạn 5.000 luật.** Khi đầy, bỏ luật lâu không dùng nhất (LRU).
-- **Không học trong:** Secure Input, ô mật khẩu, và các app trong danh sách loại trừ của 4B. Luật đã học vẫn được áp dụng ở mọi nơi engine chạy.
+- **Không học trong:** Secure Input, ô mật khẩu, và các ứng dụng trong danh sách "Không học khi gõ trong" của 4B (tooltip của danh sách nói nó áp dụng cho cả 4B, 4C và 4D). Luật đã học vẫn được áp dụng ở mọi nơi engine chạy.
 - **(sửa 2026-11-16, đánh giá toàn ứng dụng) Không hỏi AX trên luồng phím.** Trên luồng phím (event tap) chỉ đọc những gì không cần hỏi app khác: bundle ID và pid của app đang dùng (`NSWorkspace`), `IsSecureEventInputEnabled()`, thời điểm. Secure Input và app bị loại trừ được quyết ngay ở đó, trước khi đưa gì vào hàng đợi. Việc hỏi ô đang có con trỏ có phải ô mật khẩu không (AX, tối đa 2 × 25 ms) chạy trên hàng đợi nền ghi việc học (hàng đợi ghi của 4C và tên tự học, hàng đợi của 4B); ô mật khẩu, lỗi hay hết giờ thì bỏ lần học đó như trước. Chữ gõ chuyển sang hàng đợi chỉ nằm trong bộ nhớ. Kiểm tra từ điển của tên tự học vẫn chạy trên luồng phím (ruling R4). Ô được hỏi là ô đang có con trỏ lúc hàng đợi chạy, vài ms sau phím: chuyển rất nhanh từ ô mật khẩu sang ô thường trước lúc đó thì ô thường được hỏi; Secure Input (đọc trên luồng phím) vẫn là lớp chặn chính.
 
 ### 12.4 Test
@@ -389,7 +390,7 @@ Thêm ngày 2026-11-15. **Mục tiêu:** người dùng chỉ cần mở máy v�
 | Cảnh báo app đang chặn gõ (Secure Input) | Bật (có sẵn). Với engine Vikey, cảnh báo hiện cả khi đang ở chế độ Anh, vì engine vẫn chạy |
 | Tự học từ hoàn tác (4C) | Bật sẵn |
 | Gợi ý từ (4A) | Bật sẵn, Esc để ẩn |
-| Đề xuất gõ tắt (4B) | Hỏi một lần duy nhất ở màn chào. Bật rồi thì mỗi đề xuất chỉ cần một cú bấm "Thêm" |
+| Gợi ý gõ tắt (4B) | Hỏi một lần duy nhất ở màn chào. Bật rồi thì mỗi đề xuất chỉ cần một cú bấm "Thêm" |
 
 ### 13.3 Màn chào
 Chỉ **một màn**: nút cấp quyền Accessibility, cộng một công tắc cho 4B. Không có lựa chọn engine, kiểu gõ hay phím tắt ở lần đầu; những thứ đó nằm trong Cài đặt cho ai cần.

@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 /// Where a `LearnSettingsSection` sits.
 public enum LearnSettingsPart {
-    /// The "Đề xuất gõ tắt" row on Chung (inside Gõ Nhanh's Mở rộng card), with the first-time explanation sheet.
+    /// The "Gợi ý gõ tắt" row on Chung (inside Gõ Nhanh's Mở rộng card), with the first-time explanation sheet.
     case general
     /// The card on Nâng cao: threshold, excluded apps, erase.
     case advanced
@@ -12,19 +12,23 @@ public enum LearnSettingsPart {
 
 /// 4B settings. Copies the look of Gõ Nhanh's `SettingsToggleRow` and card (they live in the app target).
 public struct LearnSettingsSection: View {
-    static let toggleTitle = "Đề xuất gõ tắt"
-    static let toggleSubtitle = "Gợi ý gõ tắt cho nội dung bạn hay gõ lại. Chỉ lưu trên máy."
+    static let toggleTitle = "Gợi ý gõ tắt"
+    static let toggleSubtitle = "Cho địa chỉ, số điện thoại… bạn hay gõ lại. Chỉ lưu trên máy này."
     static let consentText = "LeanKeys sẽ đếm các cụm bạn gõ lặp lại (địa chỉ, số điện thoại, mã số thuế…) để gợi ý gõ tắt. Dữ liệu chỉ nằm trên máy này, được mã hoá, và bạn xoá được bất cứ lúc nào. Không học trong ô mật khẩu."
     static let consentConfirm = "Bật"
     static let consentCancel = "Huỷ"
-    static let advancedTitle = "Đề xuất gõ tắt"
+    static let advancedTitle = "Gợi ý gõ tắt"
     static let thresholdTitle = "Gợi ý khi gõ lại"
     static let thresholdNote = "trong 30 ngày, với cụm từ 8 ký tự trở lên"
-    static let excludedTitle = "Không học trong"
-    static let addAppLabel = "Thêm app…"
-    static let eraseLabel = "Xoá dữ liệu đã học"
-    static let eraseConfirmTitle = "Xoá dữ liệu đã học?"
-    static let eraseConfirmMessage = "Mọi số đếm và gợi ý chưa xử lý sẽ bị xoá. Không hoàn tác được."
+    static let excludedTitle = "Không học khi gõ trong"
+    /// Tooltip on `excludedTitle`: the list also governs 4C and 4D learning (spec §12.3).
+    static let excludedHelp = "Áp dụng cho gợi ý gõ tắt, từ giữ nguyên và tên đã học. Các ứng dụng mặc định không bỏ được."
+    static let addAppLabel = "Thêm ứng dụng…"
+    static let eraseLabel = "Xoá dữ liệu gợi ý gõ tắt"
+    static let eraseConfirmTitle = "Xoá dữ liệu gợi ý gõ tắt?"
+    static let eraseConfirmMessage = "Mọi số đếm và gợi ý đang chờ sẽ bị xoá. Bảng gõ tắt vẫn giữ nguyên. Không hoàn tác được."
+    /// Shown after a default (not removable) excluded app.
+    static let defaultTag = "mặc định"
     static let eraseConfirm = "Xoá"
 
     @ObservedObject private var model: ShortcutSuggestionsModel
@@ -88,7 +92,7 @@ public struct LearnSettingsSection: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Picker("", selection: $model.threshold) {
+                Picker(Self.thresholdTitle, selection: $model.threshold) {
                     ForEach(ShortcutSuggestionsModel.thresholdChoices, id: \.self) { Text("\($0) lần").tag($0) }
                 }
                 .labelsHidden()
@@ -101,7 +105,7 @@ public struct LearnSettingsSection: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(Self.excludedTitle).font(.system(size: 13))
+                    Text(Self.excludedTitle).font(.system(size: 13)).help(Self.excludedHelp)
                     Spacer()
                     Button(Self.addAppLabel, action: chooseApp).controlSize(.small)
                 }
@@ -136,7 +140,18 @@ public struct LearnSettingsSection: View {
         }
     }
 
-    private static let sortedDefaults = Exclusions.defaultBundleIDs.sorted()
+    private static let sortedDefaults = sortedByName(Exclusions.defaultBundleIDs, name: appName)
+
+    /// Bundle IDs in the order of the names shown for them (case-insensitive), bundle ID breaking ties.
+    static func sortedByName(_ bundleIDs: Set<String>, name: (String) -> String) -> [String] {
+        bundleIDs.sorted {
+            switch name($0).localizedCaseInsensitiveCompare(name($1)) {
+            case .orderedAscending: return true
+            case .orderedDescending: return false
+            case .orderedSame: return $0 < $1
+            }
+        }
+    }
 
     private func excludedRow(_ bundleID: String, removable: Bool) -> some View {
         HStack(spacing: 6) {
@@ -146,6 +161,11 @@ public struct LearnSettingsSection: View {
                 .foregroundColor(Color(NSColor.secondaryLabelColor))
                 .lineLimit(1)
                 .truncationMode(.middle)
+            if !removable {
+                Text(Self.defaultTag)
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(NSColor.secondaryLabelColor))
+            }
             Spacer()
             if removable {
                 Button { model.removeExcludedApp(bundleID) } label: {
@@ -166,13 +186,25 @@ public struct LearnSettingsSection: View {
         return knownNames[bundleID] ?? bundleID.split(separator: ".").last.map(String.init) ?? bundleID
     }
 
-    private static let knownNames = [
+    /// Names for the default exclusions when the app is not installed; covers every `Exclusions.defaultBundleIDs` entry.
+    static let knownNames = [
         "com.1password.1password": "1Password",
         "com.agilebits.onepassword7": "1Password 7",
         "org.keepassxc.keepassxc": "KeePassXC",
         "com.bitwarden.desktop": "Bitwarden",
         "com.apple.keychainaccess": "Keychain Access",
         "com.apple.Passwords": "Passwords",
+        "co.zeit.hyper": "Hyper",
+        "com.github.wez.wezterm": "WezTerm",
+        "com.googlecode.iterm2": "iTerm2",
+        "com.mitchellh.ghostty": "Ghostty",
+        "io.alacritty": "Alacritty",
+        "org.alacritty": "Alacritty (bản cũ)",
+        "net.kovidgoyal.kitty": "kitty",
+        "org.tabby": "Tabby",
+        "dev.warp.Warp-Stable": "Warp",
+        "dev.warp.Warp-Preview": "Warp Preview",
+        "com.apple.Terminal": "Terminal",
     ]
 
     private func chooseApp() {
@@ -187,7 +219,7 @@ public struct LearnSettingsSection: View {
     }
 }
 
-/// The explanation shown the first time "Đề xuất gõ tắt" is turned on. Nothing is learned until Bật.
+/// The explanation shown the first time "Gợi ý gõ tắt" is turned on. Nothing is learned until Bật.
 struct LearnConsentView: View {
     let confirm: () -> Void
     let cancel: () -> Void
