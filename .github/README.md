@@ -5,7 +5,7 @@
 
 <p align="center">
   <strong>Bộ gõ tiếng Việt cho macOS: cài xong là gõ.</strong><br>
-  Tự chuyển Việt/Anh khi bạn gõ lẫn hai thứ tiếng. Không cần chọn engine, không cần chỉnh gì.
+  Dùng lõi gõ của Gõ Nhanh và Vikey, thêm tự học, tự viết hoa tên riêng và không bao giờ đụng tới mật khẩu.
 </p>
 
 <p align="center">
@@ -15,30 +15,67 @@
 </p>
 
 <p align="center">
-  <img src="../docs/screenshots/popover.png" alt="Ô nổi trên menu bar" width="300">
+  <img src="../docs/screenshots/popover.png" alt="Ô nổi trên thanh menu" width="300">
 </p>
 
-## Con lai của ba bộ gõ mã nguồn mở
+## Lõi gõ lấy từ đâu
 
-LeanKeys gom những phần tốt nhất của ba bộ gõ tiếng Việt mã nguồn mở vào một app:
+LeanKeys không viết lại bộ gõ từ đầu. Phần đoán chữ dùng nguyên lõi của hai bộ gõ mã nguồn mở đã được nhiều người dùng:
 
-| Từ | LeanKeys lấy gì |
+| Dự án | LeanKeys dùng phần nào |
 | --- | --- |
-| [**Gõ Nhanh**](https://github.com/khaphanspace/gonhanh.org) | Thân app macOS: xử lý phím ổn định trên Chrome, Spotlight, IDE và Terminal, sửa lỗi theo từng app, gõ tắt, cài đặt, tự cập nhật. Engine Telex/VNI viết bằng Rust. |
-| [**Vikey**](https://github.com/tonyminibot/Vikey) | Engine mặc định: **tự chuyển Việt/Anh theo ngữ cảnh**, và **⌫⌫** để trả lại đúng các phím bạn đã gõ khi nó đoán sai. |
+| [**Gõ Nhanh**](https://github.com/khaphanspace/gonhanh.org) | Thân app macOS và engine Telex/VNI viết bằng Rust: cách gửi phím ổn định trên Chrome, Spotlight, IDE; sửa lỗi theo từng app; bảng gõ tắt; cài đặt. |
+| [**Vikey**](https://github.com/tonyminibot/Vikey) | Engine mặc định: **tự chuyển Việt/Anh theo ngữ cảnh**, nhận ra code, và **⌫⌫** để trả lại đúng các phím đã gõ khi nó đoán sai. |
 | [**OpenKey**](https://github.com/tuyenvm/OpenKey) | Nền móng của engine Vikey. |
 
-LeanKeys là bản fork của Gõ Nhanh. Mã gốc giữ nguyên; mọi chỗ LeanKeys sửa đều được đánh dấu `LEANKEYS-HOOK`. Nhờ vậy mỗi đêm LeanKeys tự kéo bản mới của Gõ Nhanh và Vikey về, chạy toàn bộ test, rồi build sẵn bản mới.
+LeanKeys là bản fork của Gõ Nhanh. Mã gốc của hai lõi được giữ nguyên, nên cách bỏ dấu, tự chuyển Việt/Anh và ⌫⌫ giống hệt khi bạn dùng Gõ Nhanh hay Vikey.
 
-## Tính năng
+## LeanKeys khác gì
 
-- **Gõ xen Việt/Anh không cần bấm phím chuyển.** `deploy leen server rooif check log nhes` ra *deploy lên server rồi check log nhé*. Đoán sai thì bấm ⌫⌫ để lấy lại đúng các phím đã gõ.
-- **Tự chọn engine.** Mặc định dùng Vikey. Khi bạn gõ VNI, hoặc khi Vikey không khởi động được, LeanKeys tự chuyển sang engine Gõ Nhanh.
-- **Ô nổi trên menu bar.** Bấm icon để đổi Tiếng Việt/English, đổi kiểu gõ, xem cảnh báo khi một app đang chặn gõ (Secure Input), cài bản mới. Bấm phải vẫn mở menu đầy đủ.
-- **Icon V/E đổi mượt** mỗi khi LeanKeys tự chuyển ngôn ngữ, và không có hiệu ứng nếu bạn bật "Giảm chuyển động".
-- **Cấp quyền Trợ năng chỉ một lần.** Bấm một nút rồi gạt một công tắc. Quyền được giữ qua các bản cập nhật.
-- **Tự cập nhật an toàn.** Kiểm tra chữ ký của bản mới trước khi cài. Chỉ cài ngầm khi bản mới có cùng chữ ký với bản đang chạy; nếu không, chờ bạn bấm "Cài bản mới".
-- Telex và VNI, gõ tắt, đặt dấu kiểu mới (`oà`), nhớ Việt/Anh theo từng app, khởi động cùng máy.
+Phần dưới đây là những gì LeanKeys tự làm thêm quanh hai lõi đó. Bạn sẽ không có chúng khi dùng riêng Gõ Nhanh hay Vikey.
+
+### Gõ thông minh hơn, học từ chính bạn
+
+- **Tự chọn lõi gõ.** Mặc định dùng Vikey. Khi bạn gõ VNI, hoặc khi Vikey không khởi động được, LeanKeys tự chuyển sang lõi Gõ Nhanh, không cần vào cài đặt.
+- **Gõ đúp phím dấu rồi ⌫ không còn hỏng từ.** Với Vikey gốc, gõ `hocjj` rồi ⌫ sẽ thành chữ thô và chuyển sang tiếng Anh giữa chừng. LeanKeys trả lại "học". Trên kho 20.676 từ tin nhắn, tỉ lệ từ tiếng Việt bị hỏng ở lỗi này giảm từ 28,6% xuống 0,95%.
+- **Tự học từ ⌫⌫.** Khi bạn bấm ⌫⌫ để giữ nguyên một từ bị tự đổi (`cos`, `car`, `been`…), LeanKeys nhớ lại. Từ đó thường xuất hiện sau từ nào thì lần sau gặp đúng chỗ ấy nó được giữ nguyên ngay; sau hai lần hoàn tác thì được giữ ở mọi nơi. Danh sách nằm ở Cài đặt › Nâng cao › Từ giữ nguyên.
+- **Tự viết hoa tên riêng.** `tooi owr haf nooij` ra "tôi ở Hà Nội", `nguyeenx vawn an` ra "Nguyễn Văn An". LeanKeys học thêm những tên bạn tự viết hoa từ hai lần trở lên. Bấm ⌫ ngay sau khi viết hoa sai thì chữ trở về thường, và LeanKeys nhớ điều đó.
+- **Bỏ phím lỡ bấm cùng Enter.** Một `\` hay `]` gõ dính ngay trước Enter trong ô chat được bỏ đi, không bị gửi kèm tin nhắn.
+- **Gợi ý gõ tắt** (tắt sẵn, bạn tự bật). Cụm bạn gõ lại từ 3 lần trong 30 ngày, như địa chỉ, số điện thoại, mã số thuế, được gợi ý thành gõ tắt; bạn bấm Thêm hoặc Bỏ qua.
+- **Gõ tắt chạy với cả lõi Vikey**, theo đúng quy tắc chữ hoa của Gõ Nhanh: `vn` → "Việt Nam", `VN` → "VIỆT NAM".
+
+Các tính năng học và viết hoa chỉ chạy với lõi Vikey (chế độ "Tự động", mặc định).
+
+### Không đụng tới mật khẩu và tài khoản
+
+- **Ô đăng nhập: phím đi thẳng.** Ngoài ô mật khẩu thật, LeanKeys nhận ra cả ô email, tên đăng nhập, số điện thoại, mã OTP, mã xác thực (tiếng Việt và tiếng Anh), kể cả trong app Electron và form có nhãn rời. Ở đó mọi phím đi thẳng, nên `nguyenvana` không thành "nguyễnvana".
+- **Trình quản lý mật khẩu và hộp thoại đăng nhập của macOS** (1Password, Bitwarden, KeePassXC, Passwords…): mọi phím đi thẳng ở mọi ô.
+- **Terminal không gõ tiếng Việt** (Terminal, iTerm2, Warp, Ghostty, kitty, WezTerm…). Mật khẩu `sudo`, `ssh`, `git` gõ ở đó không có ô bảo mật, nên LeanKeys để nguyên mọi phím.
+- **Điều khiển từ xa và máy ảo** (UltraViewer/MacViewer, TeamViewer, AnyDesk, Windows App, Parsec, DeskIn, Citrix, VMware, Parallels, UTM…): phím đi thẳng, để bộ gõ bên máy kia xử lý, không bị bỏ dấu hai lần.
+- **Không bao giờ học mật khẩu.** Không học trong ô đăng nhập, terminal, trình soạn code và trình quản lý mật khẩu. Từ trông như mật khẩu (trộn chữ với số hay ký hiệu) không bao giờ được lưu.
+- **Dữ liệu học chỉ nằm trên máy.** Mọi thứ được mã hoá AES-GCM, khoá giữ trong Keychain, không gửi đi đâu. Cụm chưa đủ số lần chỉ được lưu dưới dạng mã băm, không lưu chữ. Mỗi danh sách có nút "Xoá tất cả".
+- **Nhật ký gỡ lỗi không chứa chữ bạn gõ.** Chỉ ghi độ dài và phím điều khiển. Tệp nằm trong thư mục riêng của bạn (Gõ Nhanh gốc ghi vào `/tmp`, nơi chương trình khác trên máy đọc được), và tự tắt sau 24 giờ.
+- **App bật hardened runtime**, nên chương trình khác không thể chèn mã vào LeanKeys để mượn quyền Trợ năng.
+
+### Cài xong là gõ
+
+- **Cấp quyền Trợ năng chỉ một lần.** Bấm một nút trên màn chào rồi gạt một công tắc. App được ký bằng chứng chỉ cố định, nên quyền này còn nguyên qua mọi bản cập nhật.
+- **Tự cập nhật an toàn.** Bản mới chỉ được cài khi đã qua kiểm tra: tải từ GitHub qua HTTPS, có số phiên bản lớn hơn, ký cùng chứng chỉ với bản đang chạy. App chờ máy rảnh 30 giây mới cài, không bao giờ cài giữa lúc bạn đang gõ.
+- **Ô nổi trên thanh menu.** Bấm icon để đổi Tiếng Việt/English, đổi kiểu gõ, kiểm tra và cài bản mới, xem cảnh báo khi một app đang chặn gõ (Secure Input). Bấm phải vẫn mở menu đầy đủ.
+- **Icon V/E đổi mượt** mỗi khi LeanKeys tự chuyển ngôn ngữ; không có hiệu ứng nếu bạn bật "Giảm chuyển động".
+- **Cài đặt gọn bốn trang, chữ tiếng Việt thống nhất**, có nhãn cho VoiceOver. Mọi cài đặt hiện ra đều có tác dụng.
+
+### Luôn theo kịp hai lõi gốc
+
+Mọi chỗ LeanKeys sửa trong mã của Gõ Nhanh đều được đánh dấu `LEANKEYS-HOOK`, và một kiểm tra tự động chặn mọi sửa đổi không được đánh dấu. Nhờ vậy LeanKeys có thể kéo bản mới của Gõ Nhanh và Vikey về, chạy toàn bộ test, rồi build sẵn bản mới, mà không phải sửa tay lại từ đầu.
+
+## Giữ nguyên từ Gõ Nhanh và Vikey
+
+- Telex và VNI, đặt dấu kiểu mới (`oà`) hoặc kiểu cũ.
+- Tự chuyển Việt/Anh theo ngữ cảnh, ⌫⌫ để lấy lại phím đã gõ (Vikey).
+- Bảng gõ tắt, nhớ Việt/Anh theo từng app, tuỳ chỉnh cách gửi phím theo từng app, khởi động cùng máy (Gõ Nhanh).
+
+**Đánh đổi cần biết:** terminal nằm trong trình soạn code (như terminal của VS Code) vẫn gõ tiếng Việt, vì LeanKeys không phân biệt được nó với phần soạn thảo. Khi gõ mật khẩu ở đó, hãy chuyển sang English trước.
 
 ## Ảnh chụp
 
