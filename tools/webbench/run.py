@@ -136,6 +136,14 @@ def typist_args(case):
 
 # MARK: - machine (every side effect; FakeMachine in tests)
 
+def _block_signals():
+    return signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+
+
+def _unblock_signals(old):
+    signal.pthread_sigmask(signal.SIG_SETMASK, old)
+
+
 def _close_script(bundle, token):
     """AppleScript that closes this run's bench tab, or None for an unknown browser.
     Each script checks, then closes the tab it checked (by reference), in one block.
@@ -144,13 +152,15 @@ def _close_script(bundle, token):
     frontmost and its front window title carries this run's token."""
     mark = 'webbench-%s-' % token
     if bundle in (BUNDLES['chrome'], BUNDLES['safari']):
-        tab = 'active tab' if bundle == BUNDLES['chrome'] else 'current tab'
+        # Chrome tabs have `title`; Safari tabs have `name` (no `title`).
+        tab, prop = (('active tab', 'title') if bundle == BUNDLES['chrome']
+                     else ('current tab', 'name'))
         return '\n'.join([
             'tell application id "%s"' % bundle,
             '  if not frontmost then return "no"',
             '  if (count of windows) is 0 then return "no"',
             '  set t to %s of front window' % tab,
-            '  if not ((title of t) contains "%s") then return "no"' % mark,
+            '  if not ((%s of t) contains "%s") then return "no"' % (prop, mark),
             '  close t',
             '  return "yes"',
             'end tell',
@@ -389,7 +399,7 @@ class _Session:
             self.m.launch(app_path)
             flags['relaunched'] = True
 
-        old = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+        old = _block_signals()
         try:
             attempt(self.harvest)
             attempt(lambda: self.m.disable_log() if self.owns_log else None)
@@ -399,12 +409,15 @@ class _Session:
                 attempt(relaunch)
         finally:
             try:
-                signal.pthread_sigmask(signal.SIG_SETMASK, old)
+                _unblock_signals(old)
             except KeyboardInterrupt:
                 flags['interrupted'] = True
         if not flags['relaunched']:
-            print('WEBBENCH: LeanKeys was NOT relaunched. Start LeanKeys by hand: '
-                  'open /Applications/LeanKeys.app', file=sys.stderr, flush=True)
+            if gone[0]:
+                why = 'LeanKeys relaunch failed; open /Applications/LeanKeys.app by hand'
+            else:
+                why = 'LeanKeys did not quit; quit it, then open /Applications/LeanKeys.app'
+            print('WEBBENCH: ' + why, file=sys.stderr, flush=True)
         for e in errors:
             print('webbench restore: %r' % (e,), file=sys.stderr, flush=True)
         return flags
@@ -429,8 +442,13 @@ def run_matrix(machine, plan, out_path, app_path=APP_PATH, base_url=None, perf_l
         try:
             try:
                 if perf_log:
-                    s.perf_offset = len(machine.read_log())
-                    s.owns_log = machine.enable_log()
+                    # Masked so a Ctrl-C cannot land between the file appearing and owns_log.
+                    old = _block_signals()
+                    try:
+                        s.perf_offset = len(machine.read_log())
+                        s.owns_log = machine.enable_log()
+                    finally:
+                        _unblock_signals(old)
                 for i, case in enumerate(plan, 1):
                     s.set_engine(case['engine'])
                     rec = s.run_case(case)
@@ -440,10 +458,18 @@ def run_matrix(machine, plan, out_path, app_path=APP_PATH, base_url=None, perf_l
             except KeyboardInterrupt:
                 summary['interrupted'] = True
         finally:
-            flags = s.restore(original, APP_PATH)
-            summary['restored'] = flags['relaunched']
-            if flags['interrupted']:
-                summary['interrupted'] = True
+            # Masked before restore() so a Ctrl-C arriving here cannot skip the restore.
+            old = _block_signals()
+            try:
+                flags = s.restore(original, APP_PATH)
+                summary['restored'] = flags['relaunched']
+                if flags['interrupted']:
+                    summary['interrupted'] = True
+            finally:
+                try:
+                    _unblock_signals(old)
+                except KeyboardInterrupt:
+                    summary['interrupted'] = True
     return summary
 
 
@@ -459,8 +485,8 @@ def _csv(value, allowed, name):
 
 def final_message(summary):
     if summary.get('restored'):
-        return 'LeanKeys restored.'
-    return 'LeanKeys NOT relaunched: start it by hand (open /Applications/LeanKeys.app).'
+        return 'LeanKeys relaunched.'
+    return 'LeanKeys was not relaunched: see the line above.'
 
 
 def _interrupt(signum, frame):

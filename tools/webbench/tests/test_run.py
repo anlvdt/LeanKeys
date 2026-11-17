@@ -39,6 +39,7 @@ class FakeMachine:
         self.kb_on_write = None    # raise KeyboardInterrupt on this defaults_write (1-based)
         self.kb_on_enable = False  # raise KeyboardInterrupt inside enable_log
         self.kill_on_write = None  # send SIGINT to ourselves during this defaults_write
+        self.kill_on_enable = False  # create the log, send SIGINT, then return (owns it)
 
     def defaults_read(self, key):
         self.calls.append(('defaults_read', key))
@@ -107,7 +108,9 @@ class FakeMachine:
             raise KeyboardInterrupt
         if self.log_enabled:
             return False
-        self.log_enabled = True
+        self.log_enabled = True  # the file now exists
+        if self.kill_on_enable:
+            os.kill(os.getpid(), signal.SIGINT)
         return True
 
     def disable_log(self):
@@ -198,9 +201,20 @@ class RunMatrixTests(unittest.TestCase):
         with contextlib.redirect_stderr(err):
             with self.assertRaises(RuntimeError):
                 run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE)
-        self.assertIn('Start LeanKeys by hand', err.getvalue())
-        self.assertFalse(run.final_message({'restored': False}).startswith('LeanKeys restored.'))
-        self.assertEqual(run.final_message({'restored': True}), 'LeanKeys restored.')
+        self.assertIn('LeanKeys did not quit; quit it, then open /Applications/LeanKeys.app',
+                      err.getvalue())
+        self.assertNotIn('LeanKeys relaunched.', run.final_message({'restored': False}))
+        self.assertEqual(run.final_message({'restored': True}), 'LeanKeys relaunched.')
+
+    def test_ctrl_c_just_after_enable_log_still_disables_our_log(self):
+        m = FakeMachine(engine='vikey')
+        m.kill_on_enable = True
+        summary = run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE,
+                                 perf_log=True)
+        self.assertIn(('disable_log',), m.calls)
+        self.assertFalse(m.log_enabled)
+        self.assertTrue(summary['interrupted'])
+        self.assertEqual(m.calls[-1], ('launch', APP))
 
     def test_interrupt_during_enable_log_ends_with_restore(self):
         m = FakeMachine(engine='vikey')
@@ -319,6 +333,15 @@ class CloseBenchTabTests(unittest.TestCase):
             self.assertIn(bundle, script)
             self.assertIn('frontmost', script)
             self.assertIn('close t', script)
+
+    def test_tab_title_property_per_browser(self):
+        # Chrome tabs have `title`; Safari tabs have `name` (no `title`).
+        run.Machine().close_bench_tab(run.BUNDLES['chrome'], 'tok9')
+        self.assertIn('(title of t)', self.scripts[-1])
+        self.assertNotIn('name of t', self.scripts[-1])
+        run.Machine().close_bench_tab(run.BUNDLES['safari'], 'tok9')
+        self.assertIn('(name of t)', self.scripts[-1])
+        self.assertNotIn('title of t', self.scripts[-1])
 
     def test_firefox_uses_one_system_events_block_with_cmd_w(self):
         self.assertTrue(run.Machine().close_bench_tab(run.BUNDLES['firefox'], 'tok9'))
