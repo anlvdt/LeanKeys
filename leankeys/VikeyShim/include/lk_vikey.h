@@ -14,6 +14,14 @@ typedef struct { int deleteCount; int length; uint16_t text[256]; int languageCh
 int  lk_vikey_init(void);                       // 1 = ok
 void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out);
 void lk_vikey_reset_context(void);              // also clears the shim's copy of the current line
+// Caps Lock is on for the next lk_vikey_press (a capital typed without Shift). When every letter of a word was typed
+// with Caps Lock and Vikey puts its raw capitals back at the break, the shim keeps the Vietnamese word when it is a
+// common syllable with no English reading ("BUIF " -> "BÙI ", "USA " stays), as a veto (Backspace twice gives the
+// keys back): Vikey alone keeps the marks of all capitals only inside a run.
+void lk_vikey_set_caps_lock(int on);
+// Vietnamese words (one per line, any case) that a Caps Lock word keeps even though Vikey's dictionary scores them
+// low: family, middle and given names ("bùi", "nguyễn"). Replaces the previous list.
+void lk_vikey_set_caps_words(const uint16_t* units, int count);
 
 // Spec 12.1, on by default: Backspace right after a doubled key that undid a mark (Telex "hocjj" shows "hocj")
 // gives back the word from before the doubled key ("học") and keeps Vietnamese, in one edit (delete the word,

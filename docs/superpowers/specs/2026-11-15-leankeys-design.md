@@ -660,3 +660,13 @@ LeanKeys:
 Điều còn lại, chấp nhận: nhật ký vẫn cho thấy nhịp gõ và độ dài từ, vì không có chúng nhật ký không còn dùng được để tìm lỗi.
 
 `tests/privacy/test_debug_log.sh` (bước 5 của `.githooks/pre-push`) chặn mọi lần đồng bộ bản gốc đưa lại đường dẫn `/tmp` hay dòng nhật ký ghi chữ gõ. Thử tay: mục K4 trong `sync/manual-checklist.md`.
+
+## 19. Gõ chữ hoa bằng Caps Lock
+
+Thêm ngày 2026-11-17, theo lỗi người dùng báo: gõ "BÙI" bằng Caps Lock trong Canva ra "BUIF".
+
+- **Nguyên nhân (Vikey, D23/D41):** để từ viết tắt (USA, IRS) không bị bỏ dấu, Vikey chỉ giữ dấu cho một từ viết hoa toàn bộ khi từ trước nó cũng viết hoa toàn bộ, hoặc khi phím của nó có nguyên âm gõ đúp hay `w`. Từ đầu tiên của một dòng chữ hoa (thường là họ) bị trả về phím gốc ở dấu cách: `BUIF` hiện "BÙI" rồi thành "BUIF". Điểm từ điển của Vikey lấy từ tin nhắn chat nên họ tên điểm thấp ("bùi" 3, "nguyễn" 5), ngang từ viết tắt IRS (6), nên ngưỡng 15 của Vikey cũng loại chúng.
+- **LeanKeys:** Caps Lock bật cho mọi chữ của từ chính là "dòng chữ hoa" Vikey cần. Khi Vikey trả từ về phím gốc ở dấu cách hay dấu câu, LeanKeys giữ từ tiếng Việt (chặn lần sửa đó, như 12.2) nếu: mọi chữ gõ bằng Caps Lock (không giữ Shift), từ bắt đầu ở chế độ tiếng Việt, phím gốc không phải từ tiếng Anh, và từ là âm tiết thông dụng (điểm ≥ 15) hoặc là họ, tên đệm, tên trong dữ liệu 4D (`ProperNouns.json`). ⌫⌫ ngay sau đó trả lại phím gốc. Gõ bằng Shift giữ nguyên cách Vikey quyết định.
+- **Vị trí:** `leankeys/VikeyShim` (`capsLockKeeps`, `lk_vikey_set_caps_lock`, `lk_vikey_set_caps_words`) và `VikeyEngine` (Caps Lock = chữ hoa mà không giữ Shift). `vendor/` không đổi.
+- **Test:** `CapsLockWordTests` (BÙI, NGUYỄN, BÙI THỊ XUÂN, 453 BÙI MÌ, BÀN; USA, IRS, HTML giữ nguyên; Shift giữ nguyên; ⌫⌫).
+
