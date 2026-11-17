@@ -14,13 +14,18 @@ public enum Guard {
     public static func mayType(
         frontBundle: String?,
         windowTitle: String?,
+        alternateTitle: String? = nil,
         expectedBundle: String,
         token: String,
         layoutID: String
     ) -> Bool {
         guard !token.isEmpty else { return false }
         guard let bundle = frontBundle, bundle == expectedBundle else { return false }
-        guard let title = windowTitle, title.contains("webbench-\(token)-ready") else { return false }
+        // The focused window may be a browser popup (autofill, a suggestion list) while the
+        // page is the main window: either one carrying the ready title is the page.
+        let ready = "webbench-\(token)-ready"
+        let carriesReady = [windowTitle, alternateTitle].contains { $0?.contains(ready) == true }
+        guard carriesReady else { return false }
         return layoutAccepted(layoutID)
     }
 }

@@ -126,4 +126,24 @@ final class TypistCoreTests: XCTestCase {
                                     expectedBundle: "com.google.Chrome",
                                     token: "x", layoutID: "com.apple.keylayout.ABC"))
     }
+
+    func testReadyTitleOnMainWindowIsAcceptedWhenFocusedWindowIsAPopup() {
+        let ok = { (focused: String?, main: String?) in
+            Guard.mayType(
+                frontBundle: "com.google.Chrome",
+                windowTitle: focused,
+                alternateTitle: main,
+                expectedBundle: "com.google.Chrome",
+                token: "x",
+                layoutID: "com.apple.keylayout.US"
+            )
+        }
+        // An autofill popup takes the focused window; the page window is still the main one.
+        XCTAssertTrue(ok("Autofill suggestions", "webbench-x-ready - Google Chrome"))
+        XCTAssertTrue(ok(nil, "webbench-x-ready - Google Chrome"))
+        // Still refused when neither window carries the ready title.
+        XCTAssertFalse(ok("Autofill suggestions", "webbench-x-loading"))
+        XCTAssertFalse(ok("Autofill suggestions", nil))
+        XCTAssertFalse(ok("Autofill suggestions", "webbench-y-ready"))
+    }
 }

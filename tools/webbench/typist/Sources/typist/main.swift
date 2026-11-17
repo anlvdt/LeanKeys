@@ -27,11 +27,12 @@ func currentLayoutID() -> String {
     return Unmanaged<CFString>.fromOpaque(raw).takeUnretainedValue() as String
 }
 
-func frontWindowTitle() -> String? {
+/// Title of the frontmost app's window with the given AX attribute (focused or main).
+func windowTitle(_ attribute: String) -> String? {
     guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
     let axApp = AXUIElementCreateApplication(app.processIdentifier)
     var windowRef: CFTypeRef?
-    guard AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
+    guard AXUIElementCopyAttributeValue(axApp, attribute as CFString, &windowRef) == .success,
           let windowRef else { return nil }
     let window = windowRef as! AXUIElement
     var titleRef: CFTypeRef?
@@ -40,6 +41,8 @@ func frontWindowTitle() -> String? {
     }
     return titleRef as? String
 }
+
+func frontWindowTitle() -> String? { windowTitle(kAXFocusedWindowAttribute as String) }
 
 /// A listen-only tap for real keyboard and mouse input. Nil when the terminal lacks
 /// Accessibility or Input Monitoring.
@@ -162,6 +165,7 @@ func guardAllows() -> Bool {
     Guard.mayType(
         frontBundle: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
         windowTitle: frontWindowTitle(),
+        alternateTitle: windowTitle(kAXMainWindowAttribute as String),
         expectedBundle: expectedBundle,
         token: token,
         layoutID: currentLayoutID()
