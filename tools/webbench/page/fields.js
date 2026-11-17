@@ -58,7 +58,7 @@ function mountContenteditable(stage, onChange) {
   el.addEventListener('input', () => onChange());
   stage.append(el);
   return {
-    getText: () => el.innerText,
+    getText: () => el.innerText.replace(/ /g, ' '),
     focus: () => caretToEnd(el),
   };
 }
@@ -69,10 +69,14 @@ function mountAutocomplete(stage, onChange) {
   const el = document.createElement('input');
   el.type = 'text';
   setCommon(el);
+  // What the keystrokes produced, without the auto-filled remainder.
+  let typed = '';
   el.addEventListener('input', (event) => {
+    // At this point the value is exactly what the user typed (any previous
+    // completion was replaced by the keystroke), so record it before completing.
+    typed = el.value;
     onChange();
     if (event.isComposing || !event.inputType || !event.inputType.startsWith('insert')) return;
-    const typed = el.value;
     if (!typed) return;
     const lower = typed.toLowerCase();
     const match = SUGGESTIONS.find((s) => s.toLowerCase().startsWith(lower) && s.length > typed.length);
@@ -82,7 +86,7 @@ function mountAutocomplete(stage, onChange) {
   });
   stage.append(el);
   return {
-    getText: () => el.value,
+    getText: () => typed,
     focus: () => {
       el.focus();
       el.setSelectionRange(el.value.length, el.value.length);
@@ -90,7 +94,7 @@ function mountAutocomplete(stage, onChange) {
   };
 }
 
-async function mountLexical(stage, onChange) {
+async function mountLexical(stage, onChange, onFail) {
   const [{ createEditor, $getRoot, $createParagraphNode }, { registerPlainText }] = await Promise.all([
     import('lexical'),
     import('@lexical/plain-text'),
@@ -102,7 +106,10 @@ async function mountLexical(stage, onChange) {
 
   const editor = createEditor({
     namespace: 'webbench',
-    onError: (error) => { throw error; },
+    onError: (error) => {
+      console.error(error);
+      onFail();
+    },
   });
   editor.setRootElement(root);
   registerPlainText(editor);

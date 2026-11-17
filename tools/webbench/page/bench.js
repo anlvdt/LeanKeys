@@ -54,7 +54,7 @@ async function main() {
     const { FIELDS } = await import('./fields.js');
     const mount = FIELDS[field];
     if (!mount) throw new Error(`unknown field: ${field}`);
-    handle = await mount(document.getElementById('stage'), onChange);
+    handle = await mount(document.getElementById('stage'), onChange, () => setTitle('error'));
     handle.focus();
     setTitle('ready');
   } catch (err) {
