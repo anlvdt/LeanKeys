@@ -80,5 +80,5 @@ tools/mixbench/gn/target/
 # Signing key backup (never commit)
 .signing/
 *.p12
-# LEANKEYS-HOOK-END
 tools/webbench/results/
+# LEANKEYS-HOOK-END

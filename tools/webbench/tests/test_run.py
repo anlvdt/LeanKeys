@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import signal
 import sys
 import tempfile
 import unittest
@@ -37,6 +38,7 @@ class FakeMachine:
         self.writes = 0
         self.kb_on_write = None    # raise KeyboardInterrupt on this defaults_write (1-based)
         self.kb_on_enable = False  # raise KeyboardInterrupt inside enable_log
+        self.kill_on_write = None  # send SIGINT to ourselves during this defaults_write
 
     def defaults_read(self, key):
         self.calls.append(('defaults_read', key))
@@ -45,6 +47,8 @@ class FakeMachine:
     def defaults_write(self, key, value):
         self.calls.append(('defaults_write', key, value))
         self.writes += 1
+        if self.kill_on_write == self.writes:
+            os.kill(os.getpid(), signal.SIGINT)  # a real Ctrl-C landing mid-write
         if self.kb_on_write == self.writes:
             raise KeyboardInterrupt
         self.store[key] = value
@@ -175,6 +179,29 @@ class RunMatrixTests(unittest.TestCase):
         self.assertEqual(m.calls[-2][0], 'wait_gone')
         self.assertEqual(m.calls[-1], ('launch', APP))
 
+    def test_restore_finishes_when_ctrl_c_lands_during_the_engine_write(self):
+        # Original engine gonhanh, plan engine vikey: restore must write gonhanh back.
+        m = FakeMachine(engine='gonhanh')
+        m.kill_on_write = 2  # the restore write
+        summary = run.run_matrix(m, [make_case(1, engine='vikey')], self.out, app_path=APP,
+                                 base_url=BASE, perf_log=True)
+        self.assertEqual(m.store[KEY], 'gonhanh')
+        self.assertIn(('disable_log',), m.calls)
+        self.assertFalse(m.log_enabled)
+        self.assertEqual(m.calls[-1], ('launch', APP))
+        self.assertTrue(summary['restored'])
+        self.assertTrue(summary['interrupted'])
+
+    def test_start_by_hand_line_when_not_relaunched(self):
+        m = FakeMachine(engine='vikey', gone=False)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            with self.assertRaises(RuntimeError):
+                run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE)
+        self.assertIn('Start LeanKeys by hand', err.getvalue())
+        self.assertFalse(run.final_message({'restored': False}).startswith('LeanKeys restored.'))
+        self.assertEqual(run.final_message({'restored': True}), 'LeanKeys restored.')
+
     def test_interrupt_during_enable_log_ends_with_restore(self):
         m = FakeMachine(engine='vikey')
         m.kb_on_enable = True
@@ -268,6 +295,48 @@ class RunMatrixTests(unittest.TestCase):
         self.assertNotIn(('disable_log',), m.calls)
 
 
+class CloseBenchTabTests(unittest.TestCase):
+    def setUp(self):
+        self.scripts = []
+        self.answer = 'yes'
+        self._orig = run._osa
+
+        def fake_osa(script):
+            self.scripts.append(script)
+            return self.answer
+        run._osa = fake_osa
+
+    def tearDown(self):
+        run._osa = self._orig
+
+    def test_one_script_per_browser_checks_then_closes_by_reference(self):
+        for bundle in (run.BUNDLES['chrome'], run.BUNDLES['safari']):
+            self.scripts.clear()
+            self.assertTrue(run.Machine().close_bench_tab(bundle, 'tok9'))
+            self.assertEqual(len(self.scripts), 1)
+            script = self.scripts[0]
+            self.assertIn('webbench-tok9-', script)
+            self.assertIn(bundle, script)
+            self.assertIn('frontmost', script)
+            self.assertIn('close t', script)
+
+    def test_firefox_uses_one_system_events_block_with_cmd_w(self):
+        self.assertTrue(run.Machine().close_bench_tab(run.BUNDLES['firefox'], 'tok9'))
+        self.assertEqual(len(self.scripts), 1)
+        self.assertIn('webbench-tok9-', self.scripts[0])
+        self.assertIn('keystroke "w" using command down', self.scripts[0])
+
+    def test_false_when_script_fails_or_check_refuses(self):
+        self.answer = ''  # osascript failed
+        self.assertFalse(run.Machine().close_bench_tab(run.BUNDLES['chrome'], 'tok9'))
+        self.answer = 'no'  # check refused
+        self.assertFalse(run.Machine().close_bench_tab(run.BUNDLES['chrome'], 'tok9'))
+
+    def test_unknown_bundle_touches_nothing(self):
+        self.assertFalse(run.Machine().close_bench_tab('com.example.other', 'tok9'))
+        self.assertEqual(self.scripts, [])
+
+
 class EstimateAndDryRunTests(unittest.TestCase):
     def test_dry_run_touches_nothing(self):
         buf = io.StringIO()
@@ -281,8 +350,8 @@ class EstimateAndDryRunTests(unittest.TestCase):
 
     def test_estimate_counts_schedule_and_overhead(self):
         plan = [make_case(1, speed='fast', keys='a' * 25)]
-        # 25 keys at 25 keys/s is 1 s, plus 3 s overhead.
-        self.assertAlmostEqual(run.estimate_seconds(plan), 4.0, places=6)
+        # 25 keys at 25 keys/s is 1 s, plus the per-case overhead.
+        self.assertAlmostEqual(run.estimate_seconds(plan), 1.0 + run.OVERHEAD_S, places=6)
 
 
 if __name__ == '__main__':

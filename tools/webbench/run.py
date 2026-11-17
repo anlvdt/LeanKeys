@@ -51,7 +51,7 @@ QUIET_S = 1.5           # after typist returns; the page posts 800 ms after the 
 RESULT_TIMEOUT_S = 5.0  # poll window for the POSTed result
 POLL_S = 0.25
 QUIT_TIMEOUT_S = 10.0
-OVERHEAD_S = 3.0        # per case, on top of the key schedule
+OVERHEAD_S = 3.5        # per case, on top of the key schedule: open, settle, polls, one osascript close
 # Mean inter-key delay per speed (human: uniform 1/12..1/8 s; fast: 25 keys/s; burst: none).
 MEAN_KEY_S = {'human': (1 / 12 + 1 / 8) / 2, 'fast': 1 / 25, 'burst': 0.0}
 
@@ -136,6 +136,39 @@ def typist_args(case):
 
 # MARK: - machine (every side effect; FakeMachine in tests)
 
+def _close_script(bundle, token):
+    """AppleScript that closes this run's bench tab, or None for an unknown browser.
+    Each script checks, then closes the tab it checked (by reference), in one block.
+    Firefox has no tab scripting, so it is System Events plus Cmd+W. Residual risk: focus
+    can move between the check and the keystroke. The check still refuses unless Firefox is
+    frontmost and its front window title carries this run's token."""
+    mark = 'webbench-%s-' % token
+    if bundle in (BUNDLES['chrome'], BUNDLES['safari']):
+        tab = 'active tab' if bundle == BUNDLES['chrome'] else 'current tab'
+        return '\n'.join([
+            'tell application id "%s"' % bundle,
+            '  if not frontmost then return "no"',
+            '  if (count of windows) is 0 then return "no"',
+            '  set t to %s of front window' % tab,
+            '  if not ((title of t) contains "%s") then return "no"' % mark,
+            '  close t',
+            '  return "yes"',
+            'end tell',
+        ])
+    if bundle == BUNDLES['firefox']:
+        return '\n'.join([
+            'tell application "System Events"',
+            '  set p to first application process whose frontmost is true',
+            '  if bundle identifier of p is not "%s" then return "no"' % bundle,
+            '  if (count of windows of p) is 0 then return "no"',
+            '  if not ((name of front window of p) contains "%s") then return "no"' % mark,
+            '  tell p to keystroke "w" using command down',
+            '  return "yes"',
+            'end tell',
+        ])
+    return None
+
+
 def _osa(script):
     """Run an AppleScript; '' on any failure (the caller decides what that means)."""
     try:
@@ -181,25 +214,12 @@ class Machine:
         subprocess.run(['open', '-b', bundle, url], check=True)
 
     def close_bench_tab(self, bundle, token):
-        """Close the bench tab only if its browser is frontmost and the front window title
-        still carries this run's token. Anything else is left alone."""
-        if _osa('tell application "System Events" to get bundle identifier of '
-                'first application process whose frontmost is true') != bundle:
+        """Check and close the bench tab in ONE AppleScript per browser. Returns True only if
+        the script ran and reported that it closed the tab."""
+        script = _close_script(bundle, token)
+        if script is None:
             return False
-        title = _osa('tell application "System Events" to tell (first application process '
-                     'whose frontmost is true) to get name of front window')
-        if ('webbench-%s-' % token) not in title:
-            return False
-        if bundle == BUNDLES['chrome']:
-            script = 'tell application id "%s" to close active tab of front window' % bundle
-        elif bundle == BUNDLES['safari']:
-            script = 'tell application id "%s" to close current tab of front window' % bundle
-        elif bundle == BUNDLES['firefox']:
-            script = 'tell application "System Events" to keystroke "w" using command down'
-        else:
-            return False
-        _osa(script)
-        return True
+        return _osa(script) == 'yes'
 
     def run_typist(self, args):
         p = subprocess.run([TYPIST] + args, stdout=subprocess.PIPE, text=True)
@@ -315,8 +335,8 @@ class _Session:
                 rec['sent'] = sent
                 self.m.sleep(QUIET_S)
                 self._collect(case, rec)
-        self.m.close_bench_tab(case['bundle'], case['token'])
         self.write(rec)
+        self.m.close_bench_tab(case['bundle'], case['token'])
         return rec
 
     def _collect(self, case, rec):
@@ -340,17 +360,19 @@ class _Session:
 
     def restore(self, original, app_path):
         """Put the engine back, stop the debug log if this run started it, relaunch
-        /Applications/LeanKeys.app. Each step runs even if an interrupt or error hits an
-        earlier one. Returns True if an interrupt arrived during restore."""
+        /Applications/LeanKeys.app. SIGINT and SIGTERM are blocked for the whole restore, so
+        no step is cut short; a signal that arrived meanwhile is delivered on unblock.
+        Each step still runs if an earlier one fails. Returns a dict with
+        'interrupted' (a Ctrl-C or SIGTERM arrived) and 'relaunched' (the relaunch happened)."""
         errors = []
-        interrupted = [False]
+        flags = {'interrupted': False, 'relaunched': False}
         gone = [False]
 
         def attempt(fn):
             try:
                 fn()
             except KeyboardInterrupt:
-                interrupted[0] = True
+                flags['interrupted'] = True
             except BaseException as e:  # keep restoring the rest
                 errors.append(e)
 
@@ -361,26 +383,31 @@ class _Session:
                 self.m.defaults_write(KEY, original)
 
         def confirm_quit():
-            for _ in range(2):  # a second interrupt during the wait still gets one more try
-                try:
-                    gone[0] = self.quit_confirmed()
-                    return
-                except KeyboardInterrupt:
-                    interrupted[0] = True
+            gone[0] = self.quit_confirmed()
 
-        attempt(self.harvest)
-        attempt(lambda: self.m.disable_log() if self.owns_log else None)
-        attempt(restore_engine)
-        attempt(confirm_quit)
-        if gone[0]:
-            attempt(lambda: self.m.launch(app_path))
-        else:
-            print('WEBBENCH: LeanKeys did NOT quit, so /Applications/LeanKeys.app was not '
-                  'relaunched. Start LeanKeys by hand: open /Applications/LeanKeys.app',
-                  file=sys.stderr, flush=True)
+        def relaunch():
+            self.m.launch(app_path)
+            flags['relaunched'] = True
+
+        old = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+        try:
+            attempt(self.harvest)
+            attempt(lambda: self.m.disable_log() if self.owns_log else None)
+            attempt(restore_engine)
+            attempt(confirm_quit)
+            if gone[0]:
+                attempt(relaunch)
+        finally:
+            try:
+                signal.pthread_sigmask(signal.SIG_SETMASK, old)
+            except KeyboardInterrupt:
+                flags['interrupted'] = True
+        if not flags['relaunched']:
+            print('WEBBENCH: LeanKeys was NOT relaunched. Start LeanKeys by hand: '
+                  'open /Applications/LeanKeys.app', file=sys.stderr, flush=True)
         for e in errors:
             print('webbench restore: %r' % (e,), file=sys.stderr, flush=True)
-        return interrupted[0]
+        return flags
 
 def _parse_sent(stdout, n):
     try:
@@ -396,7 +423,7 @@ def run_matrix(machine, plan, out_path, app_path=APP_PATH, base_url=None, perf_l
     An interrupt (Ctrl-C, SIGTERM) ends the run cleanly with summary['interrupted'] set;
     the restore always runs and survives a second interrupt."""
     original = machine.defaults_read(KEY)
-    summary = {'interrupted': False, 'cases': 0, 'out': out_path}
+    summary = {'interrupted': False, 'restored': False, 'cases': 0, 'out': out_path}
     with open(out_path, 'w', encoding='utf-8') as out:
         s = _Session(machine, out, app_path, perf_log, base_url)
         try:
@@ -413,7 +440,9 @@ def run_matrix(machine, plan, out_path, app_path=APP_PATH, base_url=None, perf_l
             except KeyboardInterrupt:
                 summary['interrupted'] = True
         finally:
-            if s.restore(original, APP_PATH):
+            flags = s.restore(original, APP_PATH)
+            summary['restored'] = flags['relaunched']
+            if flags['interrupted']:
                 summary['interrupted'] = True
     return summary
 
@@ -426,6 +455,12 @@ def _csv(value, allowed, name):
         if v not in allowed:
             raise SystemExit('%s: unknown value %r (allowed: %s)' % (name, v, ','.join(allowed)))
     return items
+
+
+def final_message(summary):
+    if summary.get('restored'):
+        return 'LeanKeys restored.'
+    return 'LeanKeys NOT relaunched: start it by hand (open /Applications/LeanKeys.app).'
 
 
 def _interrupt(signum, frame):
@@ -522,8 +557,9 @@ def main(argv=None):
         httpd.server_close()
     print('Results: %s (%d records)' % (out_path, summary['cases']))
     print('Report: python3 -I %s %s' % (os.path.join(HERE, 'report.py'), out_path))
+    print(final_message(summary))
     if summary['interrupted']:
-        print('Interrupted: LeanKeys restored.', file=sys.stderr)
+        print('Interrupted.', file=sys.stderr)
         return 130
     return 0
 
