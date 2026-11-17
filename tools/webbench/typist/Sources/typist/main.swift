@@ -8,9 +8,9 @@ import TypistCore
 // Exit codes: 0 typed (or --check passed), 1 usage or event failure, 2 no Accessibility,
 // Input Monitoring (the tap) or US layout, 3 guard refused, 4 interrupted by real input,
 // 5 unmappable character, 6 page not ready (timeout or error title; nothing posted).
+// --watch <s> exits 0 when no real input arrived in that time, 4 when some did (posts nothing).
 
-let ownMarker: Int64 = 0x5745_4242       // "WEBB": typist's own events
-let leanKeysMarker: Int64 = 0x474E_4820  // "GNH ": LeanKeys' reposted events
+let ownMarker = InputSource.ownMarker
 
 func fail(_ code: Int32, _ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
@@ -18,7 +18,7 @@ func fail(_ code: Int32, _ message: String) -> Never {
 }
 
 func usage() -> Never {
-    fail(1, "usage: typist --keys <string> --speed human|fast|burst --seed <n> --bundle <id> --token <t> [--ready-timeout <s>]\n       typist --check")
+    fail(1, "usage: typist --keys <string> --speed human|fast|burst --seed <n> --bundle <id> --token <t> [--ready-timeout <s>]\n       typist --check\n       typist --watch <seconds>")
 }
 
 func currentLayoutID() -> String {
@@ -51,6 +51,39 @@ func makeListenTap(refcon: UnsafeMutableRawPointer?, callback: @escaping CGEvent
     return CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
                              options: .listenOnly, eventsOfInterest: mask,
                              callback: callback, userInfo: refcon)
+}
+
+// MARK: - --watch <seconds> (posts nothing: exit 4 if real input arrives in the window)
+
+if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--watch" {
+    guard let seconds = Double(CommandLine.arguments[2]), seconds >= 0 else { usage() }
+    final class WatchState {
+        var sawRealInput = false
+    }
+    let watchState = WatchState()
+    guard let watchTap = makeListenTap(refcon: Unmanaged.passUnretained(watchState).toOpaque(),
+                                       callback: { _, type, event, refcon in
+        guard let refcon else { return Unmanaged.passUnretained(event) }
+        let st = Unmanaged<WatchState>.fromOpaque(refcon).takeUnretainedValue()
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput
+            || InputSource.isForeign(marker: event.getIntegerValueField(.eventSourceUserData)) {
+            st.sawRealInput = true
+        }
+        return Unmanaged.passUnretained(event)
+    }) else {
+        fail(2, Preflight.problem(accessibilityTrusted: AXIsProcessTrusted(), tapCreated: false,
+                                  layoutID: Guard.requiredLayoutID) ?? "")
+    }
+    CFRunLoopAddSource(CFRunLoopGetCurrent(),
+                       CFMachPortCreateRunLoopSource(kCFAllocatorDefault, watchTap, 0), .commonModes)
+    let watchEnd = Date().addingTimeInterval(seconds)
+    repeat {
+        CFRunLoopRunInMode(.defaultMode, max(watchEnd.timeIntervalSinceNow, 0), false)
+    } while Date() < watchEnd
+    if watchState.sawRealInput {
+        fail(4, "typist: real keyboard or mouse input during the watch")
+    }
+    exit(0)
 }
 
 // MARK: - --check (preflight: posts nothing, changes nothing)
@@ -151,8 +184,7 @@ let tapCallback: CGEventTapCallBack = { _, type, event, refcon in
         state.interrupted = true
         return Unmanaged.passUnretained(event)
     }
-    let source = event.getIntegerValueField(.eventSourceUserData)
-    if source != ownMarker && source != leanKeysMarker {
+    if InputSource.isForeign(marker: event.getIntegerValueField(.eventSourceUserData)) {
         state.interrupted = true
     }
     return Unmanaged.passUnretained(event)

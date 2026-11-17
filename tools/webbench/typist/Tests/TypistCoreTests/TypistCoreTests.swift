@@ -105,4 +105,11 @@ final class TypistCoreTests: XCTestCase {
         XCTAssertEqual(PageState.of(title: "webbench-y-ready", token: "x"), .other)
         XCTAssertEqual(PageState.of(title: nil, token: "x"), .other)
     }
+
+    func testInputFromTypistOrLeanKeysIsNotForeign() {
+        XCTAssertFalse(InputSource.isForeign(marker: InputSource.ownMarker))
+        XCTAssertFalse(InputSource.isForeign(marker: InputSource.leanKeysMarker))
+        XCTAssertTrue(InputSource.isForeign(marker: 0))            // a real key or mouse event
+        XCTAssertTrue(InputSource.isForeign(marker: 0x5745_4243))  // one off from typist's marker
+    }
 }
