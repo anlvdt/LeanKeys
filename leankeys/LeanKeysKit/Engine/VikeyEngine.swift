@@ -7,7 +7,16 @@ public final class VikeyEngine: TypingEngine {
     /// nil when lk_vikey_init() fails.
     public init?() {
         guard lk_vikey_init() == 1 else { return nil }
+        _ = Self.capsWordsInstalled
     }
+
+    /// The names a word typed with Caps Lock keeps ("BUIF " -> "BÙI "): Vikey's dictionary scores names as low as
+    /// acronyms. Family, middle and given names from the 4D name data, once per process.
+    private static let capsWordsInstalled: Void = {
+        let data = ProperNounData.bundled
+        let words = Array((data.surnames + data.middleNames + data.givenNames).joined(separator: "\n").utf16)
+        words.withUnsafeBufferPointer { lk_vikey_set_caps_words($0.baseAddress, Int32($0.count)) }
+    }()
 
     public func process(keyCode: UInt16, caps: Bool, shift: Bool) -> EngineEdit? {
         let letter = Self.letterKeys.contains(keyCode)
@@ -22,6 +31,8 @@ public final class VikeyEngine: TypingEngine {
         }
 
         var raw = lk_edit()
+        // A capital without Shift is Caps Lock: the shim converts the first word of a run of capitals ("BUIF ").
+        lk_vikey_set_caps_lock(letter && caps && !shift ? 1 : 0)
         lk_vikey_press(keyCode, vikeyShift ? 1 : 0, ProcessInfo.processInfo.systemUptime, &raw)
         let edit = Self.edit(from: &raw)
         // Return finishes the word (Vikey may fix it), then the next word starts fresh.

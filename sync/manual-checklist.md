@@ -42,6 +42,7 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | S3 | Gợi ý gõ tắt | Gõ cùng một chuỗi 3 lần trong ô mật khẩu của Safari (Return sau mỗi lần): không có gợi ý nào. | — | [ ] |
 | S4 | Gợi ý gõ tắt | Cài đặt → Nâng cao → "Xoá dữ liệu gợi ý gõ tắt" → Xoá: ô nổi không còn dòng gợi ý, danh sách gợi ý trống; Bảng gõ tắt, "Từ giữ nguyên" và "Tên đã học" vẫn còn. | — | [ ] |
 | S5 | Chữ hoa với Shift | Gõ `DDaif Loan` trong Notes, giữ Shift (không bật Caps Lock) khi gõ `DD` và `L`: ra "Đài Loan", không ra "đài Loan". | [ ] | [ ] |
+| S6 | Chữ hoa bằng Caps Lock | Vikey, bật Caps Lock, gõ `BUIF THIJ XUAAN ` ở đầu dòng trong Notes và trong một ô chữ của Canva (hoặc trang web): ra "BÙI THỊ XUÂN"; `USA ` vẫn là "USA"; ⌫⌫ ngay sau "BÙI " trả lại "BUIF". | — | [ ] |
 | C1 | 4C · ⌫ sau phím gõ đúp | Vikey, tiếng Việt: gõ `hocjj` rồi ⌫ trong Notes: ra "học", biểu tượng vẫn là V. | — | [ ] |
 | C2 | 4C · Tự học có ngữ cảnh | Trong một câu tiếng Anh (`about its`), gõ "its" rồi ⌫⌫ để giữ nguyên. Lần sau gõ lại `about its`: "its" được giữ nguyên ngay. | — | [ ] |
 | C3 | 4C · Tự học không ngữ cảnh | Gõ "cos" ở hai câu khác nhau, mỗi lần ⌫⌫ để giữ nguyên. Lần thứ ba, ở một câu khác nữa, "cos" được giữ nguyên ngay. Cài đặt → Nâng cao → "Từ giữ nguyên" có dòng "cos". | — | [ ] |

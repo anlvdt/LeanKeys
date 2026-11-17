@@ -4,6 +4,7 @@
 #include "telex_map.h"
 #include <cstring>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -53,12 +54,19 @@ struct ScreenModel {
     int languageAfterLastKey = 1;        // vLanguage after the last non-Backspace key
     bool lastKeyReplaced = false;        // the last key was not Backspace and its edit deleted something
     std::u16string wordBeforeLastKey;    // the current word just before the last key (any key)
+    bool wordCapsLock = false;           // every letter of the current word was typed with Caps Lock on
 };
 
 static ScreenModel model;
 static bool doubleKeyFix = true;
+static bool capsLockForNextKey = false;   // lk_vikey_set_caps_lock, for the next lk_vikey_press
 
 static void resetModel() { model = ScreenModel(); }
+
+static bool isLetterKey(Uint16 key) {
+    for (Uint16 k : kLetterKeys) if (k == key) return true;
+    return false;
+}
 
 static const LKTelexLetter* telexLetter(char16_t c) {
     for (const LKTelexLetter& m : kTelexMap) if (m.c == c) return &m;
@@ -289,6 +297,7 @@ struct Veto {
     Fix fix;
     int languageAfterFix = 1;          // vLanguage right after Vikey's fix, before the veto undid it
     int backspaces = 0;                // Backspaces since the veto
+    bool capsLock = false;             // the Caps Lock rule vetoed, not the fix filter: no undo event on reverse
 };
 static Veto veto;
 static bool hasPendingUndo = false;
@@ -362,9 +371,41 @@ static bool reverseVeto(double now, VKEdit& e) {
     model.lastKeyReplaced = false;
     model.languageAfterLastKey = vLanguage;
     model.wordBeforeLastKey.clear();
-    queueUndo(veto.fix, true);
+    if (!veto.capsLock) queueUndo(veto.fix, true);   // the undo learner never saw a Caps Lock veto
     veto = Veto();
     return true;
+}
+
+// MARK: - A word typed with Caps Lock
+//
+// Vikey converts an all-caps word only inside a run of capitals or when its keys double a vowel or use w (Engine.cpp,
+// D23/D41): typing "BUIF" shows "BÙI", and at the break Vikey puts the keys back ("BUIF "), so an all-caps word that
+// is not inside a run (the first of a line, after a number) never keeps its marks ("BÙI", "NGUYỄN"). The rule below
+// applies to every word typed with Caps Lock that Vikey puts back; inside a run Vikey has already kept it. Caps Lock on for every letter is the run of
+// capitals Vikey looks for, so LeanKeys keeps the Vietnamese word on the terms Vikey applies inside a run: a common
+// syllable (score >= 15, Vikey's AS_CAPS_VN_FLOOR) or a Vietnamese name LeanKeys knows (lk_vikey_set_caps_words:
+// "bùi" scores 3 and "nguyễn" 5 in Vikey's chat-based dictionary, as low as the acronym IRS at 6), and whose keys
+// have no English reading. Acronyms (USA, IRS) and words typed with Shift held stay as Vikey decides. Backspace twice
+// still gives the keys back (the veto's reverse undo).
+
+static const int kCapsVietnameseFloor = 15;
+static std::unordered_set<std::u16string> capsWords;   // lower case
+
+// Vikey's fix `fix` of the word just finished put its raw capitals back; keep the Vietnamese word instead?
+static bool capsLockKeeps(const ScreenModel& before, const Fix& fix) {
+    if (!before.wordCapsLock || before.wordStartLanguage != 1) return false;
+    if (fix.after.size() < 2 || fix.after.size() > kMaxScoredKeys || isAscii(fix.before)) return false;
+    std::string keys;
+    for (char16_t c : fix.after) {
+        if (c < 'A' || c > 'Z') return false;   // the fix gave back the typed capitals
+        keys += (char)(c - 'A' + 'a');
+    }
+    if (englishScore(fix.after) != LK_VIKEY_NOT_A_WORD) return false;
+    std::u16string lower = fix.before;
+    for (char16_t& c : lower) c = toLower(c);
+    if (capsWords.count(lower)) return true;
+    const int score = vAutoSwitchWordScore(1, keys.c_str(), nullptr, nullptr);
+    return score != LK_VIKEY_NOT_A_WORD && score >= kCapsVietnameseFloor;
 }
 
 extern "C" {
@@ -388,7 +429,12 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
         else veto = Veto();
         if (!backspace) hasLastFix = false;
         const int undosBefore = driver->undos;
+        const bool letterKey = isLetterKey(macKeyCode);
         e = pressTracked(macKeyCode, shift != 0, now);
+        if (letterKey) {
+            const bool wordStarted = wordOf(before.line).empty();
+            model.wordCapsLock = (wordStarted || before.wordCapsLock) && capsLockForNextKey;
+        }
         if (driver->undos != undosBefore) {
             if (hasLastFix) queueUndo(lastFix, false);
             hasLastFix = false;
@@ -397,7 +443,10 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
         if (backspace) {
             if (doubleKeyFix) repairDoubleKey(before, now, e);
         } else if (fixOfLastKey(e, fix)) {
-            if (fixFilter) {
+            if (capsLockKeeps(before, fix)) {
+                vetoFix(before, macKeyCode, shift != 0, now, e, fix);
+                veto.capsLock = true;
+            } else if (fixFilter) {
                 const lk_fix c = toC(fix);
                 if (fixFilter(&c) == 1) vetoFix(before, macKeyCode, shift != 0, now, e, fix);
                 else { lastFix = fix; hasLastFix = true; }
@@ -410,6 +459,26 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
     for (int i = 0; i < n; i++) out->text[i] = (uint16_t)e.text[i];
     out->length = n;
     out->languageChanged = e.languageChanged ? 1 : 0;
+}
+
+void lk_vikey_set_caps_lock(int on) {
+    capsLockForNextKey = on != 0;
+}
+
+void lk_vikey_set_caps_words(const uint16_t* units, int count) {
+    capsWords.clear();
+    std::u16string word;
+    for (int i = 0; units && i <= count; i++) {
+        if (i == count || units[i] == u'\n') {
+            if (!word.empty()) {
+                for (char16_t& c : word) c = toLower(c);
+                capsWords.insert(word);
+            }
+            word.clear();
+        } else {
+            word += (char16_t)units[i];
+        }
+    }
 }
 
 void lk_vikey_set_fix_filter(lk_fix_filter filter) {
