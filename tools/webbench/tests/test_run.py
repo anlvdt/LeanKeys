@@ -45,6 +45,7 @@ class FakeMachine:
         self.open_fail = 0         # the next N open_url calls raise
         self.check_code = 0        # typist --check exit code
         self.installed = True      # browser_installed answer
+        self.watch_codes = []      # typist --watch exit codes in order; default 0
 
     def defaults_read(self, key):
         self.calls.append(('defaults_read', key))
@@ -94,6 +95,11 @@ class FakeMachine:
     def wait_running(self, timeout):
         self.calls.append(('wait_running', timeout))
         return True
+
+    def watch(self, seconds):
+        self.calls.append(('watch', seconds))
+        self.clock += seconds
+        return self.watch_codes.pop(0) if self.watch_codes else 0
 
     def run_typist(self, args):
         self.typist_calls += 1
@@ -155,6 +161,64 @@ def make_case(n, engine='vikey', field='input', speed='human', browser='chrome',
 def read_records(path):
     with open(path, encoding='utf-8') as f:
         return [json.loads(line) for line in f if line.strip()]
+
+
+class WatchAndCrashTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.out = os.path.join(self.tmp, 'results.jsonl')
+        quiet = contextlib.redirect_stderr(io.StringIO())
+        quiet.__enter__()
+        self.addCleanup(quiet.__exit__, None, None, None)
+
+    def test_negative_exit_code_from_a_signal_stops_the_run(self):
+        m = FakeMachine()
+        m.typist_codes = [-11]  # typist killed by SIGSEGV
+        summary = run.run_matrix(m, [make_case(1), make_case(2)], self.out, app_path=APP,
+                                 base_url=BASE)
+        self.assertEqual(m.typist_calls, 1)
+        self.assertIn('typist exit -11', summary['stopped'])
+        self.assertTrue(summary['restored'])
+        self.assertEqual(m.calls[-1], ('launch', APP))
+        self.assertEqual(read_records(self.out)[0]['status'], 'typist-error')
+
+    def test_unknown_positive_exit_code_stops_the_run(self):
+        m = FakeMachine()
+        m.typist_codes = [134]  # Swift trap
+        summary = run.run_matrix(m, [make_case(1), make_case(2)], self.out, app_path=APP,
+                                 base_url=BASE)
+        self.assertEqual(m.typist_calls, 1)
+        self.assertIsNotNone(summary['stopped'])
+
+    def test_watch_exit_4_before_open_stops_and_opens_nothing_for_that_case(self):
+        m = FakeMachine()
+        m.watch_codes = [4]
+        summary = run.run_matrix(m, [make_case(1), make_case(2)], self.out, app_path=APP,
+                                 base_url=BASE)
+        self.assertIn('real keyboard or mouse input', summary['stopped'])
+        self.assertEqual([c[2] for c in m.calls if c[0] == 'open_url'], [])
+        self.assertEqual(m.typist_calls, 0)
+        self.assertTrue(summary['restored'])
+
+    def test_watch_exit_4_after_typing_marks_the_case_aborted_and_stops(self):
+        m = FakeMachine()
+        m.watch_codes = [0, 4]  # quiet before the first open, then real input after typing
+        summary = run.run_matrix(m, [make_case(1), make_case(2)], self.out, app_path=APP,
+                                 base_url=BASE)
+        self.assertIn('real keyboard or mouse input', summary['stopped'])
+        recs = read_records(self.out)
+        self.assertEqual([r['status'] for r in recs], ['aborted'])
+        self.assertIsNone(recs[0]['text'])
+        self.assertEqual(m.typist_calls, 1)
+
+    def test_watch_runs_before_each_open_and_after_each_case(self):
+        m = FakeMachine()
+        run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE)
+        watches = [c[1] for c in m.calls if c[0] == 'watch']
+        self.assertEqual(watches, [run.PRE_OPEN_WATCH_S, run.QUIET_S])
+        names = [c[0] for c in m.calls]
+        self.assertLess(names.index('watch'), names.index('open_url'))
+        self.assertLess(names.index('open_url'), names.index('run_typist'))
 
 
 class PlanHelpers(unittest.TestCase):

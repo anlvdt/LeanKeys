@@ -53,7 +53,8 @@ CORPUS = os.path.join(HERE, 'corpus.tsv')
 RESULTS_DIR = os.path.join(HERE, 'results')
 
 READY_TIMEOUT_S = 15    # typist waits this long for the page's ready title, before any key
-QUIET_S = 1.5           # after typist returns; the page posts 800 ms after the last key
+QUIET_S = 1.5           # after typing: the page posts 800 ms after the last key; typist --watch
+PRE_OPEN_WATCH_S = 0.3  # before each open: a user key in the gap must not reach the next page
 RESULT_TIMEOUT_S = 5.0  # poll window for the POSTed result
 POLL_S = 0.25
 QUIT_TIMEOUT_S = 10.0
@@ -70,6 +71,7 @@ MEAN_KEY_S = {'human': (1 / 12 + 1 / 8) / 2, 'fast': 1 / 25, 'burst': 0.0}
 
 # typist exit codes (see typist/Sources/typist/main.swift)
 TYPIST_STATUS = {3: 'aborted', 4: 'aborted', 6: 'aborted'}   # the case is not measured
+PER_CASE_CODES = (0, 5, 6)                                  # everything else ends the run
 STOP_REASON = {                                             # these end the whole run
     1: 'typist usage or event failure',
     2: 'Accessibility, Input Monitoring or the US layout is missing',
@@ -288,6 +290,10 @@ class Machine:
                 return False
             time.sleep(0.2)
 
+    def watch(self, seconds):
+        """typist --watch: 0 if no real input for `seconds`, 4 if some came, posts nothing."""
+        return subprocess.run([TYPIST, '--watch', '%.2f' % seconds]).returncode
+
     def run_typist(self, args):
         p = subprocess.run([TYPIST] + args, stdout=subprocess.PIPE, text=True)
         return p.returncode, p.stdout
@@ -406,7 +412,9 @@ class _Session:
 
     def run_case(self, case):
         rec = _blank_record(case)
-        stop = None
+        stop = self._watch_stop(PRE_OPEN_WATCH_S)
+        if stop:
+            raise RunStopped('stopped before %s: %s' % (_where(case), stop))
         try:
             self.m.open_url(case['bundle'], page_url(case, self.base))
         except (OSError, subprocess.CalledProcessError) as e:
@@ -437,8 +445,16 @@ class _Session:
                              % (STATUS_STREAK_LIMIT, _where(case), rec['reason'] or rec['status']))
         return rec
 
+    def _watch_stop(self, seconds):
+        """Stop reason if real input arrived (or typist --watch could not run), else None."""
+        code = self.m.watch(seconds)
+        if code == 0:
+            return None
+        return STOP_REASON.get(code, 'typist --watch exit %d' % code)
+
     def _type(self, case, rec):
-        """Types the case and collects the page result into rec. Returns a stop reason or None."""
+        """Types the case and collects the page result into rec. Returns a stop reason or None.
+        Any exit code outside PER_CASE_CODES (signals and crashes included) ends the run."""
         code, out = self.m.run_typist(typist_args(case))
         if code == 0:
             sent = _parse_sent(out, len(case['keys']))
@@ -447,12 +463,20 @@ class _Session:
                 rec['reason'] = 'typist printed no usable sent list'
                 return None
             rec['sent'] = sent
-            self.m.sleep(QUIET_S)
+            # Real input during the quiet wait, the poll and the page's last POST would be scored
+            # as typed text, so the wait is a watch: any real input aborts the case.
+            watch_stop = self._watch_stop(QUIET_S)
+            if watch_stop:
+                rec['status'] = 'aborted'
+                rec['reason'] = 'real input after typing'
+                return watch_stop
             self._collect(case, rec)
             return None
         rec['status'] = TYPIST_STATUS.get(code, 'typist-error')
         rec['reason'] = 'typist exit %d' % code
-        return STOP_REASON.get(code)
+        if code in PER_CASE_CODES:
+            return None
+        return STOP_REASON.get(code, 'typist exit %d (crash or unknown code)' % code)
 
     def _collect(self, case, rec):
         url = result_url(case, self.base)
