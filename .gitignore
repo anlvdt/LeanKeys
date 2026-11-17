@@ -81,3 +81,4 @@ tools/mixbench/gn/target/
 .signing/
 *.p12
 # LEANKEYS-HOOK-END
+tools/webbench/results/

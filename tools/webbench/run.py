@@ -136,6 +136,14 @@ def typist_args(case):
 
 # MARK: - machine (every side effect; FakeMachine in tests)
 
+def _osa(script):
+    """Run an AppleScript; '' on any failure (the caller decides what that means)."""
+    try:
+        p = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+    except OSError:
+        return ''
+    return p.stdout.strip() if p.returncode == 0 else ''
+
 class Machine:
     """Real side effects. Tests pass a fake with the same methods."""
 
@@ -171,6 +179,27 @@ class Machine:
 
     def open_url(self, bundle, url):
         subprocess.run(['open', '-b', bundle, url], check=True)
+
+    def close_bench_tab(self, bundle, token):
+        """Close the bench tab only if its browser is frontmost and the front window title
+        still carries this run's token. Anything else is left alone."""
+        if _osa('tell application "System Events" to get bundle identifier of '
+                'first application process whose frontmost is true') != bundle:
+            return False
+        title = _osa('tell application "System Events" to tell (first application process '
+                     'whose frontmost is true) to get name of front window')
+        if ('webbench-%s-' % token) not in title:
+            return False
+        if bundle == BUNDLES['chrome']:
+            script = 'tell application id "%s" to close active tab of front window' % bundle
+        elif bundle == BUNDLES['safari']:
+            script = 'tell application id "%s" to close current tab of front window' % bundle
+        elif bundle == BUNDLES['firefox']:
+            script = 'tell application "System Events" to keystroke "w" using command down'
+        else:
+            return False
+        _osa(script)
+        return True
 
     def run_typist(self, args):
         p = subprocess.run([TYPIST] + args, stdout=subprocess.PIPE, text=True)
@@ -286,6 +315,7 @@ class _Session:
                 rec['sent'] = sent
                 self.m.sleep(QUIET_S)
                 self._collect(case, rec)
+        self.m.close_bench_tab(case['bundle'], case['token'])
         self.write(rec)
         return rec
 
@@ -309,26 +339,48 @@ class _Session:
             self.m.sleep(POLL_S)
 
     def restore(self, original, app_path):
-        """Put the engine back, stop the debug log if this run started it, relaunch /Applications."""
+        """Put the engine back, stop the debug log if this run started it, relaunch
+        /Applications/LeanKeys.app. Each step runs even if an interrupt or error hits an
+        earlier one. Returns True if an interrupt arrived during restore."""
         errors = []
-        for step in (self.harvest,
-                     lambda: self.m.disable_log() if self.owns_log else None,
-                     lambda: self.m.defaults_delete(KEY) if original is None
-                     else self.m.defaults_write(KEY, original)):
-            try:
-                step()
-            except Exception as e:  # keep restoring the rest
-                errors.append(e)
-        try:
-            if self.quit_confirmed():
-                self.m.launch(app_path)
-            else:
-                errors.append(RuntimeError('LeanKeys did not quit; /Applications copy not launched'))
-        except Exception as e:
-            errors.append(e)
-        for e in errors:
-            print('webbench restore: %s' % e, file=sys.stderr)
+        interrupted = [False]
+        gone = [False]
 
+        def attempt(fn):
+            try:
+                fn()
+            except KeyboardInterrupt:
+                interrupted[0] = True
+            except BaseException as e:  # keep restoring the rest
+                errors.append(e)
+
+        def restore_engine():
+            if original is None:
+                self.m.defaults_delete(KEY)
+            else:
+                self.m.defaults_write(KEY, original)
+
+        def confirm_quit():
+            for _ in range(2):  # a second interrupt during the wait still gets one more try
+                try:
+                    gone[0] = self.quit_confirmed()
+                    return
+                except KeyboardInterrupt:
+                    interrupted[0] = True
+
+        attempt(self.harvest)
+        attempt(lambda: self.m.disable_log() if self.owns_log else None)
+        attempt(restore_engine)
+        attempt(confirm_quit)
+        if gone[0]:
+            attempt(lambda: self.m.launch(app_path))
+        else:
+            print('WEBBENCH: LeanKeys did NOT quit, so /Applications/LeanKeys.app was not '
+                  'relaunched. Start LeanKeys by hand: open /Applications/LeanKeys.app',
+                  file=sys.stderr, flush=True)
+        for e in errors:
+            print('webbench restore: %r' % (e,), file=sys.stderr, flush=True)
+        return interrupted[0]
 
 def _parse_sent(stdout, n):
     try:
@@ -341,16 +393,17 @@ def _parse_sent(stdout, n):
 def run_matrix(machine, plan, out_path, app_path=APP_PATH, base_url=None, perf_log=False,
                progress=None):
     """Run every case in `plan`, appending records to out_path. Returns a summary dict.
-    KeyboardInterrupt stops the run cleanly (summary['interrupted']); the restore always runs."""
+    An interrupt (Ctrl-C, SIGTERM) ends the run cleanly with summary['interrupted'] set;
+    the restore always runs and survives a second interrupt."""
     original = machine.defaults_read(KEY)
     summary = {'interrupted': False, 'cases': 0, 'out': out_path}
     with open(out_path, 'w', encoding='utf-8') as out:
         s = _Session(machine, out, app_path, perf_log, base_url)
         try:
-            if perf_log:
-                s.perf_offset = len(machine.read_log())
-                s.owns_log = machine.enable_log()
             try:
+                if perf_log:
+                    s.perf_offset = len(machine.read_log())
+                    s.owns_log = machine.enable_log()
                 for i, case in enumerate(plan, 1):
                     s.set_engine(case['engine'])
                     rec = s.run_case(case)
@@ -360,7 +413,8 @@ def run_matrix(machine, plan, out_path, app_path=APP_PATH, base_url=None, perf_l
             except KeyboardInterrupt:
                 summary['interrupted'] = True
         finally:
-            s.restore(original, APP_PATH)
+            if s.restore(original, APP_PATH):
+                summary['interrupted'] = True
     return summary
 
 
@@ -379,13 +433,19 @@ def _interrupt(signum, frame):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description='webbench orchestrator')
+    p = argparse.ArgumentParser(
+        description='webbench orchestrator. Engine changes during the run launch the copy '
+                    'given by --app. The final relaunch is always /Applications/LeanKeys.app; '
+                    'if that copy cannot be confirmed quit, the run prints a line telling you '
+                    'to start LeanKeys by hand.')
     p.add_argument('--browsers', default='chrome,safari,firefox')
     p.add_argument('--fields', default='all')
     p.add_argument('--engines', default=','.join(ENGINES))
     p.add_argument('--speeds', default='human,fast')
     p.add_argument('--groups', default=DEFAULT_GROUPS)
-    p.add_argument('--app', default=APP_PATH)
+    p.add_argument('--app', default=APP_PATH,
+                   help='copy launched for mid-run engine changes (the final relaunch is '
+                        'always /Applications/LeanKeys.app)')
     p.add_argument('--limit', type=int, default=None, help='first N sentences of each group')
     p.add_argument('--out', default=None, help='results file (default results/<time>.jsonl)')
     p.add_argument('--debug-log', action='store_true',

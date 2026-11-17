@@ -34,6 +34,9 @@ class FakeMachine:
         self.log_text = ''
         self.log_on_typist = ''    # appended to the log on every typist call
         self.log_enabled = False
+        self.writes = 0
+        self.kb_on_write = None    # raise KeyboardInterrupt on this defaults_write (1-based)
+        self.kb_on_enable = False  # raise KeyboardInterrupt inside enable_log
 
     def defaults_read(self, key):
         self.calls.append(('defaults_read', key))
@@ -41,6 +44,9 @@ class FakeMachine:
 
     def defaults_write(self, key, value):
         self.calls.append(('defaults_write', key, value))
+        self.writes += 1
+        if self.kb_on_write == self.writes:
+            raise KeyboardInterrupt
         self.store[key] = value
 
     def defaults_delete(self, key):
@@ -59,6 +65,9 @@ class FakeMachine:
 
     def open_url(self, bundle, url):
         self.calls.append(('open_url', bundle, url))
+
+    def close_bench_tab(self, bundle, token):
+        self.calls.append(('close_bench_tab', bundle, token))
 
     def run_typist(self, args):
         self.typist_calls += 1
@@ -90,6 +99,8 @@ class FakeMachine:
 
     def enable_log(self):
         self.calls.append(('enable_log',))
+        if self.kb_on_enable:
+            raise KeyboardInterrupt
         if self.log_enabled:
             return False
         self.log_enabled = True
@@ -154,6 +165,31 @@ class RunMatrixTests(unittest.TestCase):
         self.assertEqual(m.calls[-2][0], 'wait_gone')
         self.assertEqual(m.calls[-1], ('launch', APP))
         self.assertEqual(m.store[KEY], 'vikey')
+
+    def test_restore_completes_when_interrupted_inside_a_restore_step(self):
+        m = FakeMachine(engine='vikey')
+        m.kb_on_write = 2  # the restore write of the original engine
+        summary = run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE)
+        self.assertTrue(summary['interrupted'])
+        self.assertEqual(m.calls.count(('defaults_write', KEY, 'vikey')), 2)
+        self.assertEqual(m.calls[-2][0], 'wait_gone')
+        self.assertEqual(m.calls[-1], ('launch', APP))
+
+    def test_interrupt_during_enable_log_ends_with_restore(self):
+        m = FakeMachine(engine='vikey')
+        m.kb_on_enable = True
+        summary = run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE,
+                                 perf_log=True)
+        self.assertTrue(summary['interrupted'])
+        self.assertFalse([c for c in m.calls if c[0] == 'run_typist'])
+        self.assertEqual(m.calls[-1], ('launch', APP))
+
+    def test_bench_tab_closed_once_per_case(self):
+        m = FakeMachine()
+        run.run_matrix(m, [make_case(1), make_case(2)], self.out, app_path=APP, base_url=BASE)
+        closes = [c for c in m.calls if c[0] == 'close_bench_tab']
+        self.assertEqual(closes, [('close_bench_tab', 'com.google.Chrome', 'tok1'),
+                                  ('close_bench_tab', 'com.google.Chrome', 'tok2')])
 
     def test_restore_deletes_key_when_it_was_unset(self):
         m = FakeMachine(engine=None)
