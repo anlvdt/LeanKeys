@@ -47,6 +47,9 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
     private let legacy: LegacyKeyStore?
     /// The AES key once read, so a save does not read the key file each time. `erase()` clears it.
     private var aesKey: Data?
+    /// The old keychain refused a key this session (the user clicked Deny): not asked again until next launch, so
+    /// the password prompt does not come back on every phrase.
+    private var legacyMoveError: Error?
 
     /// `keychainService`: where LeanKeys up to 1.3 kept this store's keys. `legacy` replaces that keychain in tests.
     public init(url: URL, keychainService: String = "io.github.anlvdt.leankeys.learn", legacy: LegacyKeyStore? = nil) {
@@ -62,7 +65,7 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
     /// Nothing saved yet, or a file that no longer opens (its key gone, or damaged): nil, and the next save
     /// replaces it.
     public func load() throws -> Data? {
-        guard let sealed = try? Data(contentsOf: url) else { return nil }
+        guard let sealed = try Self.readIfPresent(url) else { return nil }
         guard let keyData = try readKey(Account.aes),
               let box = try? AES.GCM.SealedBox(combined: sealed),
               let plain = try? AES.GCM.open(box, using: SymmetricKey(data: keyData)) else { return nil }
@@ -97,6 +100,7 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
         let dir = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
         let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
         let fd = open(tmp.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
         guard fd >= 0 else { throw StoreError.posix(errno) }
@@ -120,6 +124,9 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
             unlink(tmp.path)
             throw StoreError.posix(error)
         }
+        // The rename itself reaches the disk, in order: a key file is never lost behind the data it unlocks.
+        let dirFD = open(dir.path, O_RDONLY)
+        if dirFD >= 0 { fsync(dirFD); close(dirFD) }
     }
 
     // MARK: Keys
@@ -128,27 +135,39 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
     /// files; nil when there is none. A key file of the wrong size is an error, not a reason to make a new key.
     private func readKey(_ account: String) throws -> Data? {
         try moveLegacyKeysIfNeeded()
-        guard let data = try? Data(contentsOf: Self.keyURL(for: url, account: account)) else { return nil }
+        guard let data = try Self.readIfPresent(Self.keyURL(for: url, account: account)) else { return nil }
         guard data.count == 32 else { throw StoreError.badKeyFile }
         return data
     }
 
-    /// A store from before key files (its data there, no key file at all) gets both of its keys from the old
-    /// keychain, together: the data and its digests need the pair. A denied read throws before any file is written.
+    /// A store from before key files (its data there) gets each key it has no file for from the old keychain, one
+    /// account at a time, so a move cut short (a crash between the two writes) finishes next time instead of making
+    /// a new key. A store without data never asks. A denied read throws before any file is written, and is
+    /// remembered until next launch.
     private func moveLegacyKeysIfNeeded() throws {
-        let accounts = [Account.aes, Account.hmac]
-        let anyKeyFile = accounts.contains {
-            FileManager.default.fileExists(atPath: Self.keyURL(for: url, account: $0).path)
-        }
-        guard !anyKeyFile, FileManager.default.fileExists(atPath: url.path), let legacy else { return }
-        var found: [(String, Data)] = []
-        for account in accounts {
-            guard let key = try legacy.read(account) else { continue }
+        if let legacyMoveError { throw legacyMoveError }
+        guard FileManager.default.fileExists(atPath: url.path), let legacy else { return }
+        // HMAC first, AES last: a store with its AES key file but no HMAC one is a new store (its first save makes
+        // the AES key, the HMAC key comes later), never a move cut short, so it does not ask the keychain.
+        let aesFile = Self.keyURL(for: url, account: Account.aes)
+        for account in [Account.hmac, Account.aes] {
+            let file = Self.keyURL(for: url, account: account)
+            guard !FileManager.default.fileExists(atPath: file.path) else { continue }
+            if account == Account.hmac, FileManager.default.fileExists(atPath: aesFile.path) { continue }
+            let key: Data?
+            do { key = try legacy.read(account) } catch { legacyMoveError = error; throw error }
+            guard let key else { continue }
             guard key.count == 32 else { throw StoreError.badKeyFile }
-            found.append((account, key))
+            try writePrivately(key, to: file)
+            try? legacy.delete(account)
         }
-        for (account, key) in found { try writePrivately(key, to: Self.keyURL(for: url, account: account)) }
-        for (account, _) in found { try? legacy.delete(account) }
+    }
+
+    /// The file's bytes; nil only when it does not exist. Any other read error throws: a key or data file that is
+    /// there but unreadable must never be taken for "nothing yet" and replaced.
+    private static func readIfPresent(_ url: URL) throws -> Data? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try Data(contentsOf: url)
     }
 
     /// The key under `account`, made (32 random bytes) and written on first use.

@@ -110,4 +110,57 @@ final class FileKeyStoreTests: XCTestCase {
         }
         XCTAssertNil(try store.load())
     }
+
+    /// Review C1: a key file that is there but cannot be read is an error, never "no key yet" to be replaced.
+    func testUnreadableKeyFileThrowsAndIsNotReplaced() throws {
+        let url = dir.appendingPathComponent("learn.bin")
+        let store = KeychainEncryptedFileStore(url: url, legacy: FakeLegacy())
+        try store.save(Data("x".utf8))
+        let key = KeychainEncryptedFileStore.keyURL(for: url, account: "aes-gcm")
+        let before = try Data(contentsOf: key)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: key.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: key.path) }
+
+        let fresh = KeychainEncryptedFileStore(url: url, legacy: FakeLegacy())
+        XCTAssertThrowsError(try fresh.load())
+        XCTAssertThrowsError(try fresh.save(Data("y".utf8)))
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: key.path)
+        XCTAssertEqual(try Data(contentsOf: key), before)
+        XCTAssertEqual(try KeychainEncryptedFileStore(url: url, legacy: FakeLegacy()).load(), Data("x".utf8))
+    }
+
+    /// Review I1: a move cut short (the HMAC key file written first, the AES one not) finishes next time.
+    func testMoveCutShortFinishesNextTime() throws {
+        let url = dir.appendingPathComponent("learn.bin")
+        let legacy = FakeLegacy()
+        let old = KeychainEncryptedFileStore(url: url, legacy: legacy)
+        try old.save(Data("cũ".utf8))
+        _ = try old.hmacKey()
+        let aesFile = KeychainEncryptedFileStore.keyURL(for: url, account: "aes-gcm")
+        legacy.keys["aes-gcm"] = try Data(contentsOf: aesFile)
+        try FileManager.default.removeItem(at: aesFile)
+
+        XCTAssertEqual(try KeychainEncryptedFileStore(url: url, legacy: legacy).load(), Data("cũ".utf8))
+        XCTAssertEqual(legacy.deletes, ["aes-gcm"])
+    }
+
+    /// Review I2: after a Deny the keychain is not asked again this session, so the prompt does not repeat.
+    func testDeniedMoveIsNotRetriedInTheSameSession() throws {
+        let url = dir.appendingPathComponent("learn.bin")
+        let legacy = FakeLegacy()
+        let old = KeychainEncryptedFileStore(url: url, legacy: legacy)
+        try old.save(Data("cũ".utf8))
+        for account in ["aes-gcm", "hmac-sha256"] {
+            let key = KeychainEncryptedFileStore.keyURL(for: url, account: account)
+            if let data = try? Data(contentsOf: key) { legacy.keys[account] = data }
+            try? FileManager.default.removeItem(at: key)
+        }
+        legacy.failRead = true
+        let store = KeychainEncryptedFileStore(url: url, legacy: legacy)
+        XCTAssertThrowsError(try store.load())
+        XCTAssertThrowsError(try store.hmacKey())
+        XCTAssertThrowsError(try store.load())
+        XCTAssertEqual(legacy.reads.count, 1)
+    }
 }
+
