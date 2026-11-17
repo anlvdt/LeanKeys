@@ -24,6 +24,12 @@ if grep -nE 'Log\.[a-z]+\("keyDown: code=\\\(keyCode\)' "$root/platforms/macos/R
   fail "keyDown logs raw key codes"
 fi
 grep -q 'logPath = DebugLog.path' "$root/platforms/macos/RustBridge.swift" || fail "Log does not use DebugLog.path"
+# Webbench timings: both perf lines must exist, and only numbers may be interpolated into them.
+grep -q 'perf: key ms=' "$root/platforms/macos/RustBridge.swift" || fail "no 'perf: key' timing line"
+grep -q 'perf: send bs=' "$root/platforms/macos/RustBridge.swift" || fail "no 'perf: send' timing line"
+if grep 'perf:' "$root/platforms/macos/RustBridge.swift" | grep -o '\\([^)]*)' | grep -v -E 'ms|bs|count'; then
+  fail "a perf log line interpolates something other than numbers"
+fi
 
 (( failed )) && exit 1
 print -r -- "ok   debug log: private path, no typed text, no character key codes"
