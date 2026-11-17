@@ -74,15 +74,22 @@ function mountAutocomplete(stage, onChange) {
   // A completion is pending while the value holds more than what was typed. Drop it
   // before the caret moves, so collapsing the selection cannot keep the remainder.
   const dropCompletion = () => {
-    if (el.value === typed) return;
+    if (el.value === typed) return false;
     el.value = typed;
     el.setSelectionRange(typed.length, typed.length);
+    return true;
   };
   const CARET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Tab']);
+  // Keys whose default would move the caret off the collapse point (typed end) while a
+  // completion is pending. Their default is suppressed so the caret stays at typed end.
+  // Home is not in this set: moving to the start is what it does.
+  const COLLAPSE_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'ArrowDown']);
   el.addEventListener('keydown', (event) => {
-    if (CARET_KEYS.has(event.key)) dropCompletion();
+    if (!CARET_KEYS.has(event.key)) return;
+    const dropped = dropCompletion();
+    if (dropped && COLLAPSE_KEYS.has(event.key)) event.preventDefault();
   });
-  el.addEventListener('mousedown', dropCompletion);
+  el.addEventListener('mousedown', () => dropCompletion());
   el.addEventListener('input', (event) => {
     // At this point the value is exactly what the user typed (any previous
     // completion was replaced by the keystroke), so record it before completing.
