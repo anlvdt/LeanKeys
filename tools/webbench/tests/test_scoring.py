@@ -4,7 +4,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEBBENCH = os.path.dirname(HERE)
-MIXBENCH = os.path.join(os.path.dirname(os.path.dirname(WEBBENCH)), 'mixbench')
+MIXBENCH = os.path.join(os.path.dirname(WEBBENCH), 'mixbench')
 sys.path.insert(0, WEBBENCH)
 sys.path.insert(0, MIXBENCH)
 
