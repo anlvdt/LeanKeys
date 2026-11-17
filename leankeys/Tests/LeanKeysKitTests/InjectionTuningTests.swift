@@ -154,14 +154,6 @@ final class BrowserEditorInjectionTests: XCTestCase {
         return d
     }
 
-    func testOnlyEditorRolesAreEditors() {
-        XCTAssertTrue(BrowserEditorInjection.isEditor(role: "AXTextArea"))
-        XCTAssertTrue(BrowserEditorInjection.isEditor(role: "AXWebArea"))
-        XCTAssertFalse(BrowserEditorInjection.isEditor(role: "AXTextField"))
-        XCTAssertFalse(BrowserEditorInjection.isEditor(role: "AXComboBox"))
-        XCTAssertFalse(BrowserEditorInjection.isEditor(role: nil))
-    }
-
     /// Measured: only selecting and typing over is right in ProseMirror; every backspace method loses keys there.
     func testDefaultSelectsAndTypesOver() {
         XCTAssertEqual(BrowserEditorInjection.method(defaults: defaults()), .selection)
@@ -181,6 +173,11 @@ final class BrowserEditorInjectionTests: XCTestCase {
 
     /// A ProseMirror editor outside a browser (the Claude desktop app's prompt box is tiptap/ProseMirror in Electron)
     /// also gets selection: recognised by its DOM class, read through Accessibility.
+    func testElectronDetection() {
+        XCTAssertFalse(BrowserEditorInjection.isElectronApp(bundleID: "com.apple.TextEdit"))
+        XCTAssertFalse(BrowserEditorInjection.isElectronApp(bundleID: "com.example.not.installed"))
+    }
+
     func testProseMirrorRecognisedByDOMClass() {
         XCTAssertTrue(BrowserEditorInjection.isProseMirror(role: "AXTextArea", domClasses: ["tiptap", "ProseMirror", "ProseMirror-focused"]))
         XCTAssertFalse(BrowserEditorInjection.isProseMirror(role: "AXTextField", domClasses: ["ProseMirror"]))

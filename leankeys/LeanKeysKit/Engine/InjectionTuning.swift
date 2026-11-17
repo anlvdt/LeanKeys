@@ -67,30 +67,25 @@ public enum InjectionTuning {
     }
 }
 
-/// How an edit is sent into an editor inside a browser page (ProseMirror, Lexical, Quill, contenteditable, textarea:
-/// role AXTextArea, or AXWebArea). Gõ Nhanh sends every browser field the address-bar method (`emptyCharPrefix`: a
-/// U+202F first to break inline autocomplete, then one Backspace more). In a ProseMirror editor (Claude, Tiptap,
-/// many web apps) synthetic Backspaces are lost with any backspace method (measured in Chrome 2026-11-17 with
-/// webbench: emptyCharPrefix, charByChar, fast and slow all left the old letters, "Hoom" gave "Hoôm"), so Vikey's
-/// word fixes left the old word on screen. Selecting the letters with Shift+Left and typing over them is right in
-/// ProseMirror, Lexical, Quill and plain contenteditable alike. Address bars and one-line fields (AXTextField,
-/// AXComboBox) keep emptyCharPrefix.
+/// How an edit is sent into a ProseMirror editor (Claude, Tiptap and many web apps), in a browser or an Electron
+/// app. Gõ Nhanh sends every browser field the address-bar method (`emptyCharPrefix`) and Electron apps a backspace
+/// method; in ProseMirror synthetic Backspaces are lost with any backspace method (measured in Chrome 2026-11-17
+/// with webbench: emptyCharPrefix, charByChar, fast and slow all left the old letters, "Hoom" gave "Hoôm"), so
+/// Vikey's word fixes left the old word on screen. Selecting the letters with Shift+Left and typing over them is
+/// right there. Every other field keeps Gõ Nhanh's method: Lexical, Quill and contenteditable were right with it.
 public enum BrowserEditorInjection {
     public enum Method: String { case fast, slow, charByChar, emptyCharPrefix, selection }
 
-    /// Hidden setting for measuring (`defaults write io.github.anlvdt.leankeys LeanKeys.browserEditorMethod charByChar`).
+    /// Hidden setting for measuring (`defaults write io.github.anlvdt.leankeys LeanKeys.browserEditorMethod fast`).
     public static let overrideKey = "LeanKeys.browserEditorMethod"
     public static let defaultMethod: Method = .selection
-
-    public static func isEditor(role: String?) -> Bool {
-        role == "AXTextArea" || role == "AXWebArea"
-    }
 
     public static func method(defaults: UserDefaults = .standard) -> Method {
         defaults.string(forKey: overrideKey).flatMap(Method.init(rawValue:)) ?? defaultMethod
     }
 }
 
+import AppKit
 import ApplicationServices
 
 extension BrowserEditorInjection {
@@ -107,6 +102,24 @@ extension BrowserEditorInjection {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, "AXDOMClassList" as CFString, &value) == .success else { return [] }
         return (value as? [String]) ?? []
+    }
+}
+
+extension BrowserEditorInjection {
+    private static let electronLock = NSLock()
+    private static var electronApps: [String: Bool] = [:]
+
+    /// Whether the app ships Electron, cached per bundle ID: only those (and browsers) are asked for DOM classes,
+    /// so Terminal, Xcode or TextEdit never pay for the extra Accessibility query.
+    public static func isElectronApp(bundleID: String) -> Bool {
+        if let known = electronLock.withLock({ electronApps[bundleID] }) { return known }
+        var electron = false
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let framework = url.appendingPathComponent("Contents/Frameworks/Electron Framework.framework")
+            electron = FileManager.default.fileExists(atPath: framework.path)
+        }
+        electronLock.withLock { electronApps[bundleID] = electron }
+        return electron
     }
 }
 
