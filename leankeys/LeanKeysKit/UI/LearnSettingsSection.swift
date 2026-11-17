@@ -30,10 +30,19 @@ public struct LearnSettingsSection: View {
     /// Shown after a default (not removable) excluded app.
     static let defaultTag = "mặc định"
     static let eraseConfirm = "Xoá"
+    /// Default exclusions shown while the list is folded; the rest stay excluded behind "Xem thêm".
+    static let foldedDefaultCount = 5
+    static let showLessLabel = "Thu gọn"
+    static func showMoreLabel(hidden: Int) -> String { "Xem thêm \(hidden) ứng dụng mặc định" }
+    /// The defaults to list: all when expanded, else the first `foldedDefaultCount`.
+    static func visibleDefaults(_ all: [String], expanded: Bool) -> [String] {
+        expanded ? all : Array(all.prefix(foldedDefaultCount))
+    }
 
     @ObservedObject private var model: ShortcutSuggestionsModel
     private let part: LearnSettingsPart
     @State private var confirmErase = false
+    @State private var showAllDefaults = false
 
     public init(model: ShortcutSuggestionsModel, part: LearnSettingsPart) {
         self.model = model
@@ -109,11 +118,21 @@ public struct LearnSettingsSection: View {
                     Spacer()
                     Button(Self.addAppLabel, action: chooseApp).controlSize(.small)
                 }
-                ForEach(Self.sortedDefaults, id: \.self) { id in
-                    excludedRow(id, removable: false)
-                }
                 ForEach(model.userExcludedApps, id: \.self) { id in
                     excludedRow(id, removable: true)
+                }
+                ForEach(Self.visibleDefaults(Self.sortedDefaults, expanded: showAllDefaults), id: \.self) { id in
+                    excludedRow(id, removable: false)
+                }
+                if Self.sortedDefaults.count > Self.foldedDefaultCount {
+                    Button(showAllDefaults
+                        ? Self.showLessLabel
+                        : Self.showMoreLabel(hidden: Self.sortedDefaults.count - Self.foldedDefaultCount)) {
+                        showAllDefaults.toggle()
+                    }
+                    .buttonStyle(.link)
+                    .font(.system(size: 12))
+                    .padding(.leading, 8)
                 }
             }
             .padding(.horizontal, 12)

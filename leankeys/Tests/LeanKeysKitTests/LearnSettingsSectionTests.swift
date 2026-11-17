@@ -37,4 +37,16 @@ final class LearnSettingsSectionTests: XCTestCase {
         let names = ["b.zeta": "zeta", "a.Alpha": "Alpha", "c.beta": "beta", "d.beta": "beta"]
         XCTAssertEqual(LearnSettingsSection.sortedByName(ids) { names[$0]! }, ["a.Alpha", "c.beta", "d.beta", "b.zeta"])
     }
+
+    /// The default list is long (password managers, terminals, editors): it starts folded behind "Xem thêm".
+    func testDefaultExclusionsFoldBehindShowMore() {
+        let all = (1...12).map { "app\($0)" }
+        XCTAssertEqual(LearnSettingsSection.visibleDefaults(all, expanded: false), Array(all.prefix(5)))
+        XCTAssertEqual(LearnSettingsSection.visibleDefaults(all, expanded: true), all)
+        XCTAssertEqual(LearnSettingsSection.showMoreLabel(hidden: 7), "Xem thêm 7 ứng dụng mặc định")
+        XCTAssertEqual(LearnSettingsSection.showLessLabel, "Thu gọn")
+        let few = ["a", "b", "c"]
+        XCTAssertEqual(LearnSettingsSection.visibleDefaults(few, expanded: false), few, "nothing to fold")
+        XCTAssertGreaterThan(Exclusions.defaultBundleIDs.count, LearnSettingsSection.foldedDefaultCount)
+    }
 }
