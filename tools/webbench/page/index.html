@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>webbench</title>
+<script>
+  // Runs before the stylesheet and the module: a hung CDN still leaves a title the close
+  // script and typist can match (webbench-<token>-loading). Same token rule as bench.js.
+  (function () {
+    var t = new URLSearchParams(location.search).get('token') || '';
+    if (/^[A-Za-z0-9_-]{1,64}$/.test(t)) document.title = 'webbench-' + t + '-loading';
+  })();
+</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.core.css">
 <style>
   :root { color-scheme: light; }

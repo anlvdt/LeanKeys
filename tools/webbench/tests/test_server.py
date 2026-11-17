@@ -70,5 +70,15 @@ class ServerTests(ServerTestCase):
         self.assertEqual(raw, b'ok')
 
 
+    def test_page_sets_loading_title_before_any_css_or_import(self):
+        # A CDN that hangs must still leave a title the close script can match.
+        with open(os.path.join(server.PAGE_DIR, 'index.html'), encoding='utf-8') as f:
+            html = f.read()
+        self.assertIn("-loading'", html)
+        self.assertLess(html.index("-loading'"), html.index('<link'))
+        self.assertLess(html.index("-loading'"), html.index('importmap'))
+        self.assertIn('[A-Za-z0-9_-]{1,64}', html)
+
+
 if __name__ == '__main__':
     unittest.main()
