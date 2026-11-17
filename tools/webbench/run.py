@@ -6,6 +6,8 @@ LeanKeys is restarted only when the engine changes. Whatever happens, the origin
 LeanKeys.engine value is restored, the debug log is disabled if this run enabled it,
 and /Applications/LeanKeys.app is relaunched.
 
+Latency baseline: take it WITHOUT --debug-log. The log's write cost sits inside the timed span.
+
 A failing case is recorded and the run goes on, except for the stops listed in STOP_REASON
 (permissions, guard, real input), a streak of unmeasured cases, or repeated failed tab closes:
 those end the run, then the restore runs.
