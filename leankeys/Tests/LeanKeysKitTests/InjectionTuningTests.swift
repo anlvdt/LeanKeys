@@ -145,3 +145,35 @@ final class InjectionTuningTests: XCTestCase {
         print(lines.joined(separator: "\n"))
     }
 }
+
+/// Editors inside a browser page (ProseMirror, Lexical, Quill, contenteditable: AXTextArea or AXWebArea) do not get the
+/// address-bar method: its leading U+202F made ProseMirror drop the Backspaces after it ("Hoom" gave "Ho\u{202F}ôm").
+final class BrowserEditorInjectionTests: XCTestCase {
+    private func defaults() -> UserDefaults {
+        let d = UserDefaults(suiteName: "BrowserEditorInjectionTests-\(UUID().uuidString)")!
+        return d
+    }
+
+    func testOnlyEditorRolesAreEditors() {
+        XCTAssertTrue(BrowserEditorInjection.isEditor(role: "AXTextArea"))
+        XCTAssertTrue(BrowserEditorInjection.isEditor(role: "AXWebArea"))
+        XCTAssertFalse(BrowserEditorInjection.isEditor(role: "AXTextField"))
+        XCTAssertFalse(BrowserEditorInjection.isEditor(role: "AXComboBox"))
+        XCTAssertFalse(BrowserEditorInjection.isEditor(role: nil))
+    }
+
+    func testDefaultIsNotTheAddressBarMethod() {
+        XCTAssertNotEqual(BrowserEditorInjection.method(defaults: defaults()), .emptyCharPrefix)
+    }
+
+    func testHiddenOverride() {
+        let d = defaults()
+        for (value, method) in [("fast", BrowserEditorInjection.Method.fast), ("slow", .slow),
+                                ("charByChar", .charByChar), ("emptyCharPrefix", .emptyCharPrefix)] {
+            d.set(value, forKey: BrowserEditorInjection.overrideKey)
+            XCTAssertEqual(BrowserEditorInjection.method(defaults: d), method, value)
+        }
+        d.set("nonsense", forKey: BrowserEditorInjection.overrideKey)
+        XCTAssertEqual(BrowserEditorInjection.method(defaults: d), BrowserEditorInjection.defaultMethod)
+    }
+}

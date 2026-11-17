@@ -66,3 +66,24 @@ public enum InjectionTuning {
         return total + UInt64(settle)
     }
 }
+
+/// How an edit is sent into an editor inside a browser page (ProseMirror, Lexical, Quill, contenteditable, textarea:
+/// role AXTextArea, or AXWebArea). Gõ Nhanh sends every browser field the address-bar method (`emptyCharPrefix`: a
+/// U+202F first to break inline autocomplete, then one Backspace more); in ProseMirror that character made the
+/// Backspaces after it go nowhere, so Vikey's word fixes left the old word on screen ("Hoom" gave "Ho\u{202F}ôm",
+/// "dduwowcj," gave "dduwowcj được,"). Address bars and one-line fields (AXTextField, AXComboBox) keep it.
+public enum BrowserEditorInjection {
+    public enum Method: String { case fast, slow, charByChar, emptyCharPrefix }
+
+    /// Hidden setting for measuring (`defaults write io.github.anlvdt.leankeys LeanKeys.browserEditorMethod charByChar`).
+    public static let overrideKey = "LeanKeys.browserEditorMethod"
+    public static let defaultMethod: Method = .charByChar
+
+    public static func isEditor(role: String?) -> Bool {
+        role == "AXTextArea" || role == "AXWebArea"
+    }
+
+    public static func method(defaults: UserDefaults = .standard) -> Method {
+        defaults.string(forKey: overrideKey).flatMap(Method.init(rawValue:)) ?? defaultMethod
+    }
+}

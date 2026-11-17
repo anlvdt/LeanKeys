@@ -2060,6 +2060,14 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
     // All browser contexts use emptyCharPrefix to break autocomplete/suggestion highlights
     // Medium delays (3ms/8ms/3ms) to handle web apps with popup interception (e.g. Telegram Web)
     if browsers.contains(bundleId) {
+        if BrowserEditorInjection.isEditor(role: role) { // LEANKEYS-HOOK: engine-dispatch (editors in a page: no U+202F prefix)
+            switch BrowserEditorInjection.method() { // LEANKEYS-HOOK: engine-dispatch
+            case .fast: return cached(.fast, (3000, 8000, 3000), "fast:browserEditor") // LEANKEYS-HOOK: engine-dispatch
+            case .slow: return cached(.slow, (3000, 8000, 3000), "slow:browserEditor") // LEANKEYS-HOOK: engine-dispatch
+            case .charByChar: return cached(.charByChar, (3000, 8000, 3000), "char:browserEditor") // LEANKEYS-HOOK: engine-dispatch
+            case .emptyCharPrefix: break // LEANKEYS-HOOK: engine-dispatch
+            } // LEANKEYS-HOOK: engine-dispatch
+        } // LEANKEYS-HOOK: engine-dispatch
         return cached(.emptyCharPrefix, (3000, 8000, 3000), "emptyChar:browser")
     }
     if role == "AXTextField", bundleId.hasPrefix("com.jetbrains") {
