@@ -77,6 +77,15 @@ Kéo dài chữ là cách viết rất phổ biến khi nhắn tin. Phụ âm cu
 - **Gợi ý từ tiếp theo và tự sửa lỗi.** Đây là tính năng được khen nhiều nhất, nhưng trên voz.vn cũng có người chê phần sửa lỗi gõ phím. Nếu làm gợi ý, phải để người dùng tắt được và không bao giờ tự sửa từ đã gõ đúng.
 - **Ghi chú và gõ tắt** được khen là tiện. Bảng nhớ tạm thì bị chê.
 
+**MKey** (Maclife, [maclife.vn/product/mkey](https://maclife.vn/product/mkey), mã nguồn [maclifevn/mkey](https://github.com/maclifevn/mkey), GPL-3.0). Là bản fork của OpenKey, giao diện SwiftUI, phiên bản 1.6.5. Không xét phần clipboard, theo yêu cầu của người dùng. Những điểm đáng học:
+- **Gửi phím từng bước.** Mỗi ký tự là một sự kiện phím riêng, thay vì cả chuỗi trong một sự kiện (`vSendKeyStepByStep` trong `Sources/Platform/MKEngineHook.mm`). Bật sẵn từ 1.6.3 để chạy được trên Chrome, Google Docs, Google Sheets, Zalo Web. Liên quan thẳng tới hạng mục 1, nên đã đưa vào giả thuyết sửa lỗi của webbench.
+- **"Tắt MKey cho [tên app]" ngay trên menu**, và loại trừ app bằng kéo-thả. Trang của Maclife gọi đây là tính năng cộng đồng xin nhiều nhất. LeanKeys đã có tuỳ chỉnh theo app trong Cài đặt, nhưng chưa có lối tắt một chạm ngay trên ô nổi.
+- **Secure Input:** báo tên app đang giữ Secure Input và tự gõ lại được khi app đó nhả ra. Cần kiểm tra LeanKeys đã báo tên app chưa.
+- **Spotlight trên macOS 26 (tiến trình "Campo"):** sửa lỗi nhảy chữ. Cần kiểm tra cách LeanKeys nhận ra Spotlight trên macOS 26.
+- **Phụ âm đầu nhanh và "gõ nhanh"**, giống Telex nâng cao của Laban Key (hạng mục 5).
+- **Đồng bộ gõ tắt qua iCloud Drive** (thử nghiệm, tắt sẵn).
+- Kho issue nhỏ (6 issue). Có một issue về hiệu năng: gõ tắt tra bằng `std::map` ở mỗi phím, và một bộ hẹn giờ iCloud chạy từ lúc mở app.
+
 ## Khuyến nghị: thứ tự mới
 
 So với thứ tự đã đồng ý trước đó, có ba thay đổi:
@@ -94,6 +103,6 @@ So với thứ tự đã đồng ý trước đó, có ba thay đổi:
 8. **Bộ công cụ kiểu UniKey**: bỏ dấu, đổi hoa/thường, chuyển mã clipboard bằng phím tắt (thay cho "bảng mã cũ").
 9. **Bảng chọn emoji**: ít người xin nhất, làm cuối.
 
-Việc nhỏ, làm chung khi tiện: âm thanh khi chuyển E/V (tắt sẵn); thử lại Gõ Nhanh #407/#399 (phím chuyển tự kích hoạt) và #32 (sửa dấu cho từ đã gõ) trên LeanKeys.
+Việc nhỏ, làm chung khi tiện: âm thanh khi chuyển E/V (tắt sẵn); "Tắt LeanKeys cho [app]" một chạm trên ô nổi (học từ MKey); báo tên app đang giữ Secure Input; thử lại Gõ Nhanh #407/#399 (phím chuyển tự kích hoạt) và #32 (sửa dấu cho từ đã gõ) trên LeanKeys.
 
 Tệp issue đã tải: scratchpad của phiên, không đưa vào repo.

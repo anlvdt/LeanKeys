@@ -97,6 +97,7 @@ Khi nhật ký gỡ lỗi đang bật, LeanKeys ghi thêm thời gian xử lý m
    - chọn cách gửi phím theo loại ô trong trình duyệt: `emptyCharPrefix` cho thanh địa chỉ và ô có gợi ý, cách khác cho vùng soạn thảo (`AXTextArea` hay `AXWebArea` trong một trình soạn thảo web);
    - giảm số phím xoá lùi khi Vikey viết lại cả từ, chỉ gửi phần khác nhau;
    - chỉnh khoảng chờ theo loại ô.
+   - gửi từng ký tự bằng một sự kiện phím riêng, thay vì cả chuỗi trong một sự kiện. Gõ Nhanh đã làm vậy cho Safari (`charByChar`); MKey bật sẵn cách này cho Chrome, Google Docs/Sheets, Zalo Web (`vSendKeyStepByStep`). Đây là giả thuyết hàng đầu cho các trình soạn thảo web.
 3. Mỗi bản sửa: chạy lại webbench trên ô bị ảnh hưởng và trên toàn bộ ma trận, cộng `pre-push --all`, mixbench và capbench.
 
 ### Thành công là gì
