@@ -3,6 +3,7 @@ import io
 import json
 import os
 import signal
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -40,6 +41,10 @@ class FakeMachine:
         self.kb_on_enable = False  # raise KeyboardInterrupt inside enable_log
         self.kill_on_write = None  # send SIGINT to ourselves during this defaults_write
         self.kill_on_enable = False  # create the log, send SIGINT, then return (owns it)
+        self.close_results = []    # close_bench_tab answers in order; default True
+        self.open_fail = 0         # the next N open_url calls raise
+        self.check_code = 0        # typist --check exit code
+        self.installed = True      # browser_installed answer
 
     def defaults_read(self, key):
         self.calls.append(('defaults_read', key))
@@ -70,9 +75,25 @@ class FakeMachine:
 
     def open_url(self, bundle, url):
         self.calls.append(('open_url', bundle, url))
+        if self.open_fail:
+            self.open_fail -= 1
+            raise subprocess.CalledProcessError(1, 'open')
 
     def close_bench_tab(self, bundle, token):
         self.calls.append(('close_bench_tab', bundle, token))
+        return self.close_results.pop(0) if self.close_results else True
+
+    def browser_installed(self, bundle):
+        self.calls.append(('browser_installed', bundle))
+        return self.installed
+
+    def typist_check(self):
+        self.calls.append(('typist_check',))
+        return self.check_code
+
+    def wait_running(self, timeout):
+        self.calls.append(('wait_running', timeout))
+        return True
 
     def run_typist(self, args):
         self.typist_calls += 1
@@ -162,6 +183,10 @@ class RunMatrixTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.out = os.path.join(self.tmp, 'results.jsonl')
+        # The run's own warnings (WEBBENCH: ...) are asserted where they matter; keep stderr clean.
+        quiet = contextlib.redirect_stderr(io.StringIO())
+        quiet.__enter__()
+        self.addCleanup(quiet.__exit__, None, None, None)
 
     def test_restore_runs_on_interrupt(self):
         m = FakeMachine(engine='vikey')
@@ -203,8 +228,8 @@ class RunMatrixTests(unittest.TestCase):
         m = FakeMachine(engine='vikey', gone=False)
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            with self.assertRaises(RuntimeError):
-                run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE)
+            summary = run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE)
+        self.assertIn('did not quit', summary['stopped'])
         self.assertIn('LeanKeys did not quit; quit it, then open /Applications/LeanKeys.app',
                       err.getvalue())
         self.assertNotIn('LeanKeys relaunched.', run.final_message({'restored': False}))
@@ -255,20 +280,110 @@ class RunMatrixTests(unittest.TestCase):
 
     def test_run_stops_and_launches_nothing_when_copy_does_not_quit(self):
         m = FakeMachine(engine='vikey', gone=False)
-        with self.assertRaises(RuntimeError):
-            run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE)
+        with contextlib.redirect_stderr(io.StringIO()):  # the restore prints its own line
+            summary = run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE)
+        self.assertIsNotNone(summary['stopped'])
         self.assertFalse([c for c in m.calls if c[0] == 'launch'])
 
     def test_aborted_case_is_not_scored(self):
         m = FakeMachine()
         m.typist_codes = [4]
-        run.run_matrix(m, [make_case(1), make_case(2)], self.out, app_path=APP, base_url=BASE)
+        summary = run.run_matrix(m, [make_case(1), make_case(2)], self.out, app_path=APP,
+                                 base_url=BASE)
+        self.assertIn('real keyboard or mouse input', summary['stopped'])
         recs = read_records(self.out)
-        self.assertEqual(recs[0]['status'], 'aborted')
+        self.assertEqual([r['status'] for r in recs], ['aborted'])
         self.assertIsNone(recs[0]['sent'])
-        self.assertEqual(recs[1]['status'], 'ok')
         rows = report.summarize(recs)
-        self.assertEqual(sum(r['words'] for r in rows), 2)
+        self.assertEqual(sum(r['words'] for r in rows), 0)
+        self.assertEqual(sum(r['cases']['aborted'] for r in rows), 1)
+
+    def test_exit_3_and_4_stop_the_run_and_restore(self):
+        for code in (3, 4):
+            m = FakeMachine()
+            m.typist_codes = [0, code]
+            plan = [make_case(n) for n in (1, 2, 3)]
+            summary = run.run_matrix(m, plan, self.out, app_path=APP, base_url=BASE)
+            self.assertEqual(m.typist_calls, 2, 'no case after the stop')
+            self.assertIn('case 2', summary['stopped'])
+            self.assertTrue(summary['restored'])
+            self.assertEqual(m.calls[-1], ('launch', APP))
+            recs = read_records(self.out)
+            self.assertEqual([r['status'] for r in recs], ['ok', 'aborted'])
+
+    def test_exit_1_and_2_stop_the_run_as_typist_error(self):
+        for code in (1, 2):
+            m = FakeMachine()
+            m.typist_codes = [code]
+            summary = run.run_matrix(m, [make_case(1), make_case(2)], self.out,
+                                     app_path=APP, base_url=BASE)
+            self.assertEqual(m.typist_calls, 1)
+            self.assertIsNotNone(summary['stopped'])
+            self.assertEqual(read_records(self.out)[0]['status'], 'typist-error')
+            self.assertEqual(m.calls[-1], ('launch', APP))
+
+    def test_exit_5_and_6_are_per_case_and_the_run_goes_on(self):
+        m = FakeMachine()
+        m.typist_codes = [5, 6]
+        summary = run.run_matrix(m, [make_case(1), make_case(2), make_case(3)], self.out,
+                                 app_path=APP, base_url=BASE)
+        self.assertIsNone(summary['stopped'])
+        self.assertEqual(m.typist_calls, 3)
+        recs = read_records(self.out)
+        self.assertEqual([r['status'] for r in recs], ['typist-error', 'aborted', 'ok'])
+        self.assertEqual(recs[1]['reason'], 'typist exit 6')
+
+    def test_five_unmeasured_cases_in_a_row_stop_the_run(self):
+        m = FakeMachine()
+        m.typist_codes = [6] * 9
+        summary = run.run_matrix(m, [make_case(n) for n in range(1, 10)], self.out,
+                                 app_path=APP, base_url=BASE)
+        self.assertEqual(m.typist_calls, run.STATUS_STREAK_LIMIT)
+        self.assertIn('not measured', summary['stopped'])
+        self.assertTrue(summary['restored'])
+
+    def test_three_failed_tab_closes_in_a_row_stop_the_run(self):
+        m = FakeMachine()
+        m.close_results = [False, False, False]
+        summary = run.run_matrix(m, [make_case(n) for n in range(1, 7)], self.out,
+                                 app_path=APP, base_url=BASE)
+        self.assertEqual(m.typist_calls, 3)
+        self.assertEqual(summary['close_failures'], 3)
+        self.assertIn('could not be closed', summary['stopped'])
+
+    def test_a_good_close_resets_the_failure_count(self):
+        m = FakeMachine()
+        m.close_results = [False, False, True, False, False, True]
+        summary = run.run_matrix(m, [make_case(n) for n in range(1, 7)], self.out,
+                                 app_path=APP, base_url=BASE)
+        self.assertIsNone(summary['stopped'])
+        self.assertEqual(summary['close_failures'], 4)
+
+    def test_browser_that_fails_to_open_is_recorded_and_the_run_goes_on(self):
+        m = FakeMachine()
+        m.open_fail = 1
+        summary = run.run_matrix(m, [make_case(1), make_case(2)], self.out,
+                                 app_path=APP, base_url=BASE)
+        self.assertIsNone(summary['stopped'])
+        recs = read_records(self.out)
+        self.assertEqual([r['status'] for r in recs], ['aborted', 'ok'])
+        self.assertIn('could not open', recs[0]['reason'])
+
+    def test_launch_waits_until_leankeys_runs(self):
+        m = FakeMachine(engine='vikey')
+        run.run_matrix(m, [make_case(1, engine='gonhanh')], self.out, app_path=APP,
+                       base_url=BASE)
+        i = m.calls.index(('launch', APP))
+        self.assertEqual(m.calls[i + 1][0], 'wait_running')
+
+    def test_results_file_is_private(self):
+        m = FakeMachine()
+        run.run_matrix(m, [make_case(1)], self.out, app_path=APP, base_url=BASE)
+        self.assertEqual(os.stat(self.out).st_mode & 0o777, 0o600)
+
+    def test_typist_gets_the_ready_timeout(self):
+        args = run.typist_args(make_case(1))
+        self.assertEqual(args[args.index('--ready-timeout') + 1], str(run.READY_TIMEOUT_S))
 
     def test_missing_result_times_out(self):
         m = FakeMachine()
@@ -364,6 +479,56 @@ class CloseBenchTabTests(unittest.TestCase):
         self.assertEqual(self.scripts, [])
 
 
+class PreflightAndExitTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.patch = mock.patch.object(run, 'TYPIST', __file__)  # any existing file
+        self.patch.start()
+
+    def tearDown(self):
+        self.patch.stop()
+
+    def _main(self, machine, extra=()):
+        args = ['--yes', '--browsers', 'chrome', '--fields', 'input', '--engines', 'vikey',
+                '--speeds', 'human', '--limit', '1', '--app', self.tmp,
+                '--out', os.path.join(self.tmp, 'r.jsonl')] + list(extra)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return run.main(args, machine=machine)
+
+    def test_failed_typist_check_refuses_before_anything_runs(self):
+        m = FakeMachine()
+        m.check_code = 2
+        self.assertEqual(self._main(m), 2)
+        self.assertIn(('typist_check',), m.calls)
+        self.assertFalse([c for c in m.calls if c[0] in ('run_typist', 'launch', 'open_url')])
+
+    def test_missing_browser_refuses_before_anything_runs(self):
+        m = FakeMachine()
+        m.installed = False
+        self.assertEqual(self._main(m), 2)
+        self.assertFalse([c for c in m.calls if c[0] in ('run_typist', 'launch', 'open_url')])
+
+    def test_run_that_could_not_relaunch_exits_non_zero(self):
+        m = FakeMachine(gone=False)
+        self.assertEqual(self._main(m), 1)
+
+    def test_clean_run_exits_zero(self):
+        m = FakeMachine()
+        self.assertEqual(self._main(m), 0)
+
+    def test_stopped_run_exits_non_zero_and_names_the_reason(self):
+        m = FakeMachine()
+        m.typist_codes = [4]
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = run.main(['--yes', '--browsers', 'chrome', '--fields', 'input',
+                             '--engines', 'vikey', '--speeds', 'human', '--limit', '1',
+                             '--app', self.tmp, '--out', os.path.join(self.tmp, 'r.jsonl')],
+                            machine=m)
+        self.assertEqual(code, 1)
+        self.assertIn('real keyboard or mouse input', err.getvalue())
+
+
 class EstimateAndDryRunTests(unittest.TestCase):
     def test_dry_run_touches_nothing(self):
         buf = io.StringIO()
@@ -379,6 +544,10 @@ class EstimateAndDryRunTests(unittest.TestCase):
         plan = [make_case(1, speed='fast', keys='a' * 25)]
         # 25 keys at 25 keys/s is 1 s, plus the per-case overhead.
         self.assertAlmostEqual(run.estimate_seconds(plan), 1.0 + run.OVERHEAD_S, places=6)
+
+    def test_overhead_covers_ready_wait_quiet_wait_and_tab_work(self):
+        self.assertGreaterEqual(run.OVERHEAD_S, run.READY_EXPECT_S + run.QUIET_S + 1.0)
+        self.assertGreater(run.OVERHEAD_S, 3.5)  # the old constant undercounted
 
 
 if __name__ == '__main__':

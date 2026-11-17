@@ -6,6 +6,10 @@ LeanKeys is restarted only when the engine changes. Whatever happens, the origin
 LeanKeys.engine value is restored, the debug log is disabled if this run enabled it,
 and /Applications/LeanKeys.app is relaunched.
 
+A failing case is recorded and the run goes on, except for the stops listed in STOP_REASON
+(permissions, guard, real input), a streak of unmeasured cases, or repeated failed tab closes:
+those end the run, then the restore runs.
+
 Usage: python3 -I tools/webbench/run.py --dry-run
 """
 import argparse
@@ -46,16 +50,34 @@ TYPIST = os.path.join(HERE, 'typist', '.build', 'release', 'typist')
 CORPUS = os.path.join(HERE, 'corpus.tsv')
 RESULTS_DIR = os.path.join(HERE, 'results')
 
-SETTLE_S = 2.5          # after opening the page, before typing
+READY_TIMEOUT_S = 15    # typist waits this long for the page's ready title, before any key
 QUIET_S = 1.5           # after typist returns; the page posts 800 ms after the last key
 RESULT_TIMEOUT_S = 5.0  # poll window for the POSTed result
 POLL_S = 0.25
 QUIT_TIMEOUT_S = 10.0
-OVERHEAD_S = 3.5        # per case, on top of the key schedule: open, settle, polls, one osascript close
+LAUNCH_TIMEOUT_S = 10.0
+CLOSE_FAIL_LIMIT = 3    # tab closes that failed in a row before the run stops
+STATUS_STREAK_LIMIT = 5 # cases in a row without status ok before the run stops
+# Per-case cost on top of the keys: the ready wait (typical; a cold editor CDN can take longer),
+# QUIET_S, and open, typist start, the osascript close and the polls. A floor, not a forecast.
+READY_EXPECT_S = 2.0
+OPEN_CLOSE_S = 1.5
+OVERHEAD_S = READY_EXPECT_S + QUIET_S + OPEN_CLOSE_S
 # Mean inter-key delay per speed (human: uniform 1/12..1/8 s; fast: 25 keys/s; burst: none).
 MEAN_KEY_S = {'human': (1 / 12 + 1 / 8) / 2, 'fast': 1 / 25, 'burst': 0.0}
 
-STATUS_BY_EXIT = {3: 'aborted', 4: 'aborted'}
+# typist exit codes (see typist/Sources/typist/main.swift)
+TYPIST_STATUS = {3: 'aborted', 4: 'aborted', 6: 'aborted'}   # the case is not measured
+STOP_REASON = {                                             # these end the whole run
+    1: 'typist usage or event failure',
+    2: 'Accessibility, Input Monitoring or the US layout is missing',
+    3: 'the browser was not frontmost on the bench tab (guard refused)',
+    4: 'real keyboard or mouse input (the run gives the Mac back)',
+}
+
+
+class RunStopped(RuntimeError):
+    """Ends the run at once. The restore still runs; the message says why."""
 
 
 # MARK: - corpus and plan (pure)
@@ -143,7 +165,8 @@ def result_url(case, base):
 
 def typist_args(case):
     return ['--keys', case['keys'], '--speed', case['speed'], '--seed', str(case['case']),
-            '--bundle', case['bundle'], '--token', case['token']]
+            '--bundle', case['bundle'], '--token', case['token'],
+            '--ready-timeout', str(READY_TIMEOUT_S)]
 
 
 # MARK: - machine (every side effect; FakeMachine in tests)
@@ -243,6 +266,26 @@ class Machine:
             return False
         return _osa(script) == 'yes'
 
+    def browser_installed(self, bundle):
+        p = subprocess.run(['/usr/bin/mdfind', 'kMDItemCFBundleIdentifier == "%s"' % bundle],
+                           capture_output=True, text=True)
+        return p.returncode == 0 and bool(p.stdout.strip())
+
+    def typist_check(self):
+        """typist --check: permissions and layout, nothing posted. Its message goes to stderr."""
+        return subprocess.run([TYPIST, '--check']).returncode
+
+    def wait_running(self, timeout):
+        deadline = time.monotonic() + timeout
+        while True:
+            p = subprocess.run(['pgrep', '-f', 'LeanKeys.app/Contents/MacOS/'],
+                               capture_output=True)
+            if p.returncode == 0:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.2)
+
     def run_typist(self, args):
         p = subprocess.run([TYPIST] + args, stdout=subprocess.PIPE, text=True)
         return p.returncode, p.stdout
@@ -293,6 +336,19 @@ class Machine:
 
 # MARK: - run
 
+def _blank_record(case):
+    return {'browser': case['browser'], 'field': case['field'], 'engine': case['engine'],
+            'speed': case['speed'], 'group': case['group'], 'case': case['case'],
+            'status': None, 'reason': None, 'text': None, 'target': case['target'],
+            'flags': case['flags'], 'sent': None, 'inputs': None,
+            'word_spans': case['word_spans']}
+
+
+def _where(case):
+    return 'case %d (%s %s %s %s)' % (case['case'], case['browser'], case['field'],
+                                      case['engine'], case['speed'])
+
+
 class _Session:
     def __init__(self, machine, out, app_path, perf_log, base):
         self.m = machine
@@ -303,6 +359,10 @@ class _Session:
         self.engine = None
         self.perf_offset = 0
         self.owns_log = False
+        self.warned_no_log = False
+        self.close_streak = 0
+        self.close_failures = 0
+        self.status_streak = 0
 
     def write(self, record):
         self.out.write(json.dumps(record, ensure_ascii=False) + '\n')
@@ -317,6 +377,10 @@ class _Session:
         if not self.perf_log or self.engine in (None, 'off'):
             return
         text = self.m.read_log()
+        if not text and not self.warned_no_log:
+            self.warned_no_log = True
+            print('WEBBENCH: the LeanKeys debug log is missing or empty; no perf lines are '
+                  'collected for it (it may have expired)', file=sys.stderr, flush=True)
         new = text[self.perf_offset:]
         self.perf_offset = len(text)
         lines = [ln for ln in new.splitlines() if 'perf: ' in ln]
@@ -330,36 +394,63 @@ class _Session:
         if engine != 'off':
             self.m.defaults_write(KEY, engine)
         if not self.quit_confirmed():
-            raise RuntimeError('LeanKeys did not quit within %ds; nothing was launched'
-                               % QUIT_TIMEOUT_S)
+            raise RunStopped('LeanKeys did not quit within %ds; nothing was launched'
+                             % QUIT_TIMEOUT_S)
         self.engine = engine
         if engine != 'off':
             self.m.launch(self.app_path)
+            if not self.m.wait_running(LAUNCH_TIMEOUT_S):
+                raise RunStopped('LeanKeys did not start within %ds' % LAUNCH_TIMEOUT_S)
 
     def run_case(self, case):
-        self.m.open_url(case['bundle'], page_url(case, self.base))
-        self.m.sleep(SETTLE_S)
-        code, out = self.m.run_typist(typist_args(case))
-        rec = {'browser': case['browser'], 'field': case['field'], 'engine': case['engine'],
-               'speed': case['speed'], 'group': case['group'], 'case': case['case'],
-               'status': None, 'text': None, 'target': case['target'],
-               'flags': case['flags'], 'sent': None, 'inputs': None,
-               'word_spans': case['word_spans']}
-        if code in STATUS_BY_EXIT:
-            rec['status'] = STATUS_BY_EXIT[code]
-        elif code != 0:
-            rec['status'] = 'typist-error'
+        rec = _blank_record(case)
+        stop = None
+        try:
+            self.m.open_url(case['bundle'], page_url(case, self.base))
+        except (OSError, subprocess.CalledProcessError) as e:
+            rec['status'] = 'aborted'
+            rec['reason'] = 'could not open %s: %s' % (case['browser'], e)
         else:
+            stop = self._type(case, rec)
+        self.write(rec)
+        closed = self.m.close_bench_tab(case['bundle'], case['token'])
+        if closed:
+            self.close_streak = 0
+        else:
+            self.close_streak += 1
+            self.close_failures += 1
+            print('WEBBENCH: could not close the bench tab for %s; it may still be open'
+                  % _where(case), file=sys.stderr, flush=True)
+        if stop:
+            raise RunStopped('stopped at %s: %s' % (_where(case), stop))
+        if self.close_streak >= CLOSE_FAIL_LIMIT:
+            raise RunStopped(
+                'the bench tab could not be closed %d times in a row. Grant Automation for '
+                'the browser (Chrome, Safari) or Accessibility for Terminal (Firefox) in System '
+                'Settings > Privacy & Security, close the leftover webbench tabs, then run again'
+                % CLOSE_FAIL_LIMIT)
+        self.status_streak = 0 if rec['status'] == 'ok' else self.status_streak + 1
+        if self.status_streak >= STATUS_STREAK_LIMIT:
+            raise RunStopped('%d cases in a row were not measured (last: %s, %s)'
+                             % (STATUS_STREAK_LIMIT, _where(case), rec['reason'] or rec['status']))
+        return rec
+
+    def _type(self, case, rec):
+        """Types the case and collects the page result into rec. Returns a stop reason or None."""
+        code, out = self.m.run_typist(typist_args(case))
+        if code == 0:
             sent = _parse_sent(out, len(case['keys']))
             if sent is None:
                 rec['status'] = 'typist-error'
-            else:
-                rec['sent'] = sent
-                self.m.sleep(QUIET_S)
-                self._collect(case, rec)
-        self.write(rec)
-        self.m.close_bench_tab(case['bundle'], case['token'])
-        return rec
+                rec['reason'] = 'typist printed no usable sent list'
+                return None
+            rec['sent'] = sent
+            self.m.sleep(QUIET_S)
+            self._collect(case, rec)
+            return None
+        rec['status'] = TYPIST_STATUS.get(code, 'typist-error')
+        rec['reason'] = 'typist exit %d' % code
+        return STOP_REASON.get(code)
 
     def _collect(self, case, rec):
         url = result_url(case, self.base)
@@ -377,6 +468,7 @@ class _Session:
                     pass
             if self.m.now() >= deadline:
                 rec['status'] = 'no-result'
+                rec['reason'] = 'no result POST within %d s' % RESULT_TIMEOUT_S
                 return
             self.m.sleep(POLL_S)
 
@@ -444,12 +536,15 @@ def _parse_sent(stdout, n):
 
 def run_matrix(machine, plan, out_path, app_path=APP_PATH, base_url=None, perf_log=False,
                progress=None):
-    """Run every case in `plan`, appending records to out_path. Returns a summary dict.
-    An interrupt (Ctrl-C, SIGTERM) ends the run cleanly with summary['interrupted'] set;
-    the restore always runs and survives a second interrupt."""
+    """Run every case in `plan`, appending records to out_path (created 0600). Returns a summary.
+    summary['interrupted']: Ctrl-C or SIGTERM. summary['stopped']: the reason the run ended
+    early (a typist stop code, too many failed tab closes, a streak of unmeasured cases).
+    The restore always runs and survives a second interrupt."""
     original = machine.defaults_read(KEY)
-    summary = {'interrupted': False, 'restored': False, 'cases': 0, 'out': out_path}
-    with open(out_path, 'w', encoding='utf-8') as out:
+    summary = {'interrupted': False, 'stopped': None, 'restored': False, 'cases': 0,
+               'close_failures': 0, 'out': out_path}
+    fd = os.open(out_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as out:
         s = _Session(machine, out, app_path, perf_log, base_url)
         try:
             try:
@@ -469,6 +564,8 @@ def run_matrix(machine, plan, out_path, app_path=APP_PATH, base_url=None, perf_l
                         progress(i, len(plan), rec)
             except KeyboardInterrupt:
                 summary['interrupted'] = True
+            except RunStopped as e:
+                summary['stopped'] = str(e)
         finally:
             # Masked before restore() so a Ctrl-C arriving here cannot skip the restore.
             old = _block_signals()
@@ -482,6 +579,7 @@ def run_matrix(machine, plan, out_path, app_path=APP_PATH, base_url=None, perf_l
                     _unblock_signals(old)
                 except KeyboardInterrupt:
                     summary['interrupted'] = True
+        summary['close_failures'] = s.close_failures
     return summary
 
 
@@ -501,16 +599,30 @@ def final_message(summary):
     return 'LeanKeys was not relaunched: see the line above.'
 
 
+def preflight(machine, browsers):
+    """Checks before the consent prompt: every chosen browser is installed and typist can
+    type (Accessibility, Input Monitoring, US layout). Posts nothing. Returns a message or None."""
+    for b in browsers:
+        if not machine.browser_installed(BUNDLES[b]):
+            return '%s is not installed (%s); leave it out of --browsers' % (b, BUNDLES[b])
+    if machine.typist_check() != 0:
+        return ('typist --check failed (see the message above). Give this terminal Accessibility '
+                'and Input Monitoring, switch to the US layout, then run again.')
+    return None
+
+
 def _interrupt(signum, frame):
     raise KeyboardInterrupt
 
 
-def main(argv=None):
+def main(argv=None, machine=None):
     p = argparse.ArgumentParser(
         description='webbench orchestrator. Engine changes during the run launch the copy '
                     'given by --app. The final relaunch is always /Applications/LeanKeys.app; '
                     'if that copy cannot be confirmed quit, the run prints a line telling you '
-                    'to start LeanKeys by hand.')
+                    'to start LeanKeys by hand. Latency: take the baseline WITHOUT --debug-log '
+                    '(the log write cost is inside the timed span); --debug-log is for the perf '
+                    'section, in a separate run.')
     p.add_argument('--browsers', default='chrome,safari,firefox')
     p.add_argument('--fields', default='all')
     p.add_argument('--engines', default=','.join(ENGINES))
@@ -522,7 +634,8 @@ def main(argv=None):
     p.add_argument('--limit', type=int, default=None, help='first N sentences of each group')
     p.add_argument('--out', default=None, help='results file (default results/<time>.jsonl)')
     p.add_argument('--debug-log', action='store_true',
-                   help='enable LeanKeys perf logging for the run and collect it')
+                   help='enable LeanKeys perf logging for the run and collect it. Its write cost '
+                        'is inside the latency span, so do not take the latency baseline with it')
     p.add_argument('--yes', action='store_true', help='do not ask before running')
     p.add_argument('--dry-run', action='store_true', help='print the plan and estimate only')
     args = p.parse_args(argv)
@@ -544,7 +657,10 @@ def main(argv=None):
             switches += 1
             last = c['engine']
     print('Matrix: %d cases, %d engine segments' % (len(plan), switches))
-    print('Estimate: about %.1f h (%.0f min)' % (secs / 3600, secs / 60))
+    print('Estimate: at least %.1f h (%.0f min); includes about %.1f s per case for the ready '
+          'wait, the quiet wait and tab work' % (secs / 3600, secs / 60, OVERHEAD_S))
+    if args.debug_log:
+        print('Note: --debug-log adds its own cost to the latency numbers of this run.')
     if args.dry_run:
         counts = {}
         for c in plan:
@@ -565,8 +681,13 @@ def main(argv=None):
     if not os.path.isdir(args.app):
         print('app not found: %s' % args.app, file=sys.stderr)
         return 2
+    machine = machine or Machine()
+    problem = preflight(machine, browsers)
+    if problem:
+        print('webbench: ' + problem, file=sys.stderr)
+        return 2
     if not args.yes:
-        answer = input('Run %d cases (about %.1f h)? Type y to continue: '
+        answer = input('Run %d cases (at least %.1f h)? Type y to continue: '
                        % (len(plan), secs / 3600))
         if answer.strip().lower() != 'y':
             print('Not run.')
@@ -583,22 +704,32 @@ def main(argv=None):
     signal.signal(signal.SIGTERM, _interrupt)
 
     def progress(i, n, rec):
-        print('[%d/%d] %s %s %s %s case %d: %s' % (i, n, rec['browser'], rec['field'],
-                                                 rec['engine'], rec['speed'], rec['case'],
-                                                 rec['status']), file=sys.stderr, flush=True)
+        extra = ' (%s)' % rec['reason'] if rec.get('reason') and rec['status'] != 'ok' else ''
+        print('[%d/%d] %s %s %s %s case %d: %s%s' % (i, n, rec['browser'], rec['field'],
+                                                   rec['engine'], rec['speed'], rec['case'],
+                                                   rec['status'], extra),
+              file=sys.stderr, flush=True)
 
     try:
-        summary = run_matrix(Machine(), plan, out_path, app_path=args.app, base_url=base,
+        summary = run_matrix(machine, plan, out_path, app_path=args.app, base_url=base,
                              perf_log=args.debug_log, progress=progress)
     finally:
         httpd.shutdown()
         httpd.server_close()
     print('Results: %s (%d records)' % (out_path, summary['cases']))
     print('Report: python3 -I %s %s' % (os.path.join(HERE, 'report.py'), out_path))
+    if summary['close_failures']:
+        print('Bench tabs not closed: %d (listed above); close them by hand.'
+              % summary['close_failures'])
     print(final_message(summary))
     if summary['interrupted']:
         print('Interrupted.', file=sys.stderr)
         return 130
+    if summary['stopped']:
+        print('Stopped: %s' % summary['stopped'], file=sys.stderr)
+        return 1
+    if not summary['restored']:
+        return 1
     return 0
 
 
