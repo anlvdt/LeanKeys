@@ -407,18 +407,41 @@ final class KeychainEncryptedFileStoreTests: XCTestCase {
         let hmac = try store.hmacKey()
         XCTAssertEqual(hmac.count, 32)
 
-        // A second store finds both keys in the Keychain, not in memory.
+        // A second store finds both keys in their files, not in memory.
         let again = KeychainEncryptedFileStore(url: url, keychainService: service)
         XCTAssertEqual(try again.load(), plaintext)
         XCTAssertEqual(try again.hmacKey(), hmac)
         try again.save(Data("v2".utf8))
         XCTAssertEqual(try store.load(), Data("v2".utf8))
-        XCTAssertEqual(items(), 2)
+        XCTAssertEqual(items(), 0, "keys live in files now, never in the keychain")
 
         try store.erase()
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
         XCTAssertEqual(items(), 0)
         XCTAssertNil(try store.load())
+    }
+
+    /// A store LeanKeys 1.3 left (keys in the keychain, no key files) moves both keys to files on first use and
+    /// removes them from the keychain.
+    func testKeychainKeysMoveToFiles() throws {
+        try requireKeychain()
+        let url = dir.appendingPathComponent("learn.bin")
+        let staging = KeychainEncryptedFileStore(url: url, keychainService: service)
+        try staging.save(Data("cũ".utf8))
+        let hmac = try staging.hmacKey()
+        for account in ["aes-gcm", "hmac-sha256"] {
+            let keyURL = KeychainEncryptedFileStore.keyURL(for: url, account: account)
+            let add: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service!,
+                                      kSecAttrAccount as String: account, kSecValueData as String: try Data(contentsOf: keyURL)]
+            XCTAssertEqual(SecItemAdd(add as CFDictionary, nil), errSecSuccess)
+            try FileManager.default.removeItem(at: keyURL)
+        }
+        XCTAssertEqual(items(), 2)
+
+        let store = KeychainEncryptedFileStore(url: url, keychainService: service)
+        XCTAssertEqual(try store.load(), Data("cũ".utf8))
+        XCTAssertEqual(try store.hmacKey(), hmac)
+        XCTAssertEqual(items(), 0)
     }
 
     /// Off by default must mean no trace: a learner that never counts anything creates no Keychain item, and erasing
@@ -439,7 +462,7 @@ final class KeychainEncryptedFileStoreTests: XCTestCase {
         let context = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: false, now: Date())
         for _ in 0..<3 { learner.observe(CommittedPhrase(text: "Cảm ơn anh nhiều nhé"), context: context) }
         XCTAssertEqual(learner.ready.map(\.text), ["Cảm ơn anh nhiều nhé"])
-        XCTAssertEqual(items(), 2)
+        XCTAssertEqual(items(), 0, "keys live in files now, never in the keychain")
         XCTAssertEqual(PhraseLearner(store: KeychainEncryptedFileStore(url: url, keychainService: service)).ready.count, 1)
 
         learner.eraseAll()
