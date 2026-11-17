@@ -74,4 +74,35 @@ final class TypistCoreTests: XCTestCase {
             layoutID: "com.apple.keylayout.US"
         ))
     }
+
+    func testPreflightNamesBothPermissionsWhenAnyFails() {
+        for (trusted, tap) in [(false, true), (true, false), (false, false)] {
+            let msg = Preflight.problem(accessibilityTrusted: trusted, tapCreated: tap,
+                                        layoutID: "com.apple.keylayout.US")
+            XCTAssertNotNil(msg, "trusted=\(trusted) tap=\(tap) must fail")
+            XCTAssertTrue(msg!.contains("Accessibility"), msg!)
+            XCTAssertTrue(msg!.contains("Input Monitoring"), msg!)
+        }
+    }
+
+    func testPreflightPassesWhenPermissionsAndLayoutAreReady() {
+        XCTAssertNil(Preflight.problem(accessibilityTrusted: true, tapCreated: true,
+                                       layoutID: "com.apple.keylayout.US"))
+    }
+
+    func testPreflightRefusesNonUSLayout() {
+        let msg = Preflight.problem(accessibilityTrusted: true, tapCreated: true,
+                                    layoutID: "com.apple.keylayout.Vietnamese")
+        XCTAssertNotNil(msg)
+        XCTAssertTrue(msg!.contains("US"), msg!)
+    }
+
+    func testPageStateClassifiesTitles() {
+        XCTAssertEqual(PageState.of(title: "webbench-x-ready - Chrome", token: "x"), .ready)
+        XCTAssertEqual(PageState.of(title: "webbench-x-error", token: "x"), .error)
+        XCTAssertEqual(PageState.of(title: "webbench-x-loading", token: "x"), .other)
+        XCTAssertEqual(PageState.of(title: "webbench", token: "x"), .other)
+        XCTAssertEqual(PageState.of(title: "webbench-y-ready", token: "x"), .other)
+        XCTAssertEqual(PageState.of(title: nil, token: "x"), .other)
+    }
 }

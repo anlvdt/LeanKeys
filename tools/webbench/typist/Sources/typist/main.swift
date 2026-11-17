@@ -5,10 +5,10 @@ import CoreGraphics
 import Foundation
 import TypistCore
 
-// Exit codes: 0 typed, 1 usage or event failure, 2 no Accessibility or tap,
-// 3 guard refused, 4 interrupted by real input, 5 unmappable character.
+// Exit codes: 0 typed (or --check passed), 1 usage or event failure, 2 no Accessibility,
+// Input Monitoring (the tap) or US layout, 3 guard refused, 4 interrupted by real input,
+// 5 unmappable character, 6 page not ready (timeout or error title; nothing posted).
 
-let accessibilityPath = "System Settings > Privacy & Security > Accessibility"
 let ownMarker: Int64 = 0x5745_4242       // "WEBB": typist's own events
 let leanKeysMarker: Int64 = 0x474E_4820  // "GNH ": LeanKeys' reposted events
 
@@ -18,12 +18,58 @@ func fail(_ code: Int32, _ message: String) -> Never {
 }
 
 func usage() -> Never {
-    fail(1, "usage: typist --keys <string> --speed human|fast|burst --seed <n> --bundle <id> --token <t>")
+    fail(1, "usage: typist --keys <string> --speed human|fast|burst --seed <n> --bundle <id> --token <t> [--ready-timeout <s>]\n       typist --check")
+}
+
+func currentLayoutID() -> String {
+    guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+          let raw = TISGetInputSourceProperty(source, kTISPropertyInputSourceID) else { return "" }
+    return Unmanaged<CFString>.fromOpaque(raw).takeUnretainedValue() as String
+}
+
+func frontWindowTitle() -> String? {
+    guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+    let axApp = AXUIElementCreateApplication(app.processIdentifier)
+    var windowRef: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
+          let windowRef else { return nil }
+    let window = windowRef as! AXUIElement
+    var titleRef: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success else {
+        return nil
+    }
+    return titleRef as? String
+}
+
+/// A listen-only tap for real keyboard and mouse input. Nil when the terminal lacks
+/// Accessibility or Input Monitoring.
+func makeListenTap(refcon: UnsafeMutableRawPointer?, callback: @escaping CGEventTapCallBack) -> CFMachPort? {
+    let mask: CGEventMask =
+        (1 << CGEventType.keyDown.rawValue)
+        | (1 << CGEventType.mouseMoved.rawValue)
+        | (1 << CGEventType.leftMouseDown.rawValue)
+    return CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
+                             options: .listenOnly, eventsOfInterest: mask,
+                             callback: callback, userInfo: refcon)
+}
+
+// MARK: - --check (preflight: posts nothing, changes nothing)
+
+if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--check" {
+    let probe = makeListenTap(refcon: nil) { _, _, event, _ in Unmanaged.passUnretained(event) }
+    if let probe { CFMachPortInvalidate(probe) }
+    if let message = Preflight.problem(accessibilityTrusted: AXIsProcessTrusted(),
+                                       tapCreated: probe != nil,
+                                       layoutID: currentLayoutID()) {
+        fail(2, message)
+    }
+    print("typist: Accessibility, Input Monitoring and the US layout are ready.")
+    exit(0)
 }
 
 // MARK: - Arguments
 
-let known: Set<String> = ["--keys", "--speed", "--seed", "--bundle", "--token"]
+let known: Set<String> = ["--keys", "--speed", "--seed", "--bundle", "--token", "--ready-timeout"]
 var values: [String: String] = [:]
 var argIndex = 1
 while argIndex < CommandLine.arguments.count {
@@ -52,10 +98,19 @@ if let raw = values["--seed"] {
     seed = 1
 }
 
+let readyTimeout: Double
+if let raw = values["--ready-timeout"] {
+    guard let parsed = Double(raw), parsed > 0 else { usage() }
+    readyTimeout = parsed
+} else {
+    readyTimeout = 15
+}
+
 // MARK: - Accessibility (checked before any event is created)
 
 guard AXIsProcessTrusted() else {
-    fail(2, "typist: this terminal is not trusted for Accessibility. Enable it in \(accessibilityPath), then retry.")
+    fail(2, Preflight.problem(accessibilityTrusted: false, tapCreated: true,
+                              layoutID: Guard.requiredLayoutID) ?? "")
 }
 
 // MARK: - Key mapping (pure; nothing posted yet)
@@ -69,26 +124,6 @@ for c in keys {
 }
 
 // MARK: - Guard inputs
-
-func currentLayoutID() -> String {
-    guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
-          let raw = TISGetInputSourceProperty(source, kTISPropertyInputSourceID) else { return "" }
-    return Unmanaged<CFString>.fromOpaque(raw).takeUnretainedValue() as String
-}
-
-func frontWindowTitle() -> String? {
-    guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
-    let axApp = AXUIElementCreateApplication(app.processIdentifier)
-    var windowRef: CFTypeRef?
-    guard AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute as CFString, &windowRef) == .success,
-          let windowRef else { return nil }
-    let window = windowRef as! AXUIElement
-    var titleRef: CFTypeRef?
-    guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success else {
-        return nil
-    }
-    return titleRef as? String
-}
 
 func guardAllows() -> Bool {
     Guard.mayType(
@@ -107,10 +142,6 @@ final class InterruptState {
 }
 
 let interrupt = InterruptState()
-let eventMask: CGEventMask =
-    (1 << CGEventType.keyDown.rawValue)
-    | (1 << CGEventType.mouseMoved.rawValue)
-    | (1 << CGEventType.leftMouseDown.rawValue)
 
 let tapCallback: CGEventTapCallBack = { _, type, event, refcon in
     guard let refcon else { return Unmanaged.passUnretained(event) }
@@ -127,15 +158,10 @@ let tapCallback: CGEventTapCallBack = { _, type, event, refcon in
     return Unmanaged.passUnretained(event)
 }
 
-guard let tap = CGEvent.tapCreate(
-    tap: .cgSessionEventTap,
-    place: .headInsertEventTap,
-    options: .listenOnly,
-    eventsOfInterest: eventMask,
-    callback: tapCallback,
-    userInfo: Unmanaged.passUnretained(interrupt).toOpaque()
-) else {
-    fail(2, "typist: cannot create an event tap. Enable Accessibility for this terminal in \(accessibilityPath).")
+guard let tap = makeListenTap(refcon: Unmanaged.passUnretained(interrupt).toOpaque(),
+                              callback: tapCallback) else {
+    fail(2, Preflight.problem(accessibilityTrusted: true, tapCreated: false,
+                              layoutID: Guard.requiredLayoutID) ?? "")
 }
 let tapSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
 CFRunLoopAddSource(CFRunLoopGetCurrent(), tapSource, .commonModes)
@@ -147,6 +173,27 @@ func waitPumping(_ seconds: Double) {
         let remaining = end.timeIntervalSinceNow
         CFRunLoopRunInMode(.defaultMode, max(remaining, 0), false)
     } while Date() < end
+}
+
+// MARK: - Page ready (same window and bundle contract as the guard)
+
+let readyDeadline = Date().addingTimeInterval(readyTimeout)
+var lastTitle = ""
+while true {
+    if interrupt.interrupted {
+        fail(4, "typist: interrupted by real input while waiting for the page")
+    }
+    if guardAllows() { break }
+    let title = frontWindowTitle() ?? ""
+    lastTitle = title
+    if PageState.of(title: title, token: token) == .error {
+        fail(6, "typist: the bench page reported an error (title: \(title))")
+    }
+    if Date() >= readyDeadline {
+        fail(6, "typist: the bench page was not ready within \(Int(readyTimeout)) s; "
+             + "front window title: \"\(lastTitle)\". Is \(expectedBundle) frontmost on the bench tab, with the US layout?")
+    }
+    waitPumping(0.1)
 }
 
 // MARK: - Posting
