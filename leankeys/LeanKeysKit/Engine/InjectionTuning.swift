@@ -69,15 +69,18 @@ public enum InjectionTuning {
 
 /// How an edit is sent into an editor inside a browser page (ProseMirror, Lexical, Quill, contenteditable, textarea:
 /// role AXTextArea, or AXWebArea). Gõ Nhanh sends every browser field the address-bar method (`emptyCharPrefix`: a
-/// U+202F first to break inline autocomplete, then one Backspace more); in ProseMirror that character made the
-/// Backspaces after it go nowhere, so Vikey's word fixes left the old word on screen ("Hoom" gave "Ho\u{202F}ôm",
-/// "dduwowcj," gave "dduwowcj được,"). Address bars and one-line fields (AXTextField, AXComboBox) keep it.
+/// U+202F first to break inline autocomplete, then one Backspace more). In a ProseMirror editor (Claude, Tiptap,
+/// many web apps) synthetic Backspaces are lost with any backspace method (measured in Chrome 2026-11-17 with
+/// webbench: emptyCharPrefix, charByChar, fast and slow all left the old letters, "Hoom" gave "Hoôm"), so Vikey's
+/// word fixes left the old word on screen. Selecting the letters with Shift+Left and typing over them is right in
+/// ProseMirror, Lexical, Quill and plain contenteditable alike. Address bars and one-line fields (AXTextField,
+/// AXComboBox) keep emptyCharPrefix.
 public enum BrowserEditorInjection {
-    public enum Method: String { case fast, slow, charByChar, emptyCharPrefix }
+    public enum Method: String { case fast, slow, charByChar, emptyCharPrefix, selection }
 
     /// Hidden setting for measuring (`defaults write io.github.anlvdt.leankeys LeanKeys.browserEditorMethod charByChar`).
     public static let overrideKey = "LeanKeys.browserEditorMethod"
-    public static let defaultMethod: Method = .charByChar
+    public static let defaultMethod: Method = .selection
 
     public static func isEditor(role: String?) -> Bool {
         role == "AXTextArea" || role == "AXWebArea"
@@ -87,3 +90,23 @@ public enum BrowserEditorInjection {
         defaults.string(forKey: overrideKey).flatMap(Method.init(rawValue:)) ?? defaultMethod
     }
 }
+
+import ApplicationServices
+
+extension BrowserEditorInjection {
+    /// A ProseMirror editor: an AXTextArea whose DOM class list (Chromium and Electron expose `AXDOMClassList`)
+    /// has "ProseMirror". It gets `selection` in any app, not only in a browser: the Claude desktop app's prompt box
+    /// is ProseMirror inside Electron, where the default backspace method lost keys ("kieemr" stayed raw).
+    public static func isProseMirror(role: String?, domClasses: [String]) -> Bool {
+        role == "AXTextArea" && domClasses.contains("ProseMirror")
+    }
+
+    /// The element's DOM classes, read with a 25 ms cap; empty when the app does not expose them or does not answer.
+    public static func domClasses(of element: AXUIElement) -> [String] {
+        AXUIElementSetMessagingTimeout(element, 0.025)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, "AXDOMClassList" as CFString, &value) == .success else { return [] }
+        return (value as? [String]) ?? []
+    }
+}
+

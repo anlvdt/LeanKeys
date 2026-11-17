@@ -162,18 +162,30 @@ final class BrowserEditorInjectionTests: XCTestCase {
         XCTAssertFalse(BrowserEditorInjection.isEditor(role: nil))
     }
 
-    func testDefaultIsNotTheAddressBarMethod() {
-        XCTAssertNotEqual(BrowserEditorInjection.method(defaults: defaults()), .emptyCharPrefix)
+    /// Measured: only selecting and typing over is right in ProseMirror; every backspace method loses keys there.
+    func testDefaultSelectsAndTypesOver() {
+        XCTAssertEqual(BrowserEditorInjection.method(defaults: defaults()), .selection)
     }
 
     func testHiddenOverride() {
         let d = defaults()
         for (value, method) in [("fast", BrowserEditorInjection.Method.fast), ("slow", .slow),
-                                ("charByChar", .charByChar), ("emptyCharPrefix", .emptyCharPrefix)] {
+                                ("charByChar", .charByChar), ("emptyCharPrefix", .emptyCharPrefix),
+                                ("selection", .selection)] {
             d.set(value, forKey: BrowserEditorInjection.overrideKey)
             XCTAssertEqual(BrowserEditorInjection.method(defaults: d), method, value)
         }
         d.set("nonsense", forKey: BrowserEditorInjection.overrideKey)
         XCTAssertEqual(BrowserEditorInjection.method(defaults: d), BrowserEditorInjection.defaultMethod)
     }
+
+    /// A ProseMirror editor outside a browser (the Claude desktop app's prompt box is tiptap/ProseMirror in Electron)
+    /// also gets selection: recognised by its DOM class, read through Accessibility.
+    func testProseMirrorRecognisedByDOMClass() {
+        XCTAssertTrue(BrowserEditorInjection.isProseMirror(role: "AXTextArea", domClasses: ["tiptap", "ProseMirror", "ProseMirror-focused"]))
+        XCTAssertFalse(BrowserEditorInjection.isProseMirror(role: "AXTextField", domClasses: ["ProseMirror"]))
+        XCTAssertFalse(BrowserEditorInjection.isProseMirror(role: "AXTextArea", domClasses: ["monaco-editor"]))
+        XCTAssertFalse(BrowserEditorInjection.isProseMirror(role: "AXTextArea", domClasses: []))
+    }
 }
+
