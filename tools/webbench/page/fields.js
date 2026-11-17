@@ -71,6 +71,18 @@ function mountAutocomplete(stage, onChange) {
   setCommon(el);
   // What the keystrokes produced, without the auto-filled remainder.
   let typed = '';
+  // A completion is pending while the value holds more than what was typed. Drop it
+  // before the caret moves, so collapsing the selection cannot keep the remainder.
+  const dropCompletion = () => {
+    if (el.value === typed) return;
+    el.value = typed;
+    el.setSelectionRange(typed.length, typed.length);
+  };
+  const CARET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Tab']);
+  el.addEventListener('keydown', (event) => {
+    if (CARET_KEYS.has(event.key)) dropCompletion();
+  });
+  el.addEventListener('mousedown', dropCompletion);
   el.addEventListener('input', (event) => {
     // At this point the value is exactly what the user typed (any previous
     // completion was replaced by the keystroke), so record it before completing.

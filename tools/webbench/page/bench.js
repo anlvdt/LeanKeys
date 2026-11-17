@@ -50,16 +50,22 @@ async function main() {
     setTitle('error');
     return;
   }
+  let errored = false;
+  const fail = () => {
+    errored = true;
+    setTitle('error');
+  };
   try {
     const { FIELDS } = await import('./fields.js');
     const mount = FIELDS[field];
     if (!mount) throw new Error(`unknown field: ${field}`);
-    handle = await mount(document.getElementById('stage'), onChange, () => setTitle('error'));
+    handle = await mount(document.getElementById('stage'), onChange, fail);
     handle.focus();
-    setTitle('ready');
+    // Never overwrite an error reported during mount with ready.
+    if (!errored) setTitle('ready');
   } catch (err) {
     console.error(err);
-    setTitle('error');
+    fail();
   }
 }
 
