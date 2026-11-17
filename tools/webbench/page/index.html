@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>webbench</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.core.css">
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; padding: 24px; background: #fff; color: #000;
+         font: 18px/1.5 -apple-system, system-ui, sans-serif; }
+  #stage { max-width: 640px; }
+  #stage > * { margin-bottom: 12px; }
+  .field { display: block; box-sizing: border-box; width: 100%; min-height: 2.2em;
+           padding: 8px 10px; border: 1px solid #888; font: inherit; outline: none;
+           background: #fff; color: #000; white-space: pre-wrap; text-align: left; }
+  textarea.field { min-height: 6em; resize: none; }
+  .field:focus { border-color: #000; }
+  .ql-container { border: none; font: inherit; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "lexical": "https://esm.sh/lexical@0.17.1",
+    "@lexical/plain-text": "https://esm.sh/@lexical/plain-text@0.17.1?deps=lexical@0.17.1",
+    "slate": "https://esm.sh/slate@0.103.0",
+    "slate-react": "https://esm.sh/slate-react@0.110.1?deps=react@18.3.1,react-dom@18.3.1,slate@0.103.0",
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom": "https://esm.sh/react-dom@18.3.1?deps=react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
+    "prosemirror-state": "https://esm.sh/prosemirror-state@1.4.3",
+    "prosemirror-view": "https://esm.sh/prosemirror-view@1.33.8",
+    "prosemirror-schema-basic": "https://esm.sh/prosemirror-schema-basic@1.2.3",
+    "quill": "https://esm.sh/quill@2.0.2"
+  }
+}
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<script type="module" src="bench.js"></script>
+</body>
+</html>
