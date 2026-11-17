@@ -146,14 +146,14 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
     /// remembered until next launch.
     private func moveLegacyKeysIfNeeded() throws {
         if let legacyMoveError { throw legacyMoveError }
-        guard FileManager.default.fileExists(atPath: url.path), let legacy else { return }
+        guard try Self.exists(url), let legacy else { return }
         // HMAC first, AES last: a store with its AES key file but no HMAC one is a new store (its first save makes
         // the AES key, the HMAC key comes later), never a move cut short, so it does not ask the keychain.
         let aesFile = Self.keyURL(for: url, account: Account.aes)
         for account in [Account.hmac, Account.aes] {
             let file = Self.keyURL(for: url, account: account)
-            guard !FileManager.default.fileExists(atPath: file.path) else { continue }
-            if account == Account.hmac, FileManager.default.fileExists(atPath: aesFile.path) { continue }
+            guard try !Self.exists(file) else { continue }
+            if account == Account.hmac, try Self.exists(aesFile) { continue }
             let key: Data?
             do { key = try legacy.read(account) } catch { legacyMoveError = error; throw error }
             guard let key else { continue }
@@ -166,8 +166,17 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
     /// The file's bytes; nil only when it does not exist. Any other read error throws: a key or data file that is
     /// there but unreadable must never be taken for "nothing yet" and replaced.
     private static func readIfPresent(_ url: URL) throws -> Data? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        guard try exists(url) else { return nil }
         return try Data(contentsOf: url)
+    }
+
+    /// true when something is at `url` (a dangling link counts); false only when the path does not exist. Any other
+    /// failure (a folder without search permission) throws, so it is never taken for "no key yet" (review N1).
+    static func exists(_ url: URL) throws -> Bool {
+        var info = stat()
+        if lstat(url.path, &info) == 0 { return true }
+        if errno == ENOENT { return false }
+        throw StoreError.posix(errno)
     }
 
     /// The key under `account`, made (32 random bytes) and written on first use.

@@ -162,5 +162,24 @@ final class FileKeyStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.load())
         XCTAssertEqual(legacy.reads.count, 1)
     }
+
+    /// Review N1: a folder LeanKeys cannot search makes every key file look missing to a plain existence check;
+    /// the store must throw, not make a new key and rename it over the old one.
+    func testUnsearchableFolderThrowsAndKeepsTheKey() throws {
+        let folder = dir.appendingPathComponent("LeanKeys")
+        let url = folder.appendingPathComponent("learn.bin")
+        try KeychainEncryptedFileStore(url: url, legacy: FakeLegacy()).save(Data("x".utf8))
+        let key = KeychainEncryptedFileStore.keyURL(for: url, account: "aes-gcm")
+        let before = try Data(contentsOf: key)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: folder.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path) }
+
+        let fresh = KeychainEncryptedFileStore(url: url, legacy: FakeLegacy())
+        XCTAssertThrowsError(try fresh.save(Data("y".utf8)))
+        XCTAssertThrowsError(try fresh.load())
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path)
+        XCTAssertEqual(try Data(contentsOf: key), before)
+        XCTAssertEqual(try KeychainEncryptedFileStore(url: url, legacy: FakeLegacy()).load(), Data("x".utf8))
+    }
 }
 
