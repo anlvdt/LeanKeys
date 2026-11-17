@@ -64,7 +64,7 @@ STATUS_STREAK_LIMIT = 5 # cases in a row without status ok before the run stops
 # Per-case cost on top of the keys: the ready wait (typical; a cold editor CDN can take longer),
 # QUIET_S, and open, typist start, the osascript close and the polls. A floor, not a forecast.
 READY_EXPECT_S = 2.0
-OPEN_CLOSE_S = 1.5
+OPEN_CLOSE_S = 1.5      # open, typist start, osascript close, polls, the 0.3 s pre-open watch
 OVERHEAD_S = READY_EXPECT_S + QUIET_S + OPEN_CLOSE_S
 # Mean inter-key delay per speed (human: uniform 1/12..1/8 s; fast: 25 keys/s; burst: none).
 MEAN_KEY_S = {'human': (1 / 12 + 1 / 8) / 2, 'fast': 1 / 25, 'burst': 0.0}
