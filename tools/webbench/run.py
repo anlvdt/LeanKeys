@@ -74,18 +74,30 @@ def load_corpus(path=CORPUS):
     return rows
 
 
-def word_end_indexes(keys):
-    """Index of the last key of each word: the key just before a space, and the final key.
-    Backspace (`) counts as a key, so an index can point at one. Repeated or trailing
-    spaces produce no empty words."""
-    out = []
-    for k, ch in enumerate(keys):
-        if ch == ' ':
+def word_spans(keys):
+    """(end, next) per word, for the latency window (see scoring.word_latencies).
+    A word is a run of non-space keys that has at least one letter key. end is the run's
+    last key; next is the first key of the following run of any kind, or None at the end.
+    A digit-only run (the 2 in 'lúc 2 giờ') is not a word: it gets no entry, but it still
+    closes the previous word's window. Backspace (`) inside a word counts as a key."""
+    runs = []
+    i, n = 0, len(keys)
+    while i < n:
+        if keys[i] == ' ':
+            i += 1
             continue
-        nxt = keys[k + 1] if k + 1 < len(keys) else ' '
-        if nxt == ' ':
-            out.append(k)
-    return out
+        j = i
+        while j < n and keys[j] != ' ':
+            j += 1
+        runs.append((i, j - 1))
+        i = j
+    spans = []
+    for idx, (first, last) in enumerate(runs):
+        if not any(ch.isalpha() for ch in keys[first:last + 1]):
+            continue
+        nxt = runs[idx + 1][0] if idx + 1 < len(runs) else None
+        spans.append((last, nxt))
+    return spans
 
 
 def build_plan(rows, browsers, fields, engines, speeds, groups, limit, run_id):
@@ -109,7 +121,7 @@ def build_plan(rows, browsers, fields, engines, speeds, groups, limit, run_id):
                             'token': '%s%06d' % (run_id, seq),
                             'keys': row['keys'], 'target': row['target'],
                             'flags': row['flags'],
-                            'word_end_idx': word_end_indexes(row['keys']),
+                            'word_spans': word_spans(row['keys']),
                         })
     return plan
 
@@ -332,7 +344,7 @@ class _Session:
                'speed': case['speed'], 'group': case['group'], 'case': case['case'],
                'status': None, 'text': None, 'target': case['target'],
                'flags': case['flags'], 'sent': None, 'inputs': None,
-               'word_end_idx': case['word_end_idx']}
+               'word_spans': case['word_spans']}
         if code in STATUS_BY_EXIT:
             rec['status'] = STATUS_BY_EXIT[code]
         elif code != 0:

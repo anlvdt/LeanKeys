@@ -25,9 +25,18 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(char_diff("bạn tôi", "bạ tôi"), (0, 1))
         self.assertEqual(char_diff("bạn tôi", "bạn, tôi!"), (0, 0))  # punctuation ignored
 
-    def test_word_latency_uses_last_input_before_next_key(self):
-        self.assertEqual(word_latencies([0, 100, 200], [1], [101, 130, 205]), [30])
-        self.assertEqual(word_latencies([0, 100], [1], []), [None])
+    def test_word_latency_window_ends_at_next_word_first_key(self):
+        # Word ends at key 1; the next word starts at key 2 (sent 200). Input at 205 is the next word.
+        self.assertEqual(word_latencies([0, 100, 200], [(1, 2)], [101, 130, 205]), [30])
+        self.assertEqual(word_latencies([0, 100], [(1, None)], []), [None])
+
+    def test_word_latency_counts_replacement_applied_on_the_space(self):
+        # Key 0 ends the word, key 1 is the space, key 2 starts the next word (sent 200).
+        # The correction lands at 150, after the space's send time (100): it must count.
+        self.assertEqual(word_latencies([0, 100, 200], [(0, 2)], [50, 150, 205]), [150])
+
+    def test_word_latency_last_word_has_no_upper_bound(self):
+        self.assertEqual(word_latencies([0, 100], [(1, None)], [50, 150, 900]), [800])
 
     def test_percentile(self):
         self.assertEqual(percentile([10, 20, 30, 40], 50), 25)

@@ -54,7 +54,7 @@ def summarize(records):
         row['extra'] += extra
         row['lost'] += lost
         if r['speed'] in LATENCY_SPEEDS and r.get('sent') and r.get('inputs') is not None:
-            row['lat'].extend(x for x in word_latencies(r['sent'], r['word_end_idx'], r['inputs'])
+            row['lat'].extend(x for x in word_latencies(r['sent'], r['word_spans'], r['inputs'])
                               if x is not None)
     out = []
     for key in sorted(rows, key=lambda k: (k[0] != 'main', k[1:])):

@@ -127,7 +127,7 @@ def make_case(n, engine='vikey', field='input', speed='human', browser='chrome',
         'browser': browser, 'bundle': run.BUNDLES[browser], 'field': field,
         'engine': engine, 'speed': speed, 'group': group, 'case': n,
         'token': 'tok%d' % n, 'keys': keys, 'target': target, 'flags': flags,
-        'word_end_idx': run.word_end_indexes(keys),
+        'word_spans': run.word_spans(keys),
     }
 
 
@@ -137,15 +137,19 @@ def read_records(path):
 
 
 class PlanHelpers(unittest.TestCase):
-    def test_word_end_indexes_marks_key_before_space_and_final_key(self):
-        self.assertEqual(run.word_end_indexes('ab cd'), [1, 4])
+    def test_word_spans_end_before_space_and_point_at_next_word(self):
+        self.assertEqual(run.word_spans('ab cd'), [(1, 3), (4, None)])
 
-    def test_word_end_indexes_counts_backspace_as_a_key(self):
-        # "ab`" then space: the key before the space is the backspace at index 2.
-        self.assertEqual(run.word_end_indexes('ab` cd'), [2, 5])
+    def test_word_spans_count_backspace_as_a_key(self):
+        # "ab`" then space: the word ends at the backspace (index 2).
+        self.assertEqual(run.word_spans('ab` cd'), [(2, 4), (5, None)])
 
-    def test_word_end_indexes_skips_repeated_and_trailing_spaces(self):
-        self.assertEqual(run.word_end_indexes('a  b  '), [0, 3])
+    def test_word_spans_skip_repeated_and_trailing_spaces(self):
+        self.assertEqual(run.word_spans('a  b  '), [(0, 3), (3, None)])
+
+    def test_digit_token_is_not_a_word_but_ends_the_previous_window(self):
+        # "lusc 2 giowf": the 2 gets no entry; "lusc" window ends at the 2's key (index 5).
+        self.assertEqual(run.word_spans('lusc 2 giowf'), [(3, 5), (11, None)])
 
     def test_field_names_match_page_factories(self):
         with open(os.path.join(WEBBENCH, 'page', 'fields.js'), encoding='utf-8') as f:

@@ -16,14 +16,18 @@ def char_diff(target, out):
         if op in ('delete', 'replace'): lost += i2 - i1
     return extra, lost
 
-def word_latencies(sent_ms, word_end_idx, input_ms):
-    """For each word-end key index k, latency = last input time inside [t, t_next) minus t,
-    where t = sent_ms[k] and t_next = sent_ms[k+1] (+inf for the last key). None if no input fell in the window."""
+def word_latencies(sent_ms, word_spans, input_ms):
+    """Per word, latency = last input in its window minus the word's last key time.
+    word_spans holds (end, next) key indexes: end is the word's last key; next is the first
+    non-space key after it (the next word's first key, or None for the last word).
+    The window is [sent[end], sent[next]), so an input that LeanKeys applies on the space
+    after the word (a correction or auto-restore) counts, and the next word's typing does not.
+    None when no input fell in the window."""
     out = []
-    for k in word_end_idx:
-        t = sent_ms[k]
-        end = sent_ms[k + 1] if k + 1 < len(sent_ms) else float('inf')
-        inside = [x for x in input_ms if t <= x < end]
+    for end_idx, next_idx in word_spans:
+        t = sent_ms[end_idx]
+        stop = sent_ms[next_idx] if next_idx is not None else float('inf')
+        inside = [x for x in input_ms if t <= x < stop]
         out.append(inside[-1] - t if inside else None)
     return out
 
