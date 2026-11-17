@@ -94,7 +94,7 @@ final class TypistCoreTests: XCTestCase {
         let msg = Preflight.problem(accessibilityTrusted: true, tapCreated: true,
                                     layoutID: "com.apple.keylayout.Vietnamese")
         XCTAssertNotNil(msg)
-        XCTAssertTrue(msg!.contains("US"), msg!)
+        XCTAssertTrue(msg!.contains("U.S. or ABC"), msg!)
     }
 
     func testPageStateClassifiesTitles() {
@@ -111,5 +111,19 @@ final class TypistCoreTests: XCTestCase {
         XCTAssertFalse(InputSource.isForeign(marker: InputSource.leanKeysMarker))
         XCTAssertTrue(InputSource.isForeign(marker: 0))            // a real key or mouse event
         XCTAssertTrue(InputSource.isForeign(marker: 0x5745_4243))  // one off from typist's marker
+    }
+
+    func testAcceptsUSAndABCLayoutsOnly() {
+        XCTAssertTrue(Guard.layoutAccepted("com.apple.keylayout.US"))
+        XCTAssertTrue(Guard.layoutAccepted("com.apple.keylayout.ABC"))
+        XCTAssertFalse(Guard.layoutAccepted("com.apple.keylayout.Vietnamese"))
+        XCTAssertNil(Preflight.problem(accessibilityTrusted: true, tapCreated: true,
+                                       layoutID: "com.apple.keylayout.ABC"))
+        XCTAssertNotNil(Preflight.problem(accessibilityTrusted: true, tapCreated: true,
+                                          layoutID: "com.apple.keylayout.Vietnamese"))
+        XCTAssertTrue(Guard.mayType(frontBundle: "com.google.Chrome",
+                                    windowTitle: "webbench-x-ready",
+                                    expectedBundle: "com.google.Chrome",
+                                    token: "x", layoutID: "com.apple.keylayout.ABC"))
     }
 }

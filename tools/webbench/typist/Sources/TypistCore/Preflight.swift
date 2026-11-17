@@ -12,8 +12,8 @@ public enum Preflight {
             return "typist: give this terminal Accessibility and Input Monitoring in "
                 + "\(accessibilityPath) and \(inputMonitoringPath), then retry."
         }
-        if layoutID != Guard.requiredLayoutID {
-            return "typist: the keyboard layout is \(layoutID), not US. Switch the input source to U.S. first."
+        if !Guard.layoutAccepted(layoutID) {
+            return "typist: the keyboard layout is \(layoutID), not U.S. or ABC. Switch the input source to U.S. or ABC first."
         }
         return nil
     }
