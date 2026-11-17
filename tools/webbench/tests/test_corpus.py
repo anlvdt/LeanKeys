@@ -1,21 +1,17 @@
 import collections
 import os
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CORPUS = os.path.join(os.path.dirname(HERE), 'corpus.tsv')
+WEBBENCH = os.path.dirname(HERE)
+CORPUS = os.path.join(WEBBENCH, 'corpus.tsv')
+sys.path.insert(0, WEBBENCH)
+
+from make_corpus import RESEARCH  # noqa: E402
 
 # typist supports printable ASCII 0x20-0x7E, backtick included (controller ruling).
 SUPPORTED = {chr(c) for c in range(0x20, 0x7F)}
-
-RESEARCH = [
-    ('nhesee', 'nhéee'),
-    ('asaaa', 'áaaa'),
-    ('ooiii', 'ôiii'),
-    ('owiii', 'ơiii'),
-    ('Ddawsk Lawsk', 'Đắk Lắk'),
-    ('Kroong Pawsc', 'Krông Pắc'),
-]
 
 
 class CorpusShapeTests(unittest.TestCase):

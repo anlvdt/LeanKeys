@@ -11,6 +11,9 @@ MIXBENCH = os.path.join(os.path.dirname(HERE), 'mixbench')
 OUT = os.path.join(HERE, 'corpus.tsv')
 SEED = 17
 
+# Research probes: the DESIRED behaviour from Gõ Nhanh issue #211 ("a s aaa" -> "áaaa"),
+# which today's Telex cannot produce. They measure the gap, so they are excluded
+# from baseline totals (run.py/score).
 RESEARCH = [
     ('nhesee', 'nhéee'),
     ('asaaa', 'áaaa'),
