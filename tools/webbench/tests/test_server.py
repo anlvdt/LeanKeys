@@ -80,5 +80,15 @@ class ServerTests(ServerTestCase):
         self.assertIn('[A-Za-z0-9_-]{1,64}', html)
 
 
+    def test_fields_turn_off_autocorrect_and_autofill_names(self):
+        with open(os.path.join(server.PAGE_DIR, 'fields.js'), encoding='utf-8') as f:
+            src = f.read()
+        start = src.index('function setCommon(el)')
+        block = src[start:src.index('function caretToEnd', start)]
+        for needle in ("'autocomplete', 'off'", "'autocorrect', 'off'", "'autocapitalize', 'off'",
+                       "'spellcheck', 'false'", "el.name ="):
+            self.assertIn(needle, block)
+
+
 if __name__ == '__main__':
     unittest.main()

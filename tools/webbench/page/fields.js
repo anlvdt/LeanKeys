@@ -7,8 +7,12 @@ const SUGGESTIONS = ['https://www.facebook.com/messages', 'https://tiki.vn', 'ht
 function setCommon(el) {
   el.classList.add('field');
   el.setAttribute('autocomplete', 'off');
+  el.setAttribute('autocorrect', 'off');
   el.setAttribute('autocapitalize', 'off');
   el.setAttribute('spellcheck', 'false');
+  // A neutral, per-page name: browsers key autofill suggestions on the field name, and a
+  // suggestion popup would take the focused window away from the bench page.
+  el.name = 'wb-' + Math.random().toString(36).slice(2, 10);
 }
 
 function caretToEnd(el) {

@@ -163,6 +163,17 @@ def read_records(path):
         return [json.loads(line) for line in f if line.strip()]
 
 
+class FinalSpaceTests(unittest.TestCase):
+    def test_every_case_is_typed_with_one_final_space(self):
+        rows = [{'case': 1, 'keys': 'ab cd', 'target': 'ab cd', 'flags': '11', 'group': 'office'}]
+        plan = run.build_plan(rows, ['chrome'], ['input'], ['vikey'], ['human'], ['office'],
+                              None, 'run1')
+        self.assertEqual(plan[0]['keys'], 'ab cd ')
+        self.assertEqual(plan[0]['word_spans'], [(1, 3), (4, None)])
+        args = run.typist_args(plan[0])
+        self.assertEqual(args[args.index('--keys') + 1], 'ab cd ')
+
+
 class WatchAndCrashTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

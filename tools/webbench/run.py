@@ -140,14 +140,17 @@ def build_plan(rows, browsers, fields, engines, speeds, groups, limit, run_id):
                 for speed in speeds:
                     for row in chosen:
                         seq = len(plan) + 1
+                        # One final space: LeanKeys commits the last word on a break, and typist
+                        # sends no break of its own (mixbench sends one after each sentence).
+                        keys = row['keys'] + ' '
                         plan.append({
                             'browser': browser, 'bundle': BUNDLES[browser],
                             'field': field, 'engine': engine, 'speed': speed,
                             'group': row['group'], 'case': row['case'],
                             'token': '%s%06d' % (run_id, seq),
-                            'keys': row['keys'], 'target': row['target'],
+                            'keys': keys, 'target': row['target'],
                             'flags': row['flags'],
-                            'word_spans': word_spans(row['keys']),
+                            'word_spans': word_spans(keys),
                         })
     return plan
 
