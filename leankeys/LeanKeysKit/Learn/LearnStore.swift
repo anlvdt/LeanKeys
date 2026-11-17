@@ -16,9 +16,22 @@ public protocol LearnKeyProvider {
     func hmacKey() throws -> Data
 }
 
+/// Keys LeanKeys up to 1.3 kept in the login keychain. Read once, to move them to files.
+public protocol LegacyKeyStore {
+    /// nil when there is no such item; throws when it exists but cannot be read (the user denied access).
+    func read(_ account: String) throws -> Data?
+    func delete(_ account: String) throws
+}
+
 /// The real store: the counts sealed with AES-GCM in a 0600 file, the AES and HMAC keys (32 random bytes each) in
-/// the login keychain, marked after-first-unlock, this device only, not synchronizable. `erase()` deletes the file and
-/// both keys. Nothing here is logged.
+/// 0600 files next to it (`<file>.aes-gcm.key`, `<file>.hmac-sha256.key`), in a 0700 folder. `erase()` deletes the
+/// file and both keys. Nothing here is logged.
+///
+/// Not the keychain: LeanKeys is self-signed, with no team ID, so the login keychain ties each item to the cdhash of
+/// the build that may read it, and every update asked for the login password once per item. Keys an older LeanKeys
+/// kept there move to files the first time they are needed, and only when there is data they unlock (one last
+/// password prompt per item); a denied read throws, so the data is never replaced (ruling R16) and the move is tried
+/// again next time. The name stays for the callers.
 public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
     public static var defaultURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -31,13 +44,19 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
     }
 
     private let url: URL
-    private let service: String
-    /// The AES key once read, so a save does not query the Keychain each time. `erase()` clears it.
+    private let legacy: LegacyKeyStore?
+    /// The AES key once read, so a save does not read the key file each time. `erase()` clears it.
     private var aesKey: Data?
 
-    public init(url: URL, keychainService: String = "io.github.anlvdt.leankeys.learn") {
+    /// `keychainService`: where LeanKeys up to 1.3 kept this store's keys. `legacy` replaces that keychain in tests.
+    public init(url: URL, keychainService: String = "io.github.anlvdt.leankeys.learn", legacy: LegacyKeyStore? = nil) {
         self.url = url
-        self.service = keychainService
+        self.legacy = legacy ?? KeychainLegacyKeys(service: keychainService)
+    }
+
+    /// The file holding `account`'s key for the store at `url`.
+    public static func keyURL(for url: URL, account: String) -> URL {
+        url.deletingLastPathComponent().appendingPathComponent("\(url.lastPathComponent).\(account).key")
     }
 
     /// Nothing saved yet, or a file that no longer opens (its key gone, or damaged): nil, and the next save
@@ -60,8 +79,10 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
     public func erase() throws {
         if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
         aesKey = nil
-        try deleteKey(Account.aes)
-        try deleteKey(Account.hmac)
+        for account in [Account.aes, Account.hmac] {
+            let key = Self.keyURL(for: url, account: account)
+            if FileManager.default.fileExists(atPath: key.path) { try FileManager.default.removeItem(at: key) }
+        }
     }
 
     public func hmacKey() throws -> Data { try key(Account.hmac) }
@@ -70,7 +91,9 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
 
     /// Writes to a 0600 temporary file next to `url`, then renames it over: the data is never readable by others,
     /// not even for a moment, and a crash leaves the old file whole.
-    private func writePrivately(_ data: Data) throws {
+    private func writePrivately(_ data: Data) throws { try writePrivately(data, to: url) }
+
+    private func writePrivately(_ data: Data, to url: URL) throws {
         let dir = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
@@ -99,35 +122,36 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
         }
     }
 
-    // MARK: Keychain
+    // MARK: Keys
 
-    /// The login keychain. The data-protection keychain needs a keychain-access-groups entitlement, which the
-    /// self-signed app and the test runner lack (SecItemAdd there fails with errSecMissingEntitlement, while reads
-    /// just find nothing). The login keychain never syncs to iCloud; `kSecAttrAccessible` is still set, so the items
-    /// keep the intended policy if they ever move to the data-protection keychain.
-    private func baseQuery(_ account: String) -> [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecAttrSynchronizable as String: false,
-        ]
-    }
-
+    /// The key under `account` from its file, after moving the old keychain's keys of a store from before key
+    /// files; nil when there is none. A key file of the wrong size is an error, not a reason to make a new key.
     private func readKey(_ account: String) throws -> Data? {
-        var result: CFTypeRef?
-        var query = baseQuery(account)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess, let data = result as? Data, data.count == 32 else {
-            throw StoreError.keychain(status)
-        }
+        try moveLegacyKeysIfNeeded()
+        guard let data = try? Data(contentsOf: Self.keyURL(for: url, account: account)) else { return nil }
+        guard data.count == 32 else { throw StoreError.badKeyFile }
         return data
     }
 
-    /// The key under `account`, made (32 random bytes) and stored on first use.
+    /// A store from before key files (its data there, no key file at all) gets both of its keys from the old
+    /// keychain, together: the data and its digests need the pair. A denied read throws before any file is written.
+    private func moveLegacyKeysIfNeeded() throws {
+        let accounts = [Account.aes, Account.hmac]
+        let anyKeyFile = accounts.contains {
+            FileManager.default.fileExists(atPath: Self.keyURL(for: url, account: $0).path)
+        }
+        guard !anyKeyFile, FileManager.default.fileExists(atPath: url.path), let legacy else { return }
+        var found: [(String, Data)] = []
+        for account in accounts {
+            guard let key = try legacy.read(account) else { continue }
+            guard key.count == 32 else { throw StoreError.badKeyFile }
+            found.append((account, key))
+        }
+        for (account, key) in found { try writePrivately(key, to: Self.keyURL(for: url, account: account)) }
+        for (account, _) in found { try? legacy.delete(account) }
+    }
+
+    /// The key under `account`, made (32 random bytes) and written on first use.
     private func key(_ account: String) throws -> Data {
         if let existing = try readKey(account) { return existing }
         var bytes = [UInt8](repeating: 0, count: 32)
@@ -135,24 +159,44 @@ public final class KeychainEncryptedFileStore: LearnStore, LearnKeyProvider {
             throw StoreError.random
         }
         let data = Data(bytes)
-        var query = baseQuery(account)
-        query[kSecValueData as String] = data
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        query[kSecAttrLabel as String] = "LeanKeys learned phrases"
-        let status = SecItemAdd(query as CFDictionary, nil)
-        if status == errSecDuplicateItem, let existing = try readKey(account) { return existing }
-        guard status == errSecSuccess else { throw StoreError.keychain(status) }
+        try writePrivately(data, to: Self.keyURL(for: url, account: account))
         return data
     }
 
-    private func deleteKey(_ account: String) throws {
-        let status = SecItemDelete(baseQuery(account) as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw StoreError.keychain(status) }
-    }
-
     enum StoreError: Error {
-        case seal, random
+        case seal, random, badKeyFile
         case keychain(OSStatus)
         case posix(Int32)
+    }
+}
+
+/// The login keychain items LeanKeys up to 1.3 wrote: generic passwords under `service`, accounts "aes-gcm" and
+/// "hmac-sha256". Reading one of them is what may show macOS's password prompt, once, for the move to files.
+struct KeychainLegacyKeys: LegacyKeyStore {
+    let service: String
+
+    private func query(_ account: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+         kSecAttrAccount as String: account, kSecAttrSynchronizable as String: false]
+    }
+
+    func read(_ account: String) throws -> Data? {
+        var q = query(account)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(q as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = result as? Data else {
+            throw KeychainEncryptedFileStore.StoreError.keychain(status)
+        }
+        return data
+    }
+
+    func delete(_ account: String) throws {
+        let status = SecItemDelete(query(account) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainEncryptedFileStore.StoreError.keychain(status)
+        }
     }
 }

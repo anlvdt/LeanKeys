@@ -253,8 +253,8 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 **Bảo mật**
 - Mặc định tắt. Lần đầu bật có màn giải thích tính năng làm gì.
 - Chỉ xử lý và lưu trên máy, không gửi đi đâu.
-- Cụm chưa đạt ngưỡng chỉ được lưu dưới dạng HMAC-SHA256 (khoá ngẫu nhiên giữ trong Keychain) kèm số lần và các ngày gặp. Chữ thật chỉ được giữ khi cụm đạt ngưỡng, và chỉ để hiện trong màn duyệt.
-- File dữ liệu được mã hoá bằng khoá trong Keychain. Có nút "Xoá dữ liệu gợi ý gõ tắt" (chỉ xoá dữ liệu của 4B; Bảng gõ tắt, "Từ giữ nguyên" và "Tên đã học" vẫn còn). Mục đã Thêm hay Bỏ qua thì xoá chữ thật khỏi bộ đếm.
+- Cụm chưa đạt ngưỡng chỉ được lưu dưới dạng HMAC-SHA256 (khoá ngẫu nhiên giữ trong tệp riêng, xem mục 20) kèm số lần và các ngày gặp. Chữ thật chỉ được giữ khi cụm đạt ngưỡng, và chỉ để hiện trong màn duyệt.
+- File dữ liệu được mã hoá bằng khoá trong tệp riêng (mục 20). Có nút "Xoá dữ liệu gợi ý gõ tắt" (chỉ xoá dữ liệu của 4B; Bảng gõ tắt, "Từ giữ nguyên" và "Tên đã học" vẫn còn). Mục đã Thêm hay Bỏ qua thì xoá chữ thật khỏi bộ đếm.
 - Không bao giờ học từ:
   - Secure Input và ô mật khẩu (AX subrole `AXSecureTextField`);
   - chuỗi 13–19 số đạt kiểm tra Luhn (số thẻ);
@@ -343,8 +343,8 @@ Viết ngày 2026-11-15, viết lại ngày 2026-11-16 sau khi đo. Người dù
   - nút "Xoá tất cả", hỏi lại kèm dòng "Mọi từ giữ nguyên và tên đã học sẽ bị xoá. Không hoàn tác được.".
 - Mỗi dòng phụ chỉ một dòng (mục 14.3), đủ chữ trong tooltip.
 - **Lưu trữ.** Chỉ lưu những chữ người dùng đã hoàn tác, không lưu văn bản khác.
-  - File `~/Library/Application Support/LeanKeys/undo-rules.bin`, quyền 0600, mã hoá AES-GCM bằng khoá trong login Keychain.
-  - Dùng lại `KeychainEncryptedFileStore` của 4B với tên file và mục Keychain riêng.
+  - File `~/Library/Application Support/LeanKeys/undo-rules.bin`, quyền 0600, mã hoá AES-GCM bằng khoá trong tệp riêng (mục 20).
+  - Dùng lại `KeychainEncryptedFileStore` của 4B với tên file riêng.
   - Không gửi đi đâu.
 - **Giới hạn 5.000 luật.** Khi đầy, bỏ luật lâu không dùng nhất (LRU).
 - **Không học trong:** Secure Input, ô mật khẩu, và các ứng dụng trong danh sách "Không học khi gõ trong" của 4B (tooltip của danh sách nói nó áp dụng cho cả 4B, 4C và 4D). Luật đã học vẫn được áp dụng ở mọi nơi engine chạy.
@@ -577,7 +577,7 @@ Thêm ngày 2026-11-16. Người dùng đã duyệt thiết kế và yêu cầu 
 **17.1.3 Tên tự học.** LeanKeys đếm các từ người dùng **tự gõ hoa bằng Shift hoặc Caps Lock** ở giữa câu. Từ đầu câu, từ viết hoa toàn bộ, từ một chữ cái, và từ do chính LeanKeys viết hoa đều không tính.
 - **Học "sau từ xưng hô":** từ được gõ hoa ngay sau một từ xưng hô (anh, chị, em, ông, bà, cô, chú, bác, thầy, sếp, dì, cậu) từ 2 lần trở lên. Lần sau, khi từ đó được gõ thường ngay sau một từ xưng hô, nó được viết hoa ("anh hùng" → "anh Hùng").
 - **Học "mọi nơi":** từ được gõ hoa giữa câu từ 2 lần trở lên mà không phải từ tiếng Việt hay tiếng Anh có thật (`lk_vikey_word_score` của cả hai ngôn ngữ đều là `LK_VIKEY_NOT_A_WORD`, xét trên các chữ ASCII của từ). Lần sau, từ đó được viết lại đúng dạng đã học ở mọi nơi ("shopee" → "Shopee", "chatgpt" → "ChatGPT").
-- **Lưu trữ:** trước khi đạt 2 lần chỉ lưu HMAC-SHA256 của từ (khoá HMAC lấy từ Keychain như 4B) kèm số lần. Đạt ngưỡng thì mới lưu dạng chữ. File riêng `~/Library/Application Support/LeanKeys/learned-names.bin` (quyền 0600, AES-GCM, dùng `KeychainEncryptedFileStore` với mục Keychain `io.github.anlvdt.leankeys.names`). Giới hạn 2.000 tên, bỏ tên lâu không dùng nhất (LRU).
+- **Lưu trữ:** trước khi đạt 2 lần chỉ lưu HMAC-SHA256 của từ (khoá HMAC như 4B, mục 20) kèm số lần. Đạt ngưỡng thì mới lưu dạng chữ. File riêng `~/Library/Application Support/LeanKeys/learned-names.bin` (quyền 0600, AES-GCM, dùng `KeychainEncryptedFileStore` với mục Keychain `io.github.anlvdt.leankeys.names`). Giới hạn 2.000 tên, bỏ tên lâu không dùng nhất (LRU).
 - **Không học** trong Secure Input, ô mật khẩu, và các app bị loại trừ (mục 11.1). Ô mật khẩu được kiểm tra trên hàng đợi nền như 12.3.
 - **(sửa 2026-11-16, đánh giá toàn ứng dụng)** Cũng không học trong terminal và trình soạn code (danh sách của 17.2): ở đó từ viết hoa giữa dòng thường là tên biến hay lệnh (`Config`, `Router`). Danh sách loại trừ của 4B và 4C không đổi.
 
@@ -669,4 +669,14 @@ Thêm ngày 2026-11-17, theo lỗi người dùng báo: gõ "BÙI" bằng Caps L
 - **LeanKeys:** Caps Lock bật cho mọi chữ của từ chính là "dòng chữ hoa" Vikey cần. Khi Vikey trả một từ gõ bằng Caps Lock về phím gốc (thực tế là từ không nằm trong dòng chữ hoa: đầu dòng, sau con số) ở dấu cách hay dấu câu, LeanKeys giữ từ tiếng Việt (chặn lần sửa đó, như 12.2) nếu: mọi chữ gõ bằng Caps Lock (không giữ Shift), từ bắt đầu ở chế độ tiếng Việt, phím gốc không phải từ tiếng Anh, và từ là âm tiết thông dụng (điểm ≥ 15) hoặc là họ, tên đệm, tên trong dữ liệu 4D (`ProperNouns.json`). ⌫⌫ ngay sau đó trả lại phím gốc; lần ⌫⌫ này không được báo cho việc tự học từ hoàn tác (12.2), vì luật này không phải do sổ luật đặt ra. Gõ bằng Shift giữ nguyên cách Vikey quyết định. Hệ quả đã chấp nhận: từ được giữ trở thành từ trước của một dòng chữ hoa theo luật của Vikey, nên "BUIF COS" ra "BÙI CÓ", như "THỊ CÓ" vốn đã vậy; quét mọi chuỗi chữ hoa 2–4 ký tự, chỉ 10 chuỗi đổi kết quả và đều là tên (BÙI, NGÔ, HƯNG, PHÚ, TÚ).
 - **Vị trí:** `leankeys/VikeyShim` (`capsLockKeeps`, `lk_vikey_set_caps_lock`, `lk_vikey_set_caps_words`) và `VikeyEngine` (Caps Lock = chữ hoa mà không giữ Shift). `vendor/` không đổi.
 - **Test:** `CapsLockWordTests` (BÙI, NGUYỄN, BÙI THỊ XUÂN, 453 BÙI MÌ, BÀN; USA, IRS, HTML giữ nguyên; Shift giữ nguyên; ⌫⌫).
+
+## 20. Khoá mã hoá dữ liệu tự học nằm trong tệp, không trong Keychain
+
+Thêm ngày 2026-11-17, theo lỗi người dùng báo: LeanKeys liên tục đòi mật khẩu máy ("LeanKeys wants to access key 'LeanKeys learned phrases' in your keychain").
+
+- **Nguyên nhân:** khoá AES và HMAC của các kho tự học (gợi ý gõ tắt, từ giữ nguyên, tên đã học) nằm trong login Keychain. App ký bằng chứng chỉ tự cấp, không có Team ID, nên macOS gắn quyền đọc mỗi mục vào cdhash của bản build đã tạo hay đã được cho phép (danh sách `partition_id` chứa các `cdhash:`). Mỗi bản cập nhật có cdhash mới, nên với mọi người dùng, mỗi lần cập nhật macOS hỏi mật khẩu một lần cho mỗi mục. Không có cách nào tránh được khi vẫn dùng Keychain mà không có Team ID (quyết định không mua Developer ID, mục 15).
+- **LeanKeys:** mỗi kho giữ hai khoá (32 byte ngẫu nhiên) trong tệp cạnh tệp dữ liệu, `<tệp>.aes-gcm.key` và `<tệp>.hmac-sha256.key`. Tệp có quyền 0600, thư mục `~/Library/Application Support/LeanKeys` có quyền 0700, ghi qua tệp tạm `O_EXCL` rồi đổi tên. Dữ liệu vẫn mã hoá AES-GCM như cũ.
+- **Đánh đổi đã chấp nhận:** một tiến trình khác của cùng người dùng đọc được tệp khoá mà không bị hỏi, trong khi Keychain sẽ hỏi. Tiến trình như thế vốn đã đọc được nhiều thứ khác của người dùng.
+- **Chuyển từ bản cũ (một lần):** một kho đã có dữ liệu nhưng chưa có tệp khoá nào (kho của LeanKeys ≤ 1.3) lấy cả hai khoá từ Keychain cùng lúc. macOS hỏi mật khẩu lần cuối, mỗi mục một lần; nên bấm "Always Allow". LeanKeys chép khoá sang tệp rồi xoá mục trong Keychain. Nếu người dùng bấm Deny, kho đó được coi là không đọc được trong phiên này và không bị ghi đè (R16); lần mở sau thử lại. Kho chưa có dữ liệu không bao giờ hỏi Keychain.
+- **Test:** `FileKeyStoreTests` (khoá trong tệp, quyền, chuyển một lần, Deny, xoá); `KeychainEncryptedFileStoreTests.testKeychainKeysMoveToFiles` (Keychain thật).
 
