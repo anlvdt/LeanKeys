@@ -11,7 +11,7 @@ final class CapsLockWordTests: XCTestCase {
     private let keyCodes: [Character: UInt16] = [
         "a": 0, "b": 11, "c": 8, "d": 2, "e": 14, "f": 3, "g": 5, "h": 4, "i": 34, "j": 38, "k": 40, "l": 37,
         "m": 46, "n": 45, "o": 31, "p": 35, "q": 12, "r": 15, "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7,
-        "y": 16, "z": 6, " ": 49, "3": 20, "4": 21, "5": 23,
+        "y": 16, "z": 6, " ": 49, "3": 20, "4": 21, "5": 23, ".": 47, ",": 43,
     ]
 
     override func tearDown() {
@@ -79,5 +79,18 @@ final class CapsLockWordTests: XCTestCase {
 
     func testBackspaceTwiceGivesTheKeysBack() {
         XCTAssertEqual(type("BUIF ", capsLock: true, thenBackspaces: 2), "BUIF")
+        XCTAssertNil(VikeyEngine()?.takeUndo(), "the undo learner never saw the Caps Lock veto")
+    }
+
+    /// The Caps Lock rule never keeps a word whose keys are English: Vikey puts "BÚ" back to "BUS" and so does LeanKeys.
+    func testEnglishKeysStay() {
+        XCTAssertEqual(type("BUS ", capsLock: true), "BUS ")
+    }
+
+    /// The word is kept at any break, and an acronym after it stays.
+    func testInALineAndBeforePunctuation() {
+        XCTAssertEqual(type("BUIF IRS ", capsLock: true), "BÙI IRS ")
+        XCTAssertEqual(type("BUIF. ", capsLock: true), "BÙI. ")
+        XCTAssertEqual(type("BUIF, ", capsLock: true), "BÙI, ")
     }
 }
