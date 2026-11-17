@@ -66,3 +66,60 @@ public enum InjectionTuning {
         return total + UInt64(settle)
     }
 }
+
+/// How an edit is sent into a ProseMirror editor (Claude, Tiptap and many web apps), in a browser or an Electron
+/// app. Gõ Nhanh sends every browser field the address-bar method (`emptyCharPrefix`) and Electron apps a backspace
+/// method; in ProseMirror synthetic Backspaces are lost with any backspace method (measured in Chrome 2026-11-17
+/// with webbench: emptyCharPrefix, charByChar, fast and slow all left the old letters, "Hoom" gave "Hoôm"), so
+/// Vikey's word fixes left the old word on screen. Selecting the letters with Shift+Left and typing over them is
+/// right there. Every other field keeps Gõ Nhanh's method: Lexical, Quill and contenteditable were right with it.
+public enum BrowserEditorInjection {
+    public enum Method: String { case fast, slow, charByChar, emptyCharPrefix, selection }
+
+    /// Hidden setting for measuring (`defaults write io.github.anlvdt.leankeys LeanKeys.browserEditorMethod fast`).
+    public static let overrideKey = "LeanKeys.browserEditorMethod"
+    public static let defaultMethod: Method = .selection
+
+    public static func method(defaults: UserDefaults = .standard) -> Method {
+        defaults.string(forKey: overrideKey).flatMap(Method.init(rawValue:)) ?? defaultMethod
+    }
+}
+
+import AppKit
+import ApplicationServices
+
+extension BrowserEditorInjection {
+    /// A ProseMirror editor: an AXTextArea whose DOM class list (Chromium and Electron expose `AXDOMClassList`)
+    /// has "ProseMirror". It gets `selection` in any app, not only in a browser: the Claude desktop app's prompt box
+    /// is ProseMirror inside Electron, where the default backspace method lost keys ("kieemr" stayed raw).
+    public static func isProseMirror(role: String?, domClasses: [String]) -> Bool {
+        role == "AXTextArea" && domClasses.contains("ProseMirror")
+    }
+
+    /// The element's DOM classes, read with a 25 ms cap; empty when the app does not expose them or does not answer.
+    public static func domClasses(of element: AXUIElement) -> [String] {
+        AXUIElementSetMessagingTimeout(element, 0.025)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, "AXDOMClassList" as CFString, &value) == .success else { return [] }
+        return (value as? [String]) ?? []
+    }
+}
+
+extension BrowserEditorInjection {
+    private static let electronLock = NSLock()
+    private static var electronApps: [String: Bool] = [:]
+
+    /// Whether the app ships Electron, cached per bundle ID: only those (and browsers) are asked for DOM classes,
+    /// so Terminal, Xcode or TextEdit never pay for the extra Accessibility query.
+    public static func isElectronApp(bundleID: String) -> Bool {
+        if let known = electronLock.withLock({ electronApps[bundleID] }) { return known }
+        var electron = false
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let framework = url.appendingPathComponent("Contents/Frameworks/Electron Framework.framework")
+            electron = FileManager.default.fileExists(atPath: framework.path)
+        }
+        electronLock.withLock { electronApps[bundleID] = electron }
+        return electron
+    }
+}
+

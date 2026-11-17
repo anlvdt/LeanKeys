@@ -145,3 +145,44 @@ final class InjectionTuningTests: XCTestCase {
         print(lines.joined(separator: "\n"))
     }
 }
+
+/// Editors inside a browser page (ProseMirror, Lexical, Quill, contenteditable: AXTextArea or AXWebArea) do not get the
+/// address-bar method: its leading U+202F made ProseMirror drop the Backspaces after it ("Hoom" gave "Ho\u{202F}ôm").
+final class BrowserEditorInjectionTests: XCTestCase {
+    private func defaults() -> UserDefaults {
+        let d = UserDefaults(suiteName: "BrowserEditorInjectionTests-\(UUID().uuidString)")!
+        return d
+    }
+
+    /// Measured: only selecting and typing over is right in ProseMirror; every backspace method loses keys there.
+    func testDefaultSelectsAndTypesOver() {
+        XCTAssertEqual(BrowserEditorInjection.method(defaults: defaults()), .selection)
+    }
+
+    func testHiddenOverride() {
+        let d = defaults()
+        for (value, method) in [("fast", BrowserEditorInjection.Method.fast), ("slow", .slow),
+                                ("charByChar", .charByChar), ("emptyCharPrefix", .emptyCharPrefix),
+                                ("selection", .selection)] {
+            d.set(value, forKey: BrowserEditorInjection.overrideKey)
+            XCTAssertEqual(BrowserEditorInjection.method(defaults: d), method, value)
+        }
+        d.set("nonsense", forKey: BrowserEditorInjection.overrideKey)
+        XCTAssertEqual(BrowserEditorInjection.method(defaults: d), BrowserEditorInjection.defaultMethod)
+    }
+
+    /// A ProseMirror editor outside a browser (the Claude desktop app's prompt box is tiptap/ProseMirror in Electron)
+    /// also gets selection: recognised by its DOM class, read through Accessibility.
+    func testElectronDetection() {
+        XCTAssertFalse(BrowserEditorInjection.isElectronApp(bundleID: "com.apple.TextEdit"))
+        XCTAssertFalse(BrowserEditorInjection.isElectronApp(bundleID: "com.example.not.installed"))
+    }
+
+    func testProseMirrorRecognisedByDOMClass() {
+        XCTAssertTrue(BrowserEditorInjection.isProseMirror(role: "AXTextArea", domClasses: ["tiptap", "ProseMirror", "ProseMirror-focused"]))
+        XCTAssertFalse(BrowserEditorInjection.isProseMirror(role: "AXTextField", domClasses: ["ProseMirror"]))
+        XCTAssertFalse(BrowserEditorInjection.isProseMirror(role: "AXTextArea", domClasses: ["monaco-editor"]))
+        XCTAssertFalse(BrowserEditorInjection.isProseMirror(role: "AXTextArea", domClasses: []))
+    }
+}
+

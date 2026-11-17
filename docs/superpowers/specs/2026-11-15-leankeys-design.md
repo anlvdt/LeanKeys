@@ -680,3 +680,22 @@ Thêm ngày 2026-11-17, theo lỗi người dùng báo: LeanKeys liên tục đ�
 - **Chuyển từ bản cũ (một lần):** một kho đã có dữ liệu nhưng chưa có tệp khoá nào (kho của LeanKeys ≤ 1.3) lấy cả hai khoá từ Keychain cùng lúc. macOS hỏi mật khẩu lần cuối, mỗi mục một lần; nên bấm "Always Allow". LeanKeys chép khoá sang tệp rồi xoá mục trong Keychain. Nếu người dùng bấm Deny, kho đó được coi là không đọc được trong phiên này và không bị ghi đè (R16); lần mở sau thử lại. Kho chưa có dữ liệu không bao giờ hỏi Keychain.
 - **Test:** `FileKeyStoreTests` (khoá trong tệp, quyền, chuyển một lần, Deny, xoá); `KeychainEncryptedFileStoreTests.testKeychainKeysMoveToFiles` (Keychain thật).
 
+## 21. Gửi bản sửa vào trình soạn thảo trong trình duyệt
+
+Thêm ngày 2026-11-17, theo lỗi người dùng báo: từ đầu tiên "kieemr" không thành "kiểm" trong ô nhập của app Claude, chữ "s" bị lặp ("maussbot"); lỗi có từ khi dùng lõi Vikey.
+
+- **Tái hiện (webbench, Chrome):** trong trình soạn thảo ProseMirror (ô nhập của Claude, Tiptap, nhiều web app), các phím xoá lùi LeanKeys gửi bị mất: "Hoom" ra "Hoôm" hay "Ho\u202Fôm", "dduwowcj," ra "dduwowcj được,", câu tiếng Anh ra "me êting meeting". Lexical (Messenger), Quill, contenteditable và ô nhập thì đúng. Lõi Vikey hay xoá cả từ rồi gõ lại khi tự chuyển Việt/Anh, nên lỗi lộ rõ hơn với Gõ Nhanh.
+- **Đo (2026-11-17, cùng câu, cùng tốc độ):**
+
+  | Cách gửi | ProseMirror | Lexical, Quill, contenteditable, ô nhập |
+  |---|---|---|
+  | emptyCharPrefix (Gõ Nhanh, mặc định cũ cho mọi ô trình duyệt) | hỏng | đúng |
+  | charByChar | hỏng | đúng |
+  | fast | hỏng | đúng |
+  | slow (8 ms, chờ 25 ms) | hỏng | (không đo) |
+  | selection (Shift+← chọn rồi gõ đè) | **đúng** | đúng |
+
+- **LeanKeys (thu hẹp sau review):** chỉ ô ProseMirror đổi cách gửi. Ô `AXTextArea` có class DOM `ProseMirror` (đọc qua `AXDOMClassList`, giới hạn 25 ms), trong một trình duyệt Gõ Nhanh liệt kê hay trong app Electron (kiểm tra `Electron Framework.framework`, nhớ theo bundle ID), dùng `selection`. Mọi ô khác giữ cách của Gõ Nhanh: Lexical, Quill, contenteditable vẫn đúng với `emptyCharPrefix`, và cách đó còn chặn gợi ý tự hoàn thành (Gmail Smart Compose, ô có gợi ý). Terminal, Xcode, TextEdit không bị hỏi thêm AX. Ô nhập của app Claude desktop (ProseMirror trong Electron) đã được người dùng thử tay: đúng. Cài đặt ẩn `LeanKeys.browserEditorMethod` (fast, slow, charByChar, emptyCharPrefix, selection) đổi cách gửi cho ô ProseMirror để đo lại. Code: `BrowserEditorInjection` (LeanKeysKit) và hook `engine-dispatch` trong `detectMethod`.
+- **Còn lại, đã biết:** với `selection`, một bản sửa chỉ xoá (không gõ thêm) vẫn gửi Backspace, theo mã gốc của Gõ Nhanh; với Vikey trường hợp này hiếm (các bản sửa của nó hầu như luôn gõ lại chữ). Cần thử tay trong ProseMirror.
+- **Chưa đo được:** textarea và Slate (Discord), vì máy đo bị app khác gửi phím chen vào; app Claude desktop chưa được đo bằng webbench (nhận ra qua class ProseMirror, người dùng thử tay). Một dấu chấm lạ cuối câu ("Hà Nội. ") xuất hiện một lần ở ProseMirror, cần kiểm tra (có thể là "thêm dấu chấm khi gõ hai dấu cách" của macOS).
+

@@ -2060,8 +2060,20 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
     // All browser contexts use emptyCharPrefix to break autocomplete/suggestion highlights
     // Medium delays (3ms/8ms/3ms) to handle web apps with popup interception (e.g. Telegram Web)
     if browsers.contains(bundleId) {
+        if role == "AXTextArea", let el = focusedElement, BrowserEditorInjection.isProseMirror(role: role, domClasses: BrowserEditorInjection.domClasses(of: el)) { // LEANKEYS-HOOK: engine-dispatch (ProseMirror loses synthetic Backspaces)
+            switch BrowserEditorInjection.method() { // LEANKEYS-HOOK: engine-dispatch
+            case .fast: return cached(.fast, (3000, 8000, 3000), "fast:prosemirror") // LEANKEYS-HOOK: engine-dispatch
+            case .slow: return cached(.slow, (8000, 25000, 8000), "slow:prosemirror") // LEANKEYS-HOOK: engine-dispatch
+            case .charByChar: return cached(.charByChar, (3000, 8000, 3000), "char:prosemirror") // LEANKEYS-HOOK: engine-dispatch
+            case .selection: return cached(.selection, (0, 0, 0), "sel:prosemirror") // LEANKEYS-HOOK: engine-dispatch
+            case .emptyCharPrefix: break // LEANKEYS-HOOK: engine-dispatch
+            } // LEANKEYS-HOOK: engine-dispatch
+        } // LEANKEYS-HOOK: engine-dispatch
         return cached(.emptyCharPrefix, (3000, 8000, 3000), "emptyChar:browser")
     }
+    if role == "AXTextArea", let el = focusedElement, BrowserEditorInjection.isElectronApp(bundleID: bundleId), BrowserEditorInjection.isProseMirror(role: role, domClasses: BrowserEditorInjection.domClasses(of: el)) { // LEANKEYS-HOOK: engine-dispatch (ProseMirror in an Electron app: Claude desktop)
+        return cached(.selection, (0, 0, 0), "sel:prosemirror") // LEANKEYS-HOOK: engine-dispatch
+    } // LEANKEYS-HOOK: engine-dispatch
     if role == "AXTextField", bundleId.hasPrefix("com.jetbrains") {
         return cached(.selection, (0, 0, 0), "sel:jb")
     }
