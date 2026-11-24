@@ -8,8 +8,9 @@ import Foundation
 ///   own input method. Synthetic edits (Backspace + Vietnamese letters) are not forwarded the same way, so typing
 ///   there would be composed twice or garbled.
 /// - **Terminals** (`CodeApps.terminals`, ruling R22): sudo, ssh, passwd and git prompts take passwords there with no
-///   secure field, and commands are not Vietnamese. Code editors keep Vietnamese: their integrated terminals cannot
-///   be told apart from the editor.
+///   secure field, and commands are not Vietnamese. Unless the user chose Vietnamese for that terminal
+///   (`vietnameseTerminals`, for agent CLIs). Code editors keep Vietnamese: their integrated terminals cannot be told
+///   apart from the editor.
 /// - **Password managers and macOS sign-in dialogs** (`credentialAppBundleIDs`): every field there.
 /// - **Sign-in fields.** A user name, email or password must be typed exactly as the keys say. macOS hides real
 ///   password fields behind Secure Input (LeanKeys then never sees the keys), but many sign-in boxes are plain text

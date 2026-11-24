@@ -39,16 +39,17 @@ public struct TerminalVietnameseSection: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 10)
                     .padding(.bottom, 4)
-                ForEach(terminals, id: \.bundleID) { terminal in
-                    row(terminal)
-                    Divider().padding(.leading, 12)
-                }
+                // The warning first: it is read before a terminal is switched on.
                 Text(Self.note)
                     .font(.system(size: 11))
                     .foregroundColor(Color(NSColor.secondaryLabelColor))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.bottom, 6)
+                ForEach(Array(terminals.enumerated()), id: \.element.bundleID) { index, terminal in
+                    if index > 0 { Divider().padding(.leading, 12) }
+                    row(terminal)
+                }
             }
             .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 0.5))

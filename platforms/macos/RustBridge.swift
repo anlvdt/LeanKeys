@@ -2109,6 +2109,7 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
         "com.apple.Terminal", "com.googlecode.iterm2", "io.alacritty",
         "com.github.wez.wezterm", "co.zeit.hyper", "org.tabby",
         "com.raphaelamorim.rio", "com.termius-dmg.mac",
+        "org.alacritty", "dev.warp.Warp-Preview", // LEANKEYS-HOOK: engine-dispatch (every CodeApps terminal may type Vietnamese)
         // Other code editors
         "dev.zed.Zed", "com.sublimetext.4", "com.sublimetext.3", "com.panic.Nova",
     ]
