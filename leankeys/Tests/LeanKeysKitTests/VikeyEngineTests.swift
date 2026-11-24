@@ -347,6 +347,17 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertTrue(engine.isVietnamese)
     }
 
+    /// A word that is English but far more common as Vietnamese ("cos" / "có", "nos" / "nó", "ver" / "vẻ": 30 times
+    /// or more in Vikey's dictionaries) brings Vietnamese back too. The screen stays as D19 shows it.
+    func testDoubledKeyCollisionWithCommonVietnameseComesBack() {
+        for (keys, shown) in [("coss ", "cos "), ("noss ", "nos "), ("verr ", "ver ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            XCTAssertEqual(Field(engine).type(keys), shown, keys)
+            XCTAssertTrue(engine.isVietnamese, "Vietnamese after \(keys)")
+        }
+    }
+
     /// The language change reaches the app (menu bar icon) at the key that brings Vietnamese back.
     func testDoubledToneKeyComebackReportsLanguageChange() {
         let field = Field(engine)
@@ -357,9 +368,10 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertEqual(field.languageChanges, changesBefore + 1)
     }
 
-    /// An English word made by the doubled key stays English (D19): "verr" -> "ver", "boss".
+    /// An English word made by the doubled key stays English (D19) when it has no Vietnamese reading ("boss") or its
+    /// English reading is as common ("its" / "ít", "mix" / "mĩ").
     func testDoubledKeyEnglishWordStaysEnglish() {
-        for (keys, shown) in [("verr ", "ver "), ("boss ", "boss ")] {
+        for (keys, shown) in [("boss ", "boss "), ("itss ", "its "), ("mixx ", "mix ")] {
             engine.setVietnamese(true)
             engine.resetContext()
             XCTAssertEqual(Field(engine).type(keys), shown, keys)

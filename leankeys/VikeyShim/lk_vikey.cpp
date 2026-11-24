@@ -62,6 +62,8 @@ static bool doubleKeyFix = true;
 static bool capsLockForNextKey = false;   // lk_vikey_set_caps_lock, for the next lk_vikey_press
 static bool fixAtNextReturn = false;      // lk_vikey_set_fix_at_return, for the next lk_vikey_press
 static bool doubledKeyFlip = false;       // the current word switched to English mid-word (Vikey D19)
+// Scores are 10*log10(occurrences per million): 15 = the Vietnamese reading is at least about 30 times as common.
+static const int kComebackMargin = 15;
 
 static void resetModel() { model = ScreenModel(); doubledKeyFlip = false; }
 
@@ -463,7 +465,14 @@ static void comeBackAfterDoubledKey(uint16_t key, int shift, int languageBefore,
     doubledKeyFlip = false;
     if (!flipped || vLanguage != 0 || !currentWord().empty()) return;
     const std::u16string word = lastWord();
-    if (word.empty() || englishScore(word) != LK_VIKEY_NOT_A_WORD) return;
+    if (word.empty()) return;
+    // An English word too stays English, unless its Telex reading is far more common Vietnamese ("cos" / "có",
+    // "nos" / "nó"): the doubled key was then a typo, not English. "its" / "ít", "mix" / "mĩ" stay English.
+    const int english = englishScore(word);
+    if (english != LK_VIKEY_NOT_A_WORD) {
+        const int vietnamese = vietnameseScore(word, nullptr, nullptr);
+        if (vietnamese == LK_VIKEY_NOT_A_WORD || vietnamese - english < kComebackMargin) return;
+    }
     // As VikeyDriver::switchTo does at its own switches (private there): the next word starts fresh, in Vietnamese.
     // Not driver->setLanguage, whose resetContext would drop a ⌫⌫ undo Vikey armed at this break (D19's dictionary
     // fix): that undo still gives the keys back, in English.
