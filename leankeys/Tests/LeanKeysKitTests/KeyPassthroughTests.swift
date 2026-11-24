@@ -27,6 +27,45 @@ final class KeyPassthroughTests: XCTestCase {
         XCTAssertNil(KeyPassthrough.reason(bundleID: nil, focused: nil))
     }
 
+    // Terminals (ruling R22) pass every key through unless the user chose Vietnamese for that terminal.
+
+    private func terminalDefaults(_ chosen: [String]) -> UserDefaults {
+        let suite = "KeyPassthroughTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        for id in chosen { KeyPassthrough.setVietnamese(true, terminal: id, defaults: defaults) }
+        return defaults
+    }
+
+    func testChosenTerminalTypesNormally() {
+        let defaults = terminalDefaults(["com.mitchellh.ghostty"])
+        XCTAssertNil(KeyPassthrough.reason(bundleID: "com.mitchellh.ghostty", focused: nil, defaults: defaults))
+        KeyPassthrough.setVietnamese(false, terminal: "com.mitchellh.ghostty", defaults: defaults)
+        XCTAssertEqual(KeyPassthrough.reason(bundleID: "com.mitchellh.ghostty", focused: nil, defaults: defaults),
+                       "terminal", "turned off again")
+    }
+
+    func testOtherTerminalsStillPassThrough() {
+        let defaults = terminalDefaults(["com.mitchellh.ghostty"])
+        XCTAssertEqual(KeyPassthrough.reason(bundleID: "com.apple.Terminal", focused: nil, defaults: defaults), "terminal")
+        XCTAssertEqual(KeyPassthrough.reason(bundleID: "com.apple.Terminal", focused: nil,
+                                             defaults: terminalDefaults([])), "terminal", "nothing chosen: R22")
+    }
+
+    func testNonTerminalInListIgnored() {
+        let defaults = terminalDefaults(["com.apple.TextEdit", "com.apple.Terminal"])
+        XCTAssertEqual(KeyPassthrough.vietnameseTerminals(defaults: defaults), ["com.apple.Terminal"])
+        XCTAssertNil(KeyPassthrough.reason(bundleID: "com.apple.TextEdit", focused: nil, defaults: defaults))
+        XCTAssertEqual(KeyPassthrough.reason(bundleID: "com.teamviewer.TeamViewer", focused: nil, defaults: defaults),
+                       "remote")
+    }
+
+    func testChosenTerminalStillExcludedFromLearning() {
+        _ = terminalDefaults(["com.mitchellh.ghostty"])
+        XCTAssertTrue(Exclusions.isExcludedByDefault("com.mitchellh.ghostty"))
+        XCTAssertTrue(CodeApps.contains("com.mitchellh.ghostty"), "no capitals, no Return fix, no stray-Enter filter")
+    }
+
     func testSecureFieldIsCredential() {
         XCTAssertTrue(KeyPassthrough.isCredentialField(attributes: field(subrole: "AXSecureTextField")))
     }
