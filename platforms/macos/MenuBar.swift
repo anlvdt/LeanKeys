@@ -449,7 +449,10 @@ class MenuBarController: NSObject, NSWindowDelegate {
             toggleShortcut: { AppState.shared.toggleShortcut.displayParts.joined() },
             autoFix: { AppState.shared.autoFix },
             setAutoFix: { AppState.shared.autoFix = $0 },
-            newVersion: { UpdateManager.shared.pendingVersion.isEmpty ? nil : UpdateManager.shared.pendingVersion }
+            newVersion: {
+                StatusPopoverModel.displayedNewVersion(UpdateManager.shared.pendingVersion,
+                                                       ready: UpdateManager.shared.isReadyToInstall)
+            }
         ))
         // Check, download progress and install show while the popover is open (spec §16).
         NotificationCenter.default.publisher(for: .updateStateChanged)

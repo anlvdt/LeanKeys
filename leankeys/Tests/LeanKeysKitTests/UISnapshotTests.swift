@@ -169,7 +169,7 @@ final class UISnapshotTests: XCTestCase {
             suggestionCount: { suggestions },
             updatePhase: update.map { phase in { phase } },
             version: { "1.8" },
-            toggleShortcut: { "⌃⇧" },
+            toggleShortcut: { "⌃⇧Space" },
             newVersion: { "1.9" },
             appIcon: { logo() }
         )

@@ -137,6 +137,13 @@ public final class StatusPopoverModel: ObservableObject {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    /// The version the update row names: only for an update already downloaded, and never the updater's "?"
+    /// placeholder or an empty value (it stores the version before the download ends).
+    public static func displayedNewVersion(_ raw: String, ready: Bool) -> String? {
+        guard ready, !raw.isEmpty, raw != "?" else { return nil }
+        return raw
+    }
+
     var subLine: String? { Self.subLine(shortcut: toggleShortcut, autoSwitch: snapshot.autoSwitchLine) }
 
     public func choose(autoFix: Bool) {
@@ -232,8 +239,8 @@ public struct StatusPopoverView: View {
                     Text(subLine)
                         .font(.system(size: 11))
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                         .help(model.snapshot.autoSwitchHelp)
                 }
             }
@@ -355,7 +362,7 @@ struct LanguageSwitch: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: selected ? .semibold : .regular))
-                .foregroundColor(selected ? .white : Color(NSColor.labelColor))
+                .foregroundColor(selected ? Color(NSColor.alternateSelectedControlTextColor) : Color(NSColor.labelColor))
                 .frame(maxWidth: .infinity, minHeight: 28)
                 .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Color.accentColor : Color.clear))
                 .contentShape(Rectangle())

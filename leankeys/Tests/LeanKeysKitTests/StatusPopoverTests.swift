@@ -64,6 +64,15 @@ final class StatusPopoverTests: XCTestCase {
         XCTAssertNil(model.newVersion)
     }
 
+    /// The updater stores the version it is about to fetch before the download ends, and "?" when it lost it: the
+    /// popover names a version only for an update that is downloaded and named.
+    func testNewVersionShownOnlyWhenReadyAndKnown() {
+        XCTAssertEqual(StatusPopoverModel.displayedNewVersion("1.9", ready: true), "1.9")
+        XCTAssertNil(StatusPopoverModel.displayedNewVersion("1.9", ready: false), "still downloading")
+        XCTAssertNil(StatusPopoverModel.displayedNewVersion("?", ready: true))
+        XCTAssertNil(StatusPopoverModel.displayedNewVersion("", ready: true))
+    }
+
     func testEscClosesThePopover() {
         XCTAssertTrue(StatusPopoverController.closesOnKey(53))
         XCTAssertFalse(StatusPopoverController.closesOnKey(36), "Return does not close")
