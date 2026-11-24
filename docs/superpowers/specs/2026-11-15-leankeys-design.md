@@ -233,6 +233,7 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 **Hành vi**
 - LeanKeys đếm các cụm đã gõ xong: câu, cụm từ, địa chỉ, số điện thoại, mã số thuế, email, tên riêng. Một cụm kết thúc ở dấu câu, Enter, hoặc khi con trỏ đổi chỗ.
 - **Ngưỡng đề xuất** (mặc định, chỉnh được trong Cài đặt): cụm lặp lại ≥ 3 lần trong 30 ngày và dài ≥ 8 ký tự.
+- **(sửa 2026-11-24, xem `2026-11-24-shortcut-suggestions-v2.md`)** Một câu chỉ được đề xuất khi gặp trong ≥ 2 ngày khác nhau và mỗi lần dùng tiết kiệm ≥ 15 phím Telex. Danh sách xếp theo số phím tiết kiệm (số lần × phím tiết kiệm mỗi lần), không theo số lần. Hai mục chồng nhau (mục này chứa trọn các từ của mục kia) chỉ hiện một mục: SĐT, MST, email, địa chỉ được ưu tiên hơn câu chứa nó; nếu không thì mục điểm cao hơn. Mục bị ẩn vẫn được đếm.
 - Khi có đề xuất, menu bar hiện "Có N gợi ý gõ tắt". Màn duyệt có ba nút cho từng mục: **Thêm** (vào Bảng gõ tắt), **Sửa** (đổi từ viết tắt), **Bỏ qua**. Ô từ viết tắt có tooltip "Gõ “sdt” rồi dấu cách để chèn nội dung này". Sửa sai thì báo `Từ viết tắt này đã có trong Bảng gõ tắt` hoặc `Từ viết tắt không được để trống hoặc chứa dấu cách`. Mục đã bỏ qua được nhớ và không đề xuất lại. Không có gì được thêm khi người dùng chưa bấm Thêm.
 - Gõ tắt được ghi vào danh sách gõ tắt có sẵn của Gõ Nhanh, nên chạy với cả hai engine.
 - Trên giao diện, tính năng chỉ có một tên: công tắc ở Chung, thẻ ở Nâng cao và dòng trên ô nổi đều gọi là `Gợi ý gõ tắt`.
@@ -243,11 +244,12 @@ Thêm ngày 2026-11-15. Laban Key (VNG/Zalo) là app mã nguồn đóng, chỉ c
 |---|---|---|
 | Số điện thoại | `0` + 9 số, hoặc `+84` + 9 số; chấp nhận dấu cách, `.`, `-` | `sdt` |
 | Mã số thuế | 10 số, hoặc 10 số + `-` + 3 số | `mst` |
-| Địa chỉ | có ít nhất 2 trong các từ: số, đường, phố, phường, xã, quận, huyện, thị xã, TP, tỉnh | `dc` |
+| Địa chỉ | có ít nhất 2 trong các từ: số, đường, phố, phường, xã, quận, huyện, thị xã, TP, tỉnh; "số" chỉ tính khi đứng trước con số hoặc "nhà", "xã hội" không tính, phải có ít nhất một từ khác "số". Địa chỉ kết thúc sau tên đứng sau từ cuối (một con số, hoặc tối đa 4 từ, dừng ở dấu câu hay từ như "nhé", "giúp", "em") | `dchi` (R18) |
 | Email | định dạng email | `em` |
-| Câu / cụm khác | — | chữ cái đầu mỗi từ, bỏ dấu, viết thường (ví dụ "Cảm ơn anh chị đã quan tâm" → `caqt`) |
+| Câu / cụm khác | — | chữ cái đầu của 3–5 từ đầu, bỏ dấu, viết thường, bỏ từ đệm (dạ, ạ, nhé…) trước (ví dụ "Cảm ơn anh chị đã quan tâm" → `coacd`). Nếu Telex đổi chữ (`axgev` → ãgev) thì bắt đầu từ từ sau (`xgev`), rồi tới hai–ba chữ đầu của từ đầu cộng chữ đầu các từ sau (`emco`). Ít nhất 3 chữ (R17 sửa 2026-11-24). Không có `w`, không dùng teencode hay từ tục (`TriggerBlocklist.txt`) |
 
-- Nếu tên đã có thì thêm số: `sdt2`, `sdt3`…
+- Nếu tên đã có thì thêm số: `sdt2`, `sdt3`… Với câu, chỉ thêm số khi mọi tên ở trên đều đã có, là từ thật hoặc bị chặn.
+- Nội dung câu bỏ chữ hoa chỉ do đứng đầu câu (từ thứ hai viết thường): "Em gửi anh…" lưu thành "em gửi anh…". Cả hai engine viết hoa kết quả khi từ tắt viết hoa chữ đầu.
 - Từ viết tắt trùng một từ tiếng Việt hoặc tiếng Anh có thật thì bị loại, rồi thử tên kế tiếp. Việc kiểm tra dùng điểm từ của engine Vikey (`vAutoSwitchWordScore`).
 
 **Bảo mật**

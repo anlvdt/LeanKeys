@@ -277,7 +277,11 @@ final class ShortcutSuggestionsModelTests: XCTestCase {
         let model = enabledModel()
         type("Gửi về số 1 đường mẫu giúp em", into: model)
         XCTAssertEqual(model.suggestionCount, 0, "a phrase holding an 8+ character replacement")
-        type("ok anh nhé, mai gặp", into: model)
+        // Seen on two days and long enough to be worth a gõ tắt (SuggestionRanking).
+        let line = "ok anh nhé, mai gặp lại ở văn phòng"
+        type(line, times: 2, into: model)
+        model.observe(CommittedPhrase(text: line), context: LearnContext(
+            bundleID: "com.apple.Notes", secureInput: false, secureField: false, now: Date().addingTimeInterval(86_400)))
         XCTAssertEqual(model.suggestionCount, 1, "a replacement under 8 characters inside a phrase is fine")
     }
 

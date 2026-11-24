@@ -238,7 +238,8 @@ public final class ShortcutSuggestionsModel: ObservableObject {
         return made
     }
 
-    /// Learner queue: reads `ready`, dismisses what an existing gõ tắt already covers, and hands the rest to main.
+    /// Learner queue: reads `ready`, dismisses what an existing gõ tắt already covers, ranks the rest
+    /// (`SuggestionRanking`: worth a gõ tắt, best first, overlaps hidden) and hands it to main.
     private func publishReady(_ learner: PhraseLearning) {
         var ready = learner.ready
         let covered = ready.filter { Self.isCovered($0.text, byNormalized: queueReplacements) }
@@ -247,6 +248,7 @@ public final class ShortcutSuggestionsModel: ObservableObject {
             let ids = Set(covered.map(\.id))
             ready.removeAll { ids.contains($0.id) }
         }
+        ready = SuggestionRanking.rank(ready)
         onMain { [weak self] in self?.publish(ready) }
     }
 

@@ -23,37 +23,64 @@ final class AbbreviationTests: XCTestCase {
         XCTAssertEqual(Abbreviation.suggest(for: candidate("an@example.com", .email), existing: []), "eml")
     }
 
-    /// Ruling R1: every word's first letter, unaccented and lowercase; đ is d. The ruling writes the example as
-    /// "caacdqt", but its rule gives c(ảm) o(ơn) a(nh) c(hị) d(ã) q(uan) t(âm): "coacdqt".
+    /// Ruling R1 as amended 2026-11-24: the first letters of the first words, unaccented and lowercase (đ is d),
+    /// at most five of them. "Cảm ơn anh chị đã quan tâm" is coacd, not the seven-letter coacdqt.
     func testInitials() {
         XCTAssertEqual(Abbreviation.suggest(for: candidate("Cảm ơn anh chị đã quan tâm", .phrase), existing: [],
-                                            isRealWord: noWords), "coacdqt")
+                                            isRealWord: noWords), "coacd")
+        XCTAssertEqual(Abbreviation.suggest(for: candidate("để em kiểm tra lại rồi báo anh sau", .phrase), existing: [],
+                                            isRealWord: noWords), "dektl")
         XCTAssertEqual(Abbreviation.initials("Đường Ưu Đãi"), "dud")   // as a trigger, Telex types it đu (R15)
         XCTAssertEqual(Abbreviation.suggest(for: candidate("  “Xin chào”,  (bạn) ", .phrase), existing: [],
                                             isRealWord: noWords), "xcb")
+        // Filler words are left out first.
+        XCTAssertEqual(Abbreviation.suggest(for: candidate("Dạ em cảm ơn anh chị đã quan tâm ạ", .phrase), existing: [],
+                                            isRealWord: noWords), "ecoac")
     }
 
+    /// Initials that Telex would change ("ax" is ã) start one word later, still first letters of the phrase's words.
+    func testTelexClashStartsLater() {
+        XCTAssertEqual(Abbreviation.suggest(for: candidate("anh xem giúp em với", .phrase), existing: [],
+                                            isRealWord: noWords), "xgev")
+    }
+
+    /// Ruling R17 as amended 2026-11-24: a phrase's trigger has at least three letters.
+    func testPhraseTriggerHasThreeLetters() {
+        let name = Abbreviation.suggest(for: candidate("Chúc anh", .phrase), existing: [], isRealWord: noWords)
+        XCTAssertEqual(name, "cha")
+    }
+
+    /// A real word moves on to the next name, built from the phrase's own letters, before any number.
+    func testAbbreviationSkipsRealWords() {
+        let words: Set<String> = ["em", "eco", "cam"]
+        let isWord: (String) -> Bool = { words.contains($0) }
+        XCTAssertEqual(Abbreviation.suggest(for: candidate("an@example.com", .email), existing: [], isRealWord: isWord), "eml")
+        XCTAssertEqual(Abbreviation.suggest(for: candidate("an@example.com", .email), existing: ["eml"], isRealWord: isWord), "eml2")
+        XCTAssertEqual(Abbreviation.suggest(for: candidate("em cảm ơn", .phrase), existing: [], isRealWord: isWord), "emco")
+        XCTAssertEqual(Abbreviation.suggest(for: candidate("Chúc anh mạnh", .phrase), existing: [], isRealWord: isWord), "cham")
+    }
+
+    /// Teencode and rude words the user types themselves would expand every time: never offered.
+    func testBlockedWords() {
+        XCTAssertTrue(Abbreviation.isBlocked("ntn"))
+        XCTAssertTrue(Abbreviation.isBlocked("cl"))
+        XCTAssertTrue(Abbreviation.isBlocked("VCL"))
+        XCTAssertFalse(Abbreviation.isBlocked("coacd"))
+        XCTAssertEqual(Abbreviation.suggest(for: candidate("như thế nào", .phrase), existing: [], isRealWord: noWords), "nhtn")
+    }
+
+    /// A number goes on only once every name is taken; never letters that start no word of the phrase.
     func testNumbering() {
         XCTAssertEqual(Abbreviation.suggest(for: candidate("0901234567", .phone), existing: ["sdt"], isRealWord: noWords), "sdt2")
         XCTAssertEqual(Abbreviation.suggest(for: candidate("0901234567", .phone), existing: ["sdt", "sdt2"],
                                             isRealWord: noWords), "sdt3")
-        // R15 order: initials, initials without vowels, first two consonants, then a number on the initials.
-        let thanks = candidate("Cảm ơn anh chị đã quan tâm", .phrase)
-        XCTAssertEqual(Abbreviation.suggest(for: thanks, existing: ["coacdqt"], isRealWord: noWords), "ccdqt")
-        XCTAssertEqual(Abbreviation.suggest(for: thanks, existing: ["coacdqt", "ccdqt"], isRealWord: noWords), "cm")
-        XCTAssertEqual(Abbreviation.suggest(for: thanks, existing: ["coacdqt", "ccdqt", "cm"], isRealWord: noWords),
-                       "coacdqt2")
-    }
-
-    func testAbbreviationSkipsRealWords() {
-        let words: Set<String> = ["em", "cam", "cam2"]
-        let isWord: (String) -> Bool = { words.contains($0) }
-        XCTAssertEqual(Abbreviation.suggest(for: candidate("an@example.com", .email), existing: [], isRealWord: isWord), "eml")
-        XCTAssertEqual(Abbreviation.suggest(for: candidate("an@example.com", .email), existing: ["eml"], isRealWord: isWord), "eml2")
-        XCTAssertEqual(Abbreviation.suggest(for: candidate("Chúc anh mạnh", .phrase), existing: [], isRealWord: isWord), "cm")
-        XCTAssertEqual(Abbreviation.suggest(for: candidate("Chúc anh mạnh", .phrase), existing: ["cm", "ch"], isRealWord: isWord), "cam3")
-        XCTAssertEqual(Abbreviation.suggest(for: candidate("Chúc anh may", .phrase), existing: ["cm", "ch", "cam3"],
-                                            isRealWord: isWord), "cam4")
+        let text = "Cảm ơn anh chị đã quan tâm"
+        let thanks = candidate(text, .phrase)
+        let names = Abbreviation.phraseNames(text)
+        XCTAssertEqual(Array(names.prefix(3)), ["coacd", "coac", "coa"])
+        XCTAssertTrue(names.allSatisfy { $0.count >= 3 && $0.count <= 6 }, "\(names)")
+        XCTAssertEqual(Abbreviation.suggest(for: thanks, existing: ["coacd"], isRealWord: noWords), "coac")
+        XCTAssertEqual(Abbreviation.suggest(for: thanks, existing: Set(names), isRealWord: noWords), "coacd2")
     }
 
     func testIsRealWordUsesVikey() {
@@ -93,17 +120,20 @@ final class AbbreviationTests: XCTestCase {
         let w = Abbreviation.suggest(for: candidate("Xin wifi nhé", .phrase), existing: [], isRealWord: noWords)
         XCTAssertFalse(w.contains("w"), w)
         XCTAssertTrue(Abbreviation.typesAsIs(String(w.prefix { $0.isLetter })), w)
-        // Consonant-only initials come before numbering: "Anh sẽ tới" is ast (á), then st.
-        XCTAssertEqual(Abbreviation.suggest(for: candidate("Anh sẽ tới", .phrase), existing: [], isRealWord: noWords), "st")
+        // "Anh sẽ tới" is ast (á): the name moves to the phrase's own letters, at least three, never a vowel-less
+        // two-letter name.
+        let ast = Abbreviation.suggest(for: candidate("Anh sẽ tới", .phrase), existing: [], isRealWord: noWords)
+        XCTAssertNotEqual(ast, "ast")
+        XCTAssertGreaterThanOrEqual(ast.count, 3, ast)
+        XCTAssertTrue(Abbreviation.typesAsIs(ast), ast)
     }
 
-    /// Ruling R17: at least two letters, also for a one-word phrase.
+    /// Ruling R17 (amended 2026-11-24): at least three letters, also for a one-word phrase.
     func testOneWordPhrase() {
         let name = Abbreviation.suggest(for: candidate("Shopee", .phrase), existing: [], isRealWord: noWords)
-        XCTAssertGreaterThanOrEqual(name.filter { $0.isLetter }.count, 2, name)
         XCTAssertTrue(Abbreviation.typesAsIs(String(name.prefix { $0.isLetter })), name)
-        XCTAssertEqual(name, "sh")
+        XCTAssertEqual(name, "sho")
         let real = Abbreviation.suggest(for: candidate("Shopee", .phrase), existing: [])
-        XCTAssertGreaterThanOrEqual(real.filter { $0.isLetter }.count, 2, real)
+        XCTAssertGreaterThanOrEqual(real.filter { $0.isLetter }.count, 3, real)
     }
 }

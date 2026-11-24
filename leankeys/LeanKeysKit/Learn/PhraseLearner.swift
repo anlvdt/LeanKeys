@@ -28,6 +28,16 @@ public struct Candidate: Identifiable, Equatable {
     public let kind: PhraseKind
     /// Sightings in the window.
     public let count: Int
+    /// Days in the window with at least one sighting.
+    public let days: Int
+
+    public init(id: String, text: String, kind: PhraseKind, count: Int, days: Int = 1) {
+        self.id = id
+        self.text = text
+        self.kind = kind
+        self.count = count
+        self.days = days
+    }
 }
 
 /// Counts the phrases the user types again and again, so the app can suggest a gõ tắt for them.
@@ -95,7 +105,7 @@ public final class PhraseLearner {
         entries.compactMap { id, entry -> Candidate? in
             guard !handled.contains(id), let text = entry.text, let kind = entry.kind, entry.count >= threshold
             else { return nil }
-            return Candidate(id: id, text: text, kind: kind, count: entry.count)
+            return Candidate(id: id, text: text, kind: kind, count: entry.count, days: entry.days.count)
         }
         .sorted { $0.count != $1.count ? $0.count > $1.count : $0.text < $1.text }
     }
@@ -267,6 +277,54 @@ enum PhraseDetector {
         pattern: #"(?<![\p{L}\p{N}])(?:số|đường|phố|phường|thị xã|xã|quận|huyện|tp|tỉnh)(?![\p{L}\p{N}])"#,
         options: [.caseInsensitive])
 
+    /// "số" before a number or "nhà" ("số 12", "số nhà 5"), not "số lượng" or "con số này".
+    private static let soAddress = try! NSRegularExpression(pattern: #"^\s*(?:\d|nhà(?![\p{L}\p{N}]))"#,
+                                                            options: [.caseInsensitive])
+    /// "xã hội" (society) is no "xã".
+    private static let xaHoi = try! NSRegularExpression(pattern: #"^\s+hội(?![\p{L}\p{N}])"#, options: [.caseInsensitive])
+    /// One word of a place name after an address word, and the punctuation right after it.
+    private static let nameToken = try! NSRegularExpression(pattern: #"(?:\s+|\.)([^\s,;:!?.]+)([,;:!?.]?)"#)
+    /// Words that end a place name typed in lowercase: particles, pronouns and the like ("quận đống đa giúp em").
+    private static let addressStopWords: Set<String> = [
+        "nhé", "nha", "nhá", "nhe", "ạ", "à", "ha", "nhỉ", "ơi", "giúp", "với", "đi", "luôn", "thì", "mà", "là", "và",
+        "em", "anh", "chị", "mình", "tôi", "bạn", "mai", "nay", "hôm", "cho", "của", "để", "nhưng", "rồi",
+    ]
+    /// Longest place name taken after the last address word: "tỉnh Bà Rịa Vũng Tàu".
+    private static let maxNameWords = 4
+
+    private static func isSo(_ range: NSRange, in ns: NSString) -> Bool {
+        ns.substring(with: range).lowercased() == "số"
+    }
+
+    private static func isAddressWord(_ range: NSRange, in ns: NSString) -> Bool {
+        let word = ns.substring(with: range).lowercased()
+        let after = NSRange(location: range.location + range.length, length: ns.length - range.location - range.length)
+        let rest = ns as String
+        if word == "số" { return soAddress.firstMatch(in: rest, options: [.anchored], range: after) != nil }
+        if word == "xã" { return xaHoi.firstMatch(in: rest, options: [.anchored], range: after) == nil }
+        return true
+    }
+
+    /// Where the place name after the address word at `last` ends: a number ("quận 1"), or up to four words, ending
+    /// before a stop word or at a comma or other punctuation.
+    private static func addressEnd(after last: NSRange, in ns: NSString) -> Int {
+        let text = ns as String
+        var end = last.location + last.length
+        var pos = end
+        for i in 0..<maxNameWords {
+            guard let m = nameToken.firstMatch(in: text, options: [.anchored],
+                                               range: NSRange(location: pos, length: ns.length - pos)) else { break }
+            let token = ns.substring(with: m.range(at: 1))
+            if addressStopWords.contains(token.lowercased()) { break }
+            let number = token.first?.isNumber == true
+            if i > 0, number { break }
+            end = m.range(at: 1).location + m.range(at: 1).length
+            pos = m.range.location + m.range.length
+            if number || m.range(at: 2).length > 0 { break }
+        }
+        return end
+    }
+
     /// "mst", "thuế" (which covers "mã số thuế") or plain "thue" as a word, ignoring case but not diacritics, so
     /// "thuê" (to rent) never matches. `text` is already NFC.
     static func mentionsTax(_ text: String) -> Bool {
@@ -340,11 +398,13 @@ enum PhraseDetector {
             let s = ns.substring(with: m.range)
             pieces.append((m.range, Item(kind: .taxCode, key: "taxCode:" + s, display: s)))
         }
-        // An address runs from its first address word to the end of the phrase.
-        let words = addressWord.matches(in: text, range: all)
-        if words.count >= 2, let first = words.first {
-            let tail = ns.substring(from: first.range.location)
-            let s = tail.trimmingCharacters(in: CharacterSet(charactersIn: " .,;:"))
+        // An address runs from its first address word to the name after its last one (design 2026-11-24, N5).
+        let words = addressWord.matches(in: text, range: all).filter { isAddressWord($0.range, in: ns) }
+        if words.count >= 2, words.contains(where: { !isSo($0.range, in: ns) }),
+           let first = words.first, let last = words.last {
+            let end = addressEnd(after: last.range, in: ns)
+            let raw = ns.substring(with: NSRange(location: first.range.location, length: end - first.range.location))
+            let s = raw.trimmingCharacters(in: CharacterSet(charactersIn: " .,;:"))
             let range = NSRange(location: first.range.location, length: (s as NSString).length)
             pieces.append((range, Item(kind: .address, key: "address:" + normalizedKey(s), display: s)))
         }
