@@ -51,7 +51,7 @@ typedef struct { lk_fix fix; int reverse; } lk_undo;
 // No lock: call it on the thread that calls lk_vikey_press, right after the press.
 int  lk_vikey_take_undo(lk_undo* out);
 
-void lk_vikey_set_language(int vietnamese);     // 1 = Việt, 0 = Anh; clears the copy of the line too
+void lk_vikey_set_language(int vietnamese);     // 1 = Việt, 0 = Anh; a change clears the copy of the line too (same language: no-op)
 int  lk_vikey_language(void);
 void lk_vikey_set_options(int modernOrthography, int autoSwitch, int telexStyle);
 

@@ -61,8 +61,9 @@ static ScreenModel model;
 static bool doubleKeyFix = true;
 static bool capsLockForNextKey = false;   // lk_vikey_set_caps_lock, for the next lk_vikey_press
 static bool fixAtNextReturn = false;      // lk_vikey_set_fix_at_return, for the next lk_vikey_press
+static bool doubledKeyFlip = false;       // the current word switched to English mid-word (Vikey D19)
 
-static void resetModel() { model = ScreenModel(); }
+static void resetModel() { model = ScreenModel(); doubledKeyFlip = false; }
 
 static bool isLetterKey(Uint16 key) {
     for (Uint16 k : kLetterKeys) if (k == key) return true;
@@ -428,6 +429,49 @@ static void keepSwitchBackUnlessEnglish(int languageBefore) {
     driver->*member(UndoActiveTag()) = false;
 }
 
+// The last word on the line, before any break characters after it.
+static std::u16string lastWord() {
+    size_t end = model.line.size();
+    while (end > 0 && !isWordLetter(model.line[end - 1]) && model.line[end - 1] != u'\n') end--;
+    return wordEndingAt(model.line, end);
+}
+
+// Vikey D19: a doubled tone key switches to English mid-word and shows the Telex result ("lamff" -> "lamf", "verr"
+// -> "ver"). The screen stays as D19 shows it; only the language is the shim's business. When the word ends and what
+// it shows is no English word ("lamf", "bij", "nguowif"), the doubled key was a Vietnamese typo, not English, so
+// Vietnamese comes back: the words after it are no longer typed in English. "ver", "boss", "mix" stay English.
+static void comeBackAfterDoubledKey(uint16_t key, int shift, int languageBefore, VKEdit& e) {
+    if (key == KEY_DELETE) {
+        // The user is correcting: what the word shows is no longer D19's result and tells nothing (an English word
+        // with an extra letter, "thiss" ⌫ -> "thi", is not a Vietnamese typo). Vikey's language stands.
+        doubledKeyFlip = false;
+        return;
+    }
+    if (isLetterKey(key)) {
+        if (languageBefore == 1 && vLanguage == 0) doubledKeyFlip = true;
+        return;
+    }
+    // A digit glued to the word ("cass1") is part of an identifier, not the end of a word (as in Driver.cpp).
+    if (!shift && (key == KEY_0 || key == KEY_1 || key == KEY_2 || key == KEY_3 || key == KEY_4 || key == KEY_5 ||
+                   key == KEY_6 || key == KEY_7 || key == KEY_8 || key == KEY_9)) {
+        doubledKeyFlip = false;
+        return;
+    }
+    const bool flipped = doubledKeyFlip;
+    doubledKeyFlip = false;
+    if (!flipped || vLanguage != 0 || !currentWord().empty()) return;
+    const std::u16string word = lastWord();
+    if (word.empty() || englishScore(word) != LK_VIKEY_NOT_A_WORD) return;
+    // As VikeyDriver::switchTo does at its own switches (private there): the next word starts fresh, in Vietnamese.
+    // Not driver->setLanguage, whose resetContext would drop a ⌫⌫ undo Vikey armed at this break (D19's dictionary
+    // fix): that undo still gives the keys back, in English.
+    vLanguage = 1;
+    startNewSession();
+    vAutoSwitchForget();
+    e.languageChanged = true;
+    model.languageAfterLastKey = 1;
+}
+
 // One key the user pressed: Vikey's edit with the shim's repairs, vetoes and undo bookkeeping.
 static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
     const ScreenModel before = model;
@@ -444,6 +488,7 @@ static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
         const int languageBefore = vLanguage;
         e = pressTracked(macKeyCode, shift != 0, now);
         if (!backspace) keepSwitchBackUnlessEnglish(languageBefore);
+        comeBackAfterDoubledKey(macKeyCode, shift, languageBefore, e);
         if (letterKey) {
             const bool wordStarted = wordOf(before.line).empty();
             model.wordCapsLock = (wordStarted || before.wordCapsLock) && capsLockForNextKey;
@@ -541,6 +586,10 @@ void lk_vikey_set_double_key_fix(int on) {
 }
 
 void lk_vikey_set_language(int vietnamese) {
+    // The app echoes each of Vikey's own switches back here, asynchronously, with the language Vikey already has:
+    // that echo must not wipe the copy of the line or the word's state (the double-key repair, D19's comeback, a fix
+    // ⌫⌫ may still undo). Starting over is lk_vikey_reset_context's job.
+    if (driver && vLanguage == (vietnamese ? 1 : 0)) return;
     resetModel();
     forgetFixes();
     if (driver) driver->setLanguage(vietnamese ? 1 : 0);

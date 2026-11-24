@@ -301,6 +301,61 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertEqual(String(field.text), typed + "\n")
     }
 
+    // Vikey D19: a doubled tone key switches to English mid-word and shows the Telex result ("lamff" -> "lamf").
+
+    /// A Vietnamese typo with a doubled tone key keeps D19's Telex result, but the word that comes out is no English
+    /// word, so Vietnamese comes back at the end of the word: the next words are not typed in English.
+    func testDoubledToneKeyInVietnameseWordComesBackAtWordEnd() {
+        for (keys, shown) in [("lamff ", "lamf "), ("nguowiff ", "nguowif "), ("bijj ", "bij "), ("dduowcjj ", "dduowcj ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            let field = Field(engine)
+            XCTAssertEqual(field.type(keys), shown, keys)
+            XCTAssertTrue(engine.isVietnamese, "Vietnamese after \(keys)")
+            XCTAssertEqual(field.type("tooi "), shown + "tôi ")
+        }
+    }
+
+    /// Bringing Vietnamese back leaves Vikey's own Backspace alone: the first ⌫ takes the break and the word goes on.
+    func testDoubledKeyComebackLeavesBackspaceAlone() {
+        let field = Field(engine)
+        field.type("lamff ")
+        XCTAssertTrue(engine.isVietnamese)
+        XCTAssertEqual(field.backspace(), "lamf")
+    }
+
+    /// The app echoes each switch of Vikey's back to it (MenuBar's language-sync → router.setEnabled → setVietnamese,
+    /// asynchronously, with the language Vikey already has). That echo must not wipe what the shim tracks about the
+    /// word: Vietnamese still comes back at the end of "lamff".
+    func testDoubledKeyComebackSurvivesTheAppsEcho() {
+        let field = Field(engine)
+        field.type("lamff")
+        XCTAssertFalse(engine.isVietnamese, "precondition: D19 switched to English mid-word")
+        engine.setVietnamese(false)   // the echo
+        XCTAssertEqual(field.type(" "), "lamf ")
+        XCTAssertTrue(engine.isVietnamese)
+    }
+
+    /// The language change reaches the app (menu bar icon) at the key that brings Vietnamese back.
+    func testDoubledToneKeyComebackReportsLanguageChange() {
+        let field = Field(engine)
+        field.type("lamff")
+        XCTAssertFalse(engine.isVietnamese, "precondition: D19 switched to English mid-word")
+        let changesBefore = field.languageChanges
+        field.type(" ")
+        XCTAssertEqual(field.languageChanges, changesBefore + 1)
+    }
+
+    /// An English word made by the doubled key stays English (D19): "verr" -> "ver", "boss".
+    func testDoubledKeyEnglishWordStaysEnglish() {
+        for (keys, shown) in [("verr ", "ver "), ("boss ", "boss ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            XCTAssertEqual(Field(engine).type(keys), shown, keys)
+            XCTAssertFalse(engine.isVietnamese, "English after \(keys)")
+        }
+    }
+
     /// D62 by default in English mode too: a one-word reply is sent as typed and English stays.
     func testReturnInEnglishSendsKeysByDefault() {
         engine.setVietnamese(false)

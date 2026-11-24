@@ -62,6 +62,9 @@ public final class EngineRouter {
     /// any other key. Holds no typed text.
     public private(set) var returnFixNote: String?
 
+    /// For the debug log: " lang→EN" / " lang→VN" when Vikey switched language by itself at the last key, else "".
+    public private(set) var languageLog = ""
+
     /// `returnFixNote` with what the live field query saw, when it was asked. For the debug log only.
     public var returnFixLog: String? {
         guard let note = returnFixNote else { return nil }
@@ -119,6 +122,8 @@ public final class EngineRouter {
     /// which reaches here without `ctrl` only on Return/Enter.
     public func intercept(keyCode: UInt16, caps: Bool, ctrl: Bool, shift: Bool,
                           option: Bool = false) -> InterceptResult {
+        languageLog = ""
+        returnFixNote = nil   // also when the stray-key filter or a Ctrl chord answers this key
         guard active == .vikey, let vikey else { return .passToGoNhanh }
         // Only the very next key may undo a capitalisation (spec 17.1.4).
         let capitalized = capitalizer?.last
@@ -161,7 +166,6 @@ public final class EngineRouter {
         // Vikey D62 keeps Return from fixing a word, for an address bar's autocompletion; elsewhere a message's last
         // word is fixed as at Space. The field is asked only here: one Accessibility query per Return after a word.
         // Not in terminals and code editors, where Return accepts a completion from a popup list (as ruling R12).
-        returnFixNote = nil
         if Self.returnKeys.contains(keyCode), !mirror.currentWord.isEmpty {
             if CodeApps.contains(frontmostBundleID()) {
                 returnFixNote = "returnFix=0 code-app"
@@ -186,6 +190,7 @@ public final class EngineRouter {
         }
         if edit.languageChanged {
             let on = vikey.isVietnamese
+            languageLog = on ? " lang→VN" : " lang→EN"
             if languageBeforeAutoSwitch == nil { languageBeforeAutoSwitch = vietnamese }
             vietnamese = on
             DispatchQueue.main.async {
