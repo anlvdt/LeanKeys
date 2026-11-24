@@ -25,4 +25,10 @@ public protocol TypingEngine: AnyObject {
     func setAutoSwitch(_ on: Bool)
     /// Modern tone placement ("hoà") rather than classic ("hòa"); on by default.
     func setModernTone(_ on: Bool)
+    /// The next key, when it is Return/Enter, may finish the word being typed as Space would. Off by default.
+    func allowFixAtNextReturn()
+}
+
+public extension TypingEngine {
+    func allowFixAtNextReturn() {}
 }

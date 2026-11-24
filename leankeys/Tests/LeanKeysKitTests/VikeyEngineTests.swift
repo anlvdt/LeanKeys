@@ -103,6 +103,62 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertTrue(engine.isVietnamese)
     }
 
+    /// The router asks the field before Return, only when a word is pending, and passes the answer to the engine.
+    private func typeThroughRouter(_ keys: String, fieldAllows: Bool,
+                                   app: String? = "com.tinyspeck.slackmacgap") -> (text: String, asked: Int) {
+        let suite = "VikeyEngineTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let engine = self.engine!
+        var asked = 0
+        let router = EngineRouter(defaults: defaults, makeVikey: { engine },
+                                  undoLearning: { UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults,
+                                                               context: { LearnContext(bundleID: nil, secureInput: true, secureField: true, now: Date()) }) },
+                                  frontmostBundleID: { app },
+                                  fieldAllowsFixAtReturn: { asked += 1; return fieldAllows })
+        router.setEnabled(false)
+        engine.resetContext()
+        var text: [Character] = []
+        for ch in keys {
+            guard let code = macKey[ch], case .handled(let r) = router.intercept(keyCode: code, caps: false, ctrl: false,
+                                                                                    shift: false) else {
+                XCTFail("Vikey must handle \(ch)"); continue
+            }
+            if let (deleteCount, inserted, consumed) = r {
+                text.removeLast(min(deleteCount, text.count))
+                text += inserted
+                if !consumed { text.append(ch) }
+            } else {
+                text.append(ch)
+            }
+        }
+        return (String(text), asked)
+    }
+
+    func testRouterLetsReturnFixTheWordWhereTheFieldAllows() {
+        let r = typeThroughRouter("dduowcj\n", fieldAllows: true)
+        XCTAssertEqual(r.text, "được\n")
+        XCTAssertEqual(r.asked, 1)
+        XCTAssertTrue(engine.isVietnamese)
+    }
+
+    func testRouterKeepsD62WhereTheFieldDoesNotAllow() {
+        let r = typeThroughRouter("dduowcj\n", fieldAllows: false)
+        XCTAssertEqual(r.text, "dduowcj\n")
+        XCTAssertFalse(engine.isVietnamese)
+    }
+
+    /// Code editors and terminals keep D62: Return there accepts a completion from a popup list (as ruling R12).
+    func testRouterKeepsD62InCodeApps() {
+        let r = typeThroughRouter("dduowcj\n", fieldAllows: true, app: "com.microsoft.VSCode")
+        XCTAssertEqual(r.text, "dduowcj\n")
+        XCTAssertEqual(r.asked, 0, "the field is not even asked")
+    }
+
+    func testRouterAsksTheFieldOnlyAtReturnAfterAWord() {
+        XCTAssertEqual(typeThroughRouter("merge \n", fieldAllows: true).asked, 0, "no word pending at Return")
+    }
+
     /// Ruling R25: the user's explicit off (through the router) stays off.
     func testExplicitOffThroughRouterStaysEnglish() {
         let suite = "VikeyEngineTests.\(UUID().uuidString)"
@@ -136,13 +192,39 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertEqual(Field(engine).type("more "), "more ")
     }
 
+    /// Vikey D61: Backspace twice right after a switch back to Vietnamese gives the keys back, when they are an English
+    /// word ("cos" is English, "có" Vietnamese).
     func testUndoTwoBackspaces() {
+        engine.setVietnamese(false)
+        engine.resetContext()
+        let field = Field(engine)
+        XCTAssertEqual(field.type("cos "), "có ")
+        XCTAssertEqual(field.backspace(), "có")
+        XCTAssertEqual(field.backspace(), "cos")
+        XCTAssertFalse(engine.isVietnamese)
+    }
+
+    /// Keys that are no English word ("dduowcj", "vieejt") had only the Vietnamese reading: after the switch back,
+    /// Backspace just deletes, and Vietnamese stays (a user fixing the word's last letter is not sent back to English).
+    func testBackspaceAfterSwitchBackDeletesWhenKeysAreNoEnglishWord() {
+        engine.setVietnamese(false)
+        engine.resetContext()
+        let field = Field(engine)
+        XCTAssertEqual(field.type("vieejt "), "việt ")
+        XCTAssertEqual(field.backspace(), "việt")
+        XCTAssertEqual(field.backspace(), "việ")
+        XCTAssertTrue(engine.isVietnamese)
+        XCTAssertEqual(field.type("c "), "việc ")
+    }
+
+    func testBackspaceAfterSwitchBackDeletesForAnotherNonEnglishWord() {
         engine.setVietnamese(false)
         engine.resetContext()
         let field = Field(engine)
         XCTAssertEqual(field.type("dduowcj "), "được ")
         XCTAssertEqual(field.backspace(), "được")
-        XCTAssertEqual(field.backspace(), "dduowcj")
+        XCTAssertEqual(field.backspace(), "đượ")
+        XCTAssertTrue(engine.isVietnamese)
     }
 
     func testNavigationKeyResetsContext() {
@@ -217,6 +299,130 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertNotEqual(typed, "test", "precondition: Telex transforms the word")
         XCTAssertNil(field.press(kReturn, shift: false, own: "\n"), "no fix at Return")
         XCTAssertEqual(String(field.text), typed + "\n")
+    }
+
+    // Vikey D19: a doubled tone key switches to English mid-word and shows the Telex result ("lamff" -> "lamf").
+
+    /// A Vietnamese typo with a doubled tone key keeps D19's Telex result, but the word that comes out is no English
+    /// word, so Vietnamese comes back at the end of the word: the next words are not typed in English.
+    func testDoubledToneKeyInVietnameseWordComesBackAtWordEnd() {
+        for (keys, shown) in [("lamff ", "lamf "), ("nguowiff ", "nguowif "), ("bijj ", "bij "), ("dduowcjj ", "dduowcj ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            let field = Field(engine)
+            XCTAssertEqual(field.type(keys), shown, keys)
+            XCTAssertTrue(engine.isVietnamese, "Vietnamese after \(keys)")
+            XCTAssertEqual(field.type("tooi "), shown + "tôi ")
+        }
+    }
+
+    /// Bringing Vietnamese back leaves Vikey's own Backspace alone: the first ⌫ takes the break and the word goes on.
+    func testDoubledKeyComebackLeavesBackspaceAlone() {
+        let field = Field(engine)
+        field.type("lamff ")
+        XCTAssertTrue(engine.isVietnamese)
+        XCTAssertEqual(field.backspace(), "lamf")
+    }
+
+    /// The app echoes each switch of Vikey's back to it (MenuBar's language-sync → router.setEnabled → setVietnamese,
+    /// asynchronously, with the language Vikey already has). That echo must not wipe what the shim tracks about the
+    /// word: Vietnamese still comes back at the end of "lamff".
+    func testDoubledKeyComebackSurvivesTheAppsEcho() {
+        let field = Field(engine)
+        field.type("lamff")
+        XCTAssertFalse(engine.isVietnamese, "precondition: D19 switched to English mid-word")
+        engine.setVietnamese(false)   // the echo
+        XCTAssertEqual(field.type(" "), "lamf ")
+        XCTAssertTrue(engine.isVietnamese)
+    }
+
+    /// The language change reaches the app (menu bar icon) at the key that brings Vietnamese back.
+    func testDoubledToneKeyComebackReportsLanguageChange() {
+        let field = Field(engine)
+        field.type("lamff")
+        XCTAssertFalse(engine.isVietnamese, "precondition: D19 switched to English mid-word")
+        let changesBefore = field.languageChanges
+        field.type(" ")
+        XCTAssertEqual(field.languageChanges, changesBefore + 1)
+    }
+
+    /// An English word made by the doubled key stays English (D19): "verr" -> "ver", "boss".
+    func testDoubledKeyEnglishWordStaysEnglish() {
+        for (keys, shown) in [("verr ", "ver "), ("boss ", "boss ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            XCTAssertEqual(Field(engine).type(keys), shown, keys)
+            XCTAssertFalse(engine.isVietnamese, "English after \(keys)")
+        }
+    }
+
+    /// D62 by default in English mode too: a one-word reply is sent as typed and English stays.
+    func testReturnInEnglishSendsKeysByDefault() {
+        engine.setVietnamese(false)
+        engine.resetContext()
+        let field = Field(engine)
+        field.type("dduowcj")
+        field.press(kReturn, shift: false, own: "\n")
+        XCTAssertEqual(String(field.text), "dduowcj\n")
+        XCTAssertFalse(engine.isVietnamese)
+    }
+
+    /// Where the app allows it (a multi-line field without a selection), Return finishes the word as Space does:
+    /// "dduowcj" + Return sends "được" and Vietnamese comes back. Return is typed by the key itself.
+    func testReturnFixesWordInEnglishWhenAllowed() {
+        engine.setVietnamese(false)
+        engine.resetContext()
+        let field = Field(engine)
+        field.type("dduowcj")
+        engine.fixWordAtReturn = true
+        let edit = field.press(kReturn, shift: false, own: "\n")
+        XCTAssertEqual(String(field.text), "được\n")
+        XCTAssertEqual(edit?.keyPassesThrough, true, "Return still submits")
+        XCTAssertEqual(edit?.languageChanged, true)
+        XCTAssertTrue(engine.isVietnamese)
+        XCTAssertFalse(engine.fixWordAtReturn, "the permission is for one Return only")
+    }
+
+    /// The other direction: an English word typed in Vietnamese mode gets its keys back at Return ("púh" -> "push").
+    func testReturnRestoresEnglishWordInVietnameseWhenAllowed() {
+        let field = Field(engine)
+        XCTAssertNotEqual(field.type("test"), "test", "precondition: Telex transforms the word")
+        engine.fixWordAtReturn = true
+        field.press(kReturn, shift: false, own: "\n")
+        XCTAssertEqual(String(field.text), "test\n")
+    }
+
+    /// A word Return has nothing to fix in: exactly the word and Return, no stray space.
+    func testReturnWhenAllowedLeavesPlainWordsAlone() {
+        let field = Field(engine)
+        field.type("vieejt")
+        engine.fixWordAtReturn = true
+        field.press(kReturn, shift: false, own: "\n")
+        XCTAssertEqual(String(field.text), "việt\n")
+
+        engine.setVietnamese(false)
+        engine.resetContext()
+        let english = Field(engine)
+        english.type("merge")
+        engine.fixWordAtReturn = true
+        english.press(kReturn, shift: false, own: "\n")
+        XCTAssertEqual(String(english.text), "merge\n")
+        XCTAssertFalse(engine.isVietnamese)
+    }
+
+    /// After Return the next message starts fresh: a later Return without permission is D62 again.
+    func testReturnPermissionIsForOneReturn() {
+        engine.setVietnamese(false)
+        engine.resetContext()
+        let field = Field(engine)
+        field.type("dduowcj")
+        engine.fixWordAtReturn = true
+        field.press(kReturn, shift: false, own: "\n")
+        XCTAssertTrue(engine.isVietnamese, "precondition: the first Return switched back")
+        let shown = String(field.type("test").dropFirst("được\n".count))
+        XCTAssertNotEqual(shown, "test", "precondition: Telex transforms the word")
+        field.press(kReturn, shift: false, own: "\n")
+        XCTAssertEqual(String(field.text), "được\n" + shown + "\n", "no fix at this Return")
     }
 
     /// A Space before Return still lets Vikey restore the word, and Return then goes through as typed.

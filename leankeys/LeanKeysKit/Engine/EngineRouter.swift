@@ -20,7 +20,8 @@ public extension Notification.Name {
 /// is Telex only) or when Vikey fails to start, where Gõ Nhanh takes over; Gõ Nhanh when the user picks it.
 /// Driven from the event-tap thread only: no locking.
 public final class EngineRouter {
-    public static let shared = EngineRouter()
+    /// The app's router: the only one that asks the focused field at Return (tests pass their own answer).
+    public static let shared = EngineRouter(fieldAllowsFixAtReturn: { FocusedField.allowsFixAtReturn() })
 
     private static let vniMethod = 1
 
@@ -42,6 +43,7 @@ public final class EngineRouter {
     private var strayEnter = StrayEnterFilter()
     private let now: () -> TimeInterval
     private let frontmostBundleID: () -> String?
+    private let fieldAllowsFixAtReturn: () -> Bool
     private var vikeyAttempted = false
     private var method = 0
     private var vietnamese = true
@@ -55,6 +57,20 @@ public final class EngineRouter {
 
     public private(set) var fallbackReason: String?
 
+    /// For the debug log, after the last Return/Enter with a word pending: whether Return could finish the word and
+    /// why not ("returnFix=1", "returnFix=0 code-app", "returnFix=0 field"; see `FocusedField.lastNote`). nil after
+    /// any other key. Holds no typed text.
+    public private(set) var returnFixNote: String?
+
+    /// For the debug log: " lang→EN" / " lang→VN" when Vikey switched language by itself at the last key, else "".
+    public private(set) var languageLog = ""
+
+    /// `returnFixNote` with what the live field query saw, when it was asked. For the debug log only.
+    public var returnFixLog: String? {
+        guard let note = returnFixNote else { return nil }
+        return note.hasSuffix("code-app") ? note : note + " " + FocusedField.lastNote
+    }
+
     /// What was just typed, from either engine (see `observeGoNhanh`). Memory only.
     public let mirror = TextMirror()
 
@@ -65,18 +81,22 @@ public final class EngineRouter {
     /// when that engine is the real `VikeyEngine`: the default (`UndoLearning.shared`, which opens the saved rules)
     /// is never built for a stub engine or a router that never uses Vikey. `now` (seconds, monotonic) and
     /// `frontmostBundleID` serve the stray-key filter (spec 17.2); `frontmostBundleID` also keeps capitals out of
-    /// terminals and code editors (spec 17.1).
+    /// terminals and code editors (spec 17.1). `fieldAllowsFixAtReturn` is asked at Return/Enter with a word pending,
+    /// outside code apps: true lets Return finish the word as Space does. The default never allows it (Vikey D62);
+    /// `shared` asks the focused field (`FocusedField.allowsFixAtReturn`).
     public init(defaults: UserDefaults = .standard, makeVikey: @escaping () -> TypingEngine? = { VikeyEngine() },
                 undoLearning: @escaping () -> UndoLearning = { UndoLearning.shared },
                 now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
                 frontmostBundleID: @escaping () -> String? = {
                     NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-                }) {
+                },
+                fieldAllowsFixAtReturn: @escaping () -> Bool = { false }) {
         settings = LeanSettings(defaults: defaults)
         self.makeVikey = makeVikey
         makeUndoLearning = undoLearning
         self.now = now
         self.frontmostBundleID = frontmostBundleID
+        self.fieldAllowsFixAtReturn = fieldAllowsFixAtReturn
         refresh()
     }
 
@@ -102,6 +122,8 @@ public final class EngineRouter {
     /// which reaches here without `ctrl` only on Return/Enter.
     public func intercept(keyCode: UInt16, caps: Bool, ctrl: Bool, shift: Bool,
                           option: Bool = false) -> InterceptResult {
+        languageLog = ""
+        returnFixNote = nil   // also when the stray-key filter or a Ctrl chord answers this key
         guard active == .vikey, let vikey else { return .passToGoNhanh }
         // Only the very next key may undo a capitalisation (spec 17.1.4).
         let capitalized = capitalizer?.last
@@ -141,6 +163,19 @@ public final class EngineRouter {
             observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
             return result
         }
+        // Vikey D62 keeps Return from fixing a word, for an address bar's autocompletion; elsewhere a message's last
+        // word is fixed as at Space. The field is asked only here: one Accessibility query per Return after a word.
+        // Not in terminals and code editors, where Return accepts a completion from a popup list (as ruling R12).
+        if Self.returnKeys.contains(keyCode), !mirror.currentWord.isEmpty {
+            if CodeApps.contains(frontmostBundleID()) {
+                returnFixNote = "returnFix=0 code-app"
+            } else if fieldAllowsFixAtReturn() {
+                returnFixNote = "returnFix=1"
+                vikey.allowFixAtNextReturn()
+            } else {
+                returnFixNote = "returnFix=0 field"
+            }
+        }
         let processed = vikey.process(keyCode: keyCode, caps: caps, shift: shift)
         if let vikeyEngine { undoLearning?.afterPress(engine: vikeyEngine) }
         guard let edit = processed else {
@@ -155,6 +190,7 @@ public final class EngineRouter {
         }
         if edit.languageChanged {
             let on = vikey.isVietnamese
+            languageLog = on ? " lang→VN" : " lang→EN"
             if languageBeforeAutoSwitch == nil { languageBeforeAutoSwitch = vietnamese }
             vietnamese = on
             DispatchQueue.main.async {

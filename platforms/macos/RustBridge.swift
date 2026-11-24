@@ -1612,7 +1612,7 @@ private func keyboardCallback(
         Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log
 
         if let (bs, chars, keyConsumed) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
-            Log.key(keyCode, "enter: bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed)") // LEANKEYS-HOOK: debug-log
+            Log.key(keyCode, "enter: bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed) \(EngineRouter.shared.returnFixLog ?? "")\(EngineRouter.shared.languageLog)") // LEANKEYS-HOOK: debug-log
             sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
 
             if bs > 0 || !chars.isEmpty {
@@ -1623,6 +1623,7 @@ private func keyboardCallback(
                 return nil
             }
         }
+        if let note = EngineRouter.shared.returnFixLog { Log.info("enter: \(note)") } // LEANKEYS-HOOK: debug-log
 
         return Unmanaged.passUnretained(event)
     }
@@ -1701,7 +1702,7 @@ private func keyboardCallback(
     if keyCode == KeyCode.backspace, !bypassIME {
         // First try Rust engine (handles immediate backspace-after-space)
         if let (bs, chars, _) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
-            Log.key(keyCode, "backspace: bs=\(bs) chars=\(DebugLog.redact(chars))") // LEANKEYS-HOOK: debug-log
+            Log.key(keyCode, "backspace: bs=\(bs) chars=\(DebugLog.redact(chars))\(EngineRouter.shared.languageLog)") // LEANKEYS-HOOK: debug-log
             sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
             return nil
         }
@@ -1752,7 +1753,7 @@ private func keyboardCallback(
     }
 
     if let (bs, chars, keyConsumed) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
-        Log.key(keyCode, "bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed)") // LEANKEYS-HOOK: debug-log
+        Log.key(keyCode, "bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed)\(EngineRouter.shared.languageLog)") // LEANKEYS-HOOK: debug-log
         if EngineRouter.swallowsKeyOnly((bs, chars, keyConsumed)) { return nil } // LEANKEYS-HOOK: engine-dispatch
         sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
 
