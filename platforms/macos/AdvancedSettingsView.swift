@@ -14,7 +14,7 @@ struct AdvancedSettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 EngineSettingsSection(onEngineChanged: { RustBridge.clearBuffer() }) // LEANKEYS-HOOK: settings-engine (first, spec §14.3)
                 LearnSettingsSection(model: .shared, part: .advanced) // LEANKEYS-HOOK: settings-engine (LeanKeys cards first)
-                UndoLearningSection(model: .shared) // LEANKEYS-HOOK: settings-engine (LeanKeys cards first)
+                UndoLearningSection(model: .shared, autoFixOff: !appState.autoFix) // LEANKEYS-HOOK: auto-fix
                 perAppSection // LEANKEYS-HOOK: copy (rare and technical sections last)
                 performanceSection // LEANKEYS-HOOK: copy
                 compatibilitySection // LEANKEYS-HOOK: copy

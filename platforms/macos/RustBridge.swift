@@ -738,13 +738,13 @@ class RustBridge {
     /// Set whether to enable English auto-restore (experimental)
     /// When enabled, automatically restores English words that were transformed
     static func setEnglishAutoRestore(_ enabled: Bool) {
-        ime_english_auto_restore(enabled)
+        ime_english_auto_restore(enabled && EngineRouter.shared.autoFix) // LEANKEYS-HOOK: auto-fix
     }
 
     /// Set whether to enable auto-capitalize after sentence-ending punctuation
     /// When enabled, capitalizes first letter after . ! ? Enter
     static func setAutoCapitalize(_ enabled: Bool) {
-        ime_auto_capitalize(enabled)
+        ime_auto_capitalize(enabled && EngineRouter.shared.autoFix) // LEANKEYS-HOOK: auto-fix
     }
 
     /// Set whether to allow foreign consonants (z, w, j, f) as valid initials

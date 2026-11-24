@@ -71,13 +71,80 @@ final class VikeyEngineTests: XCTestCase {
 
     override func tearDown() {
         // Options are process-wide: put back the defaults for the next test.
+        engine?.setPureTelex(false)
         engine?.setAutoSwitch(true)
         engine?.setModernTone(true)
+        VikeyEngine.setDoubleKeyFix(true)
         // A router on the real engine installs its (memory-only) undo learner's fix filter: unregister it.
         lk_vikey_set_fix_filter(nil)
         engine?.setVietnamese(true)
         engine?.resetContext()
         super.tearDown()
+    }
+
+    /// Pure Telex: no auto switch and no restore of a wrong spelling, so every key is plain Telex.
+    func testPureTelexTypesKeysAsTelex() {
+        engine.setPureTelex(true)
+        XCTAssertEqual(Field(engine).type("test push user coss "), "tét púh uẻ cos ")
+        XCTAssertTrue(engine.isVietnamese)
+        engine.setPureTelex(false)
+        engine.setVietnamese(true)
+        engine.resetContext()
+        XCTAssertEqual(Field(engine).type("test "), "test ")
+    }
+
+    /// Requests made while pure are kept, not applied: they take effect once pure is off.
+    func testAutoSwitchRequestDuringPureTelexAppliesWhenPureEnds() {
+        engine.setAutoSwitch(false)
+        engine.setPureTelex(true)
+        engine.setAutoSwitch(true)
+        XCTAssertEqual(Field(engine).type("test push user coss "), "tét púh uẻ cos ")
+        XCTAssertTrue(engine.isVietnamese)
+        engine.setPureTelex(false)
+        engine.setVietnamese(true)
+        engine.resetContext()
+        // Auto switch (requested true while pure) is in effect: the English word turns the language off.
+        XCTAssertEqual(Field(engine).type("push "), "push ")
+        XCTAssertFalse(engine.isVietnamese)
+    }
+
+    /// Mirror: auto switch never requested, so the language stays Vietnamese after pure ends.
+    func testNoAutoSwitchRequestKeepsVietnameseAfterPureTelex() {
+        engine.setAutoSwitch(false)
+        engine.setPureTelex(true)
+        engine.setPureTelex(false)
+        engine.setVietnamese(true)
+        engine.resetContext()
+        _ = Field(engine).type("push ")
+        XCTAssertTrue(engine.isVietnamese)
+    }
+
+    private func backspaceAfterDoubledKey() -> String {
+        engine.setVietnamese(true)
+        engine.resetContext()
+        let f = Field(engine)
+        f.type("hocjj")
+        return f.backspace()
+    }
+
+    func testDoubleKeyFixRequestsAcrossPureTelex() {
+        // Control: fix on (default) gives the word back.
+        XCTAssertEqual(backspaceAfterDoubledKey(), "học")
+        // Fix off: Vikey's own Backspace.
+        VikeyEngine.setDoubleKeyFix(false)
+        XCTAssertEqual(backspaceAfterDoubledKey(), "hoc")
+        // Pure on: off even though the request is true.
+        VikeyEngine.setDoubleKeyFix(true)
+        engine.setPureTelex(true)
+        XCTAssertNotEqual(backspaceAfterDoubledKey(), "học")
+        // Pure off: the request (true) is in effect.
+        engine.setPureTelex(false)
+        XCTAssertEqual(backspaceAfterDoubledKey(), "học")
+        // A false request made while pure is applied when pure ends.
+        engine.setPureTelex(true)
+        VikeyEngine.setDoubleKeyFix(false)
+        engine.setPureTelex(false)
+        XCTAssertEqual(backspaceAfterDoubledKey(), "hoc")
     }
 
     /// Control for the test below: English with auto switch on turns a Vietnamese word back on.
