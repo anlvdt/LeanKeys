@@ -47,8 +47,15 @@ final class PopoverUpdateRowTests: XCTestCase {
     func testBackgroundDownloadOffersOneClickInstall() {
         let p = phase(.readyToInstall, requested: false)
         XCTAssertEqual(p, .ready)
-        XCTAssertEqual(PopoverUpdateRow.buttonTitle(p), "Cài bản mới")
+        XCTAssertEqual(PopoverUpdateRow.buttonTitle(p), "Cài")
         XCTAssertEqual(PopoverUpdateRow.tapAction(p), .install)
+    }
+
+    /// The ready row says which version it installs when the updater knows it.
+    func testReadyLineNamesTheNewVersion() {
+        XCTAssertEqual(PopoverUpdateRow.line(.ready, newVersion: "1.9"), "Có bản mới 1.9")
+        XCTAssertEqual(PopoverUpdateRow.line(.ready), "Có bản mới")
+        XCTAssertNil(PopoverUpdateRow.line(.idle, newVersion: "1.9"), "idle stays a plain button")
     }
 
     func testUnknownSizeIsIndeterminate() {

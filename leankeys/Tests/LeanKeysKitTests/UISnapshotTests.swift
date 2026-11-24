@@ -34,14 +34,14 @@ final class UISnapshotTests: XCTestCase {
             let popover = StatusPopoverView(model: StatusPopoverModel(actions: Self.popoverActions(vietnameseOn)))
                 .background(Color(NSColor.windowBackgroundColor))
             try Self.render(
-                popover, width: 280, height: nil, appearance: appearance,
+                popover, width: StatusPopoverView.width, height: nil, appearance: appearance,
                 to: outDir.appendingPathComponent("popover-\(label).png")
             )
 
             let blocked = StatusPopoverView(model: StatusPopoverModel(actions: Self.popoverActions(blockedByOnePassword)))
                 .background(Color(NSColor.windowBackgroundColor))
             try Self.render(
-                blocked, width: 280, height: nil, appearance: appearance,
+                blocked, width: StatusPopoverView.width, height: nil, appearance: appearance,
                 to: outDir.appendingPathComponent("popover-blocked-\(label).png")
             )
 
@@ -49,7 +49,7 @@ final class UISnapshotTests: XCTestCase {
             let withSuggestions = StatusPopoverView(model: StatusPopoverModel(actions: Self.popoverActions(vietnameseOn, suggestions: 2)))
                 .background(Color(NSColor.windowBackgroundColor))
             try Self.render(
-                withSuggestions, width: 280, height: nil, appearance: appearance,
+                withSuggestions, width: StatusPopoverView.width, height: nil, appearance: appearance,
                 to: outDir.appendingPathComponent("popover-suggestions-\(label).png")
             )
 
@@ -64,7 +64,7 @@ final class UISnapshotTests: XCTestCase {
                 let view = StatusPopoverView(model: StatusPopoverModel(actions: Self.popoverActions(vietnameseOn, update: phase)))
                     .background(Color(NSColor.windowBackgroundColor))
                 try Self.render(
-                    view, width: 280, height: nil, appearance: appearance,
+                    view, width: StatusPopoverView.width, height: nil, appearance: appearance,
                     to: outDir.appendingPathComponent("popover-update-\(name)-\(label).png")
                 )
             }
@@ -167,7 +167,11 @@ final class UISnapshotTests: XCTestCase {
             openSettings: {},
             quit: {},
             suggestionCount: { suggestions },
-            updatePhase: update.map { phase in { phase } }
+            updatePhase: update.map { phase in { phase } },
+            version: { "1.8" },
+            toggleShortcut: { "⌃⇧Space" },
+            newVersion: { "1.9" },
+            appIcon: { logo() }
         )
     }
 

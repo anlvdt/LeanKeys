@@ -79,9 +79,11 @@ public enum PopoverUpdateRow {
     }
 
     /// The one status line, or nil when the row is just a button.
-    public static func line(_ phase: Phase) -> String? {
+    /// `newVersion` names the version a ready update installs ("Có bản mới 1.9").
+    public static func line(_ phase: Phase, newVersion: String? = nil) -> String? {
         switch phase {
-        case .idle, .ready: return nil
+        case .idle: return nil
+        case .ready: return newVersion.map { "Có bản mới \($0)" } ?? "Có bản mới"
         case .checking: return "Đang kiểm tra cập nhật…"
         case let .downloading(progress):
             guard let progress else { return "Đang tải bản mới…" }
@@ -97,7 +99,7 @@ public enum PopoverUpdateRow {
     public static func buttonTitle(_ phase: Phase) -> String? {
         switch phase {
         case .idle: return "Kiểm tra cập nhật"
-        case .ready: return "Cài bản mới"
+        case .ready: return "Cài"
         case .failed: return "Thử lại"
         case .checking, .downloading, .installing, .upToDate: return nil
         }
