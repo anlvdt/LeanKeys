@@ -5,17 +5,17 @@ import VikeyShim
 public enum Abbreviation {
     /// A free trigger for `candidate`. `existing` holds the current gõ tắt triggers, lowercased.
     ///
-    /// Every name types as itself in Telex (ruling R15) and has at least two letters (R17).
-    /// Phones, tax codes and addresses get fixed names (sdt, mst, dchi; R18) that skip the real-word check.
-    /// Emails get "em", or "eml" when "em" is a real word (it is). A phrase gets every word's first letter,
-    /// unaccented and lowercase (ruling R1), then those initials without vowels, then the phrase's first two
-    /// consonants; a name that is taken, a real word or changed by Telex moves on. Last comes a number on the first
-    /// of those that types as itself: sdt2, sdt3, coacdqt2.
+    /// Every name types as itself in Telex (ruling R15), is not in the blocklist of chat words and rude words, and
+    /// has at least two letters, three for a phrase (R17, amended 2026-11-24). Phones, tax codes and addresses get
+    /// fixed names (sdt, mst, dchi; R18) that skip the real-word check. Emails get "em", or "eml" when "em" is a real
+    /// word (it is). A phrase tries `phraseNames` in order, skipping real words. Only when every name is taken or a
+    /// real word comes a number, on the first name that types as itself: sdt2, coacd2.
     /// Main (key-handling) thread only: replays through the engine's global state.
     public static func suggest(for candidate: Candidate, existing: Set<String>,
                                isRealWord: (String) -> Bool = Abbreviation.isRealWord) -> String {
         let taken = Set(existing.map { $0.lowercased() })
         let (names, avoidWords, bases) = choices(for: candidate)
+        let minLetters = candidate.kind == .phrase ? 3 : 2
         var typesCache: [String: Bool] = [:]
         func types(_ name: String) -> Bool {
             if let known = typesCache[name] { return known }
@@ -23,13 +23,22 @@ public enum Abbreviation {
             typesCache[name] = result
             return result
         }
+        // No "w": it is Telex's ư key, in both engines, whatever Vikey's English restore makes of it ("xiwn").
+        func usable(_ name: String) -> Bool {
+            name.count >= minLetters && !name.contains("w") && !isBlocked(name) && types(name)
+        }
         func free(_ name: String) -> Bool {
-            name.count >= 2 && types(name) && !taken.contains(name) && !(avoidWords && isRealWord(name))
+            usable(name) && !taken.contains(name) && !(avoidWords && isRealWord(name))
         }
         if let name = names.first(where: free) { return name }
-        let base = bases.first { $0.count >= 2 && types($0) } ?? safeLetters(candidate.text, types) ?? "gt"
+        let vowelless = consonants(initials(candidate.text))
+        let base = bases.first(where: usable)
+            ?? (candidate.kind == .phrase && vowelless.count >= 2 && types(vowelless) ? vowelless : nil)
+            ?? "gt"
         var n = 2
-        while taken.contains("\(base)\(n)") || (avoidWords && isRealWord("\(base)\(n)")) { n += 1 }
+        while taken.contains("\(base)\(n)") || isBlocked("\(base)\(n)") || (avoidWords && isRealWord("\(base)\(n)")) {
+            n += 1
+        }
         return "\(base)\(n)"
     }
 
@@ -51,6 +60,23 @@ public enum Abbreviation {
         return lk_vikey_types_as_is(word) == 1
     }
 
+    /// True for chat words and rude words people type themselves (`TriggerBlocklist.txt`): as a trigger they would
+    /// expand every time. Vikey's dictionaries do not hold them.
+    public static func isBlocked(_ s: String) -> Bool { blocklist.contains(s.lowercased()) }
+
+    private static let blocklist: Set<String> = {
+        guard let url = Bundle.module.url(forResource: "TriggerBlocklist", withExtension: "txt"),
+              let text = try? String(contentsOf: url, encoding: .utf8)
+        else {
+            // A debug build stops here, so a broken resource never ships as a silently empty list.
+            assertionFailure("TriggerBlocklist.txt is missing or unreadable")
+            return []
+        }
+        return Set(text.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty && !$0.hasPrefix("#") })
+    }()
+
     private static func isPlainLetters(_ word: String) -> Bool {
         !word.isEmpty && word.unicodeScalars.allSatisfy { ("a"..."z").contains($0) }
     }
@@ -63,23 +89,48 @@ public enum Abbreviation {
         case .address: return (["dchi"], false, ["dchi"])
         case .email: return (["em", "eml"], true, ["eml"])
         case .phrase:
-            let first = initials(candidate.text)
-            let letters = plainLetters(candidate.text)
-            var names: [String] = []
-            for name in [first, consonants(first), String(consonants(letters).prefix(2))]
-            where name.count >= 2 && !names.contains(name) { names.append(name) }
+            let names = phraseNames(candidate.text)
             return (names, true, names)
         }
     }
 
-    private static func consonants(_ s: String) -> String { s.filter { !"aeiouy".contains($0) } }
-
-    /// Two of the phrase's letters, in order, that type as themselves ("Đi đâu": di), or nil.
-    private static func safeLetters(_ text: String, _ types: (String) -> Bool) -> String? {
-        var out = ""
-        for letter in plainLetters(text) where out.count < 2 && types(out + String(letter)) { out.append(letter) }
-        return out.count == 2 ? out : nil
+    /// Names for a phrase, best first, each made of the phrase's own letters, 3 to 5 of them (design 2026-11-24):
+    /// - the first letters of its first five, four, three words ("Cảm ơn anh chị đã quan tâm": coacd, coac, coa),
+    ///   filler words (dạ, ạ, nhé, thì…) left out first, then kept ("Dạ em cảm ơn anh": ecoa, then decoa);
+    /// - the same starting one or two words later, for initials Telex would change ("anh xem giúp em với": axgev
+    ///   types ãgev, so xgev);
+    /// - the first word's first two or three letters, then the next words' initials ("em cảm ơn": emco);
+    /// - the first word's first four or three letters ("Shopee": shop, sho).
+    /// Never letters that start no word, like the old "first two consonants" (which gave "cl").
+    /// Not filtered: `suggest` drops the ones taken, real, blocked or changed by Telex.
+    static func phraseNames(_ text: String) -> [String] {
+        let all = initials(text)
+        let content = initials(text, skipping: fillers)
+        let firstWord = text.split(whereSeparator: \.isWhitespace).lazy
+            .map { plainLetters(String($0)) }.first { !$0.isEmpty } ?? ""
+        let rest = all.dropFirst()
+        var names: [String] = []
+        for length in [5, 4, 3] {
+            names.append(String(content.prefix(length)))
+            names.append(String(all.prefix(length)))
+        }
+        for start in [1, 2] where start < all.count {
+            let tail = all.dropFirst(start)
+            for length in [5, 4, 3] { names.append(String(tail.prefix(length))) }
+        }
+        names.append(String(firstWord.prefix(2)) + rest.prefix(3))
+        names.append(String(firstWord.prefix(3)) + rest.prefix(2))
+        names.append(String(firstWord.prefix(4)))
+        names.append(String(firstWord.prefix(3)))
+        var seen: Set<String> = []
+        return names.filter { (3...5).contains($0.count) && seen.insert($0).inserted }
     }
+
+    /// Words that add little to a phrase's meaning, skipped for the second set of initials.
+    static let fillers: Set<String> = ["dạ", "ạ", "nhé", "nha", "nhá", "à", "ừ", "ơi", "thì", "là", "mà", "nhỉ",
+                                       "vâng", "hả", "ha"]
+
+    private static func consonants(_ s: String) -> String { s.filter { !"aeiouy".contains($0) } }
 
     /// Every letter of `text`, unaccented and lowercase, đ as d.
     private static func plainLetters(_ text: String) -> String {
@@ -87,10 +138,12 @@ public enum Abbreviation {
     }
 
     /// Every word's first letter, unaccented and lowercase, with đ as d: "Cảm ơn anh chị đã quan tâm" is coacdqt.
-    /// Leading punctuation is skipped; a word that starts with a digit or a symbol adds nothing.
-    static func initials(_ text: String) -> String {
+    /// Leading punctuation is skipped; a word that starts with a digit or a symbol adds nothing; so does a word in
+    /// `skipping` (lowercased, punctuation around it ignored).
+    static func initials(_ text: String, skipping: Set<String> = []) -> String {
         var out = ""
         for word in text.split(whereSeparator: { $0.isWhitespace }) {
+            if !skipping.isEmpty, skipping.contains(Exclusions.trimmedWord(String(word)).lowercased()) { continue }
             guard let first = word.first(where: { $0.isLetter || $0.isNumber }), first.isLetter,
                   let letter = plainLetter(first) else { continue }
             out.append(letter)
