@@ -154,6 +154,32 @@ final class AutoFixSwitchTests: XCTestCase {
         XCTAssertEqual(type(router, "treen ", vietnamese: nil), "treen ", "auto switch does not resume")
     }
 
+    /// Turning the switch off after Vikey switched language by itself puts the user's own language back.
+    func testAutoFixOffAfterAutomaticSwitchRestoresUsersLanguage() {
+        let router = makeRouter()
+        router.setEnabled(true)
+        _ = type(router, "push ", vietnamese: nil)
+        XCTAssertFalse(engine.isVietnamese, "precondition: Vikey switched to English by itself")
+        XCTAssertEqual(router.languageBeforeAutoSwitch, true)
+        let posted = expectation(forNotification: .leanKeysLanguageChanged, object: nil) {
+            ($0.userInfo?["vietnamese"] as? Bool) == true
+        }
+        router.autoFix = false
+        wait(for: [posted], timeout: 2)
+        XCTAssertTrue(engine.isVietnamese)
+        XCTAssertNil(router.languageBeforeAutoSwitch)
+        XCTAssertEqual(type(router, "treen ", vietnamese: nil), "trên ", "pure Telex in Vietnamese")
+    }
+
+    /// Control: the user chose English explicitly, so turning the switch off leaves it.
+    func testAutoFixOffKeepsExplicitEnglish() {
+        let router = makeRouter()
+        router.setEnabled(false, explicit: true)
+        router.autoFix = false
+        XCTAssertFalse(engine.isVietnamese)
+        XCTAssertNil(router.languageBeforeAutoSwitch)
+    }
+
     func testTogglingMidWordStartsFreshWord() {
         let router = makeRouter()
         XCTAssertEqual(type(router, "vie"), "vie")

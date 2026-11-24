@@ -150,6 +150,7 @@ class AppState: ObservableObject {
         didSet {
             guard autoFix != EngineRouter.shared.autoFix else { return }
             EngineRouter.shared.autoFix = autoFix
+            RustBridge.clearBuffer()
             RustBridge.setEnglishAutoRestore(englishAutoRestore)
             updateAutoCapitalizeEngine()
         }

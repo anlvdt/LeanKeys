@@ -49,6 +49,8 @@ public final class EngineRouter {
     private var method = 0
     private var vietnamese = true
     private var autoSwitch = true
+    /// `settings.autoFix`, read once at init and kept by the setter: `intercept` runs on every key.
+    private var autoFixCached = true
     private var modernTone = true
 
     /// The language the user had before Vikey's first switch by itself since the user's last explicit choice;
@@ -93,6 +95,7 @@ public final class EngineRouter {
                 },
                 fieldAllowsFixAtReturn: @escaping () -> Bool = { false }) {
         settings = LeanSettings(defaults: defaults)
+        autoFixCached = settings.autoFix
         self.makeVikey = makeVikey
         makeUndoLearning = undoLearning
         self.now = now
@@ -118,10 +121,22 @@ public final class EngineRouter {
     /// pure Telex, and the router skips the stray-key filter, capitals and name learning, and the Return query;
     /// gõ tắt still expands. The sub-switches are not touched. Applied to Vikey whenever it is built (`refresh`).
     public var autoFix: Bool {
-        get { settings.autoFix }
+        get { autoFixCached }
         set {
             settings.autoFix = newValue
+            autoFixCached = newValue
             vikey?.setPureTelex(!newValue)
+            // Pure mode never switches back by itself: if Vikey had switched language on its own, the user's
+            // own language returns now (as their choice; the menu bar icon follows).
+            if !newValue, let before = languageBeforeAutoSwitch {
+                vietnamese = before
+                vikey?.setVietnamese(before)
+                languageBeforeAutoSwitch = nil
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .leanKeysLanguageChanged, object: nil,
+                                                    userInfo: ["vietnamese": before])
+                }
+            }
             vikey?.resetContext()
             mirror.discard()
             forgetWord()
@@ -152,7 +167,7 @@ public final class EngineRouter {
         }
         let wordWasEmpty = mirror.currentWord.isEmpty
         // Master switch off: pure Telex, no stray-key filter, capitals or Return query (gõ tắt still runs).
-        let fixing = autoFix
+        let fixing = autoFixCached
         let result = (fixing ? dropStrayKey(vikey, keyCode: keyCode, caps: caps, shift: shift, option: option) : nil)
             ?? interceptVikey(vikey, keyCode: keyCode, caps: caps, shift: shift, capitalized: capitalized,
                               fixing: fixing)
@@ -484,7 +499,7 @@ public final class EngineRouter {
             vikey?.setVietnamese(vietnamese)
             vikey?.setAutoSwitch(autoSwitch)
             vikey?.setModernTone(modernTone)
-            vikey?.setPureTelex(!autoFix)
+            vikey?.setPureTelex(!autoFixCached)
         }
         fallbackReason = vikey == nil ? "vikey-init-failed" : nil
     }
