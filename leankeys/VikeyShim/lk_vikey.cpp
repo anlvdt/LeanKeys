@@ -429,9 +429,11 @@ static void keepSwitchBackUnlessEnglish(int languageBefore) {
     driver->*member(UndoActiveTag()) = false;
 }
 
-// The last word on the line, before any break characters after it.
+// The last word on the line, before any break characters after it: a Return that just ended the word counts as its
+// break (one newline), an earlier line does not.
 static std::u16string lastWord() {
     size_t end = model.line.size();
+    if (end > 0 && model.line[end - 1] == u'\n') end--;
     while (end > 0 && !isWordLetter(model.line[end - 1]) && model.line[end - 1] != u'\n') end--;
     return wordEndingAt(model.line, end);
 }

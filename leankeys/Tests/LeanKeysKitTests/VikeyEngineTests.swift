@@ -336,6 +336,17 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertTrue(engine.isVietnamese)
     }
 
+    /// A word ended by Return (a one-word message) brings Vietnamese back too, even where Return may not fix the
+    /// word (an address bar keeps D62): the newline Return typed is no word of its own.
+    func testDoubledToneKeyComesBackAtReturn() {
+        let field = Field(engine)
+        field.type("lamff")
+        XCTAssertFalse(engine.isVietnamese, "precondition: D19 switched to English mid-word")
+        field.press(kReturn, shift: false, own: "\n")
+        XCTAssertEqual(String(field.text), "lamf\n")
+        XCTAssertTrue(engine.isVietnamese)
+    }
+
     /// The language change reaches the app (menu bar icon) at the key that brings Vietnamese back.
     func testDoubledToneKeyComebackReportsLanguageChange() {
         let field = Field(engine)
