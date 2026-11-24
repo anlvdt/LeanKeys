@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import Foundation
 
@@ -19,10 +20,17 @@ public enum FocusedField {
 
     /// `allowsFixAtReturn(role:selectionLength:)` for the field focused now; false when Accessibility does not answer.
     public static func allowsFixAtReturn() -> Bool {
-        let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, axTimeout)
+        // The frontmost app's element, not the system-wide one: a timeout set on the system-wide element becomes the
+        // default for every Accessibility call in the process (as LearnContextReader notes), cutting Gõ Nhanh's own
+        // 0.1 s bound (axSystemWideBounded) to 25 ms. NSWorkspace's frontmost app is cached: no IPC.
+        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else {
+            lastNote = "no-app"
+            return false
+        }
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, axTimeout)
         var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+        guard AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
               let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { lastNote = "no-focus"; return false }
         let element = focused as! AXUIElement
         AXUIElementSetMessagingTimeout(element, axTimeout)
