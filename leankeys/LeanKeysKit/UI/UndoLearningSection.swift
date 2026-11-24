@@ -14,6 +14,8 @@ public struct UndoLearningSection: View {
     static let autoCapitalizeSubtitle = "Tên người, địa danh: Hà Nội, Nguyễn Văn An"
     static let strayEnterTitle = "Bỏ phím \\ ] ' lỡ bấm cùng Enter"
     static let strayEnterSubtitle = "Không áp dụng trong Terminal và trình soạn code"
+    /// Shown under each of the four switches while the master switch "Tự sửa khi gõ" is off.
+    static let autoFixOffNote = "Đang tắt bởi Tự sửa khi gõ"
     static let listTitle = "Từ giữ nguyên"
     static let emptyText = "Chưa có. Bấm ⌫⌫ ngay sau khi một từ bị tự đổi để thêm."
     static let namesTitle = "Tên đã học"
@@ -32,9 +34,12 @@ public struct UndoLearningSection: View {
 
     @ObservedObject private var model: UndoLearning
     @State private var confirmRemoveAll = false
+    /// True while the master switch is off: the four switches are greyed out; their stored values stay.
+    private let autoFixOff: Bool
 
-    public init(model: UndoLearning) {
+    public init(model: UndoLearning, autoFixOff: Bool = false) {
         self.model = model
+        self.autoFixOff = autoFixOff
     }
 
     public var body: some View {
@@ -91,6 +96,12 @@ public struct UndoLearningSection: View {
                         .lineLimit(1)
                         .help(subtitle)
                 }
+                if autoFixOff {
+                    Text(Self.autoFixOffNote)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        .lineLimit(1)
+                }
             }
             Spacer()
             Toggle("", isOn: isOn)
@@ -101,6 +112,7 @@ public struct UndoLearningSection: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .disabled(autoFixOff)
     }
 
     /// How a rule reads in the list: a capitalisation undo ("cap:hà nội") as "hà nội (giữ chữ thường)", others as typed.

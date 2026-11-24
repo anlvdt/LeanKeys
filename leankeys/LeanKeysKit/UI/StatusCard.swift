@@ -7,15 +7,19 @@ public struct StatusSnapshot: Equatable {
     /// True only while Vikey is the active engine: Gõ Nhanh has no automatic switching.
     public var autoSwitchApplies: Bool
     public var autoSwitchOn: Bool
+    /// The master switch "Tự sửa khi gõ"; off beats both Bật and Tạm dừng.
+    public var autoFix: Bool
     /// True while a Secure Input holder stops Vietnamese typing.
     public var blocked: Bool
     /// The app holding Secure Input; nil when it is not known.
     public var blockingApp: String?
 
-    public init(vietnamese: Bool, autoSwitchApplies: Bool, autoSwitchOn: Bool, blocked: Bool, blockingApp: String?) {
+    public init(vietnamese: Bool, autoSwitchApplies: Bool, autoSwitchOn: Bool, blocked: Bool, blockingApp: String?,
+                autoFix: Bool = true) {
         self.vietnamese = vietnamese
         self.autoSwitchApplies = autoSwitchApplies
         self.autoSwitchOn = autoSwitchOn
+        self.autoFix = autoFix
         self.blocked = blocked
         self.blockingApp = blockingApp
     }
@@ -27,12 +31,14 @@ public extension StatusSnapshot {
     /// nil when automatic switching does not apply.
     var autoSwitchLine: String? {
         guard autoSwitchApplies else { return nil }
+        guard autoFix else { return "Tự chuyển Việt/Anh: Tắt" }
         return autoSwitchOn ? "Tự chuyển Việt/Anh: Bật" : "Tự chuyển Việt/Anh: Tạm dừng"
     }
 
     /// Tooltip of the auto-switch line: why it is paused and how to resume (`EngineRouter.setEnabled(explicit:)`).
     var autoSwitchHelp: String {
-        autoSwitchOn
+        if !autoFix { return "Công tắc chính Tự sửa khi gõ đang tắt nên LeanKeys không tự chuyển Việt/Anh. Bật lại ở Cài đặt, trang Chung." }
+        return autoSwitchOn
             ? "LeanKeys tự chuyển Việt/Anh theo từ bạn gõ."
             : "Bạn đã tự chọn English nên LeanKeys tạm không tự chuyển. Chọn Tiếng Việt để bật lại."
     }

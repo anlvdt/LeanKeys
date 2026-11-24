@@ -13,6 +13,22 @@ final class StatusCardTests: XCTestCase {
         XCTAssertNil(StatusSnapshot(vietnamese: true, autoSwitchApplies: false, autoSwitchOn: true, blocked: false, blockingApp: nil).autoSwitchLine)
     }
 
+    func testAutoFixOffLine() {
+        // The master switch "Tự sửa khi gõ" wins over both Bật and Tạm dừng.
+        let off = StatusSnapshot(vietnamese: true, autoSwitchApplies: true, autoSwitchOn: true, blocked: false, blockingApp: nil, autoFix: false)
+        XCTAssertEqual(off.autoSwitchLine, "Tự chuyển Việt/Anh: Tắt")
+        XCTAssertTrue(off.autoSwitchHelp.contains("Tự sửa khi gõ"))
+        let offPaused = StatusSnapshot(vietnamese: false, autoSwitchApplies: true, autoSwitchOn: false, blocked: false, blockingApp: nil, autoFix: false)
+        XCTAssertEqual(offPaused.autoSwitchLine, "Tự chuyển Việt/Anh: Tắt")
+        XCTAssertNil(StatusSnapshot(vietnamese: true, autoSwitchApplies: false, autoSwitchOn: false, blocked: false, blockingApp: nil, autoFix: false).autoSwitchLine)
+        // On by default: existing callers are unchanged.
+        XCTAssertEqual(StatusSnapshot(vietnamese: true, autoSwitchApplies: true, autoSwitchOn: true, blocked: false, blockingApp: nil).autoSwitchLine, "Tự chuyển Việt/Anh: Bật")
+    }
+
+    func testSubSwitchNoteWhenAutoFixOff() {
+        XCTAssertEqual(UndoLearningSection.autoFixOffNote, "Đang tắt bởi Tự sửa khi gõ")
+    }
+
     func testWarningLine() {
         XCTAssertEqual(StatusSnapshot(vietnamese: true, autoSwitchApplies: false, autoSwitchOn: false, blocked: true, blockingApp: "1Password").warningLine, "⚠︎ 1Password đang chặn gõ tiếng Việt")
         XCTAssertEqual(StatusSnapshot(vietnamese: true, autoSwitchApplies: false, autoSwitchOn: false, blocked: true, blockingApp: nil).warningLine, "⚠︎ Một ứng dụng đang chặn gõ tiếng Việt")

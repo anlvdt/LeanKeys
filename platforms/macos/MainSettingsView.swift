@@ -143,6 +143,19 @@ class AppState: ObservableObject {
         }
     }
 
+    // LEANKEYS-HOOK-BEGIN: auto-fix
+    /// The master switch "Tự sửa khi gõ". `EngineRouter.shared.autoFix` is the only store; the two Gõ Nhanh values
+    /// below are sent as `value && autoFix`, so they are pushed again whenever it changes.
+    @Published var autoFix: Bool = EngineRouter.shared.autoFix {
+        didSet {
+            guard autoFix != EngineRouter.shared.autoFix else { return }
+            EngineRouter.shared.autoFix = autoFix
+            RustBridge.setEnglishAutoRestore(englishAutoRestore)
+            updateAutoCapitalizeEngine()
+        }
+    }
+
+    // LEANKEYS-HOOK-END
     @Published var englishAutoRestore: Bool = false {
         didSet {
             UserDefaults.standard.set(englishAutoRestore, forKey: SettingsKey.englishAutoRestore)
@@ -1052,6 +1065,8 @@ struct SettingsPageView: View {
             if part == .general { // LEANKEYS-HOOK: settings-engine
             VStack(spacing: 0) {
                 SettingsToggleRow("Gõ tiếng Việt", subtitle: "Tắt là gõ English, như chọn English trên thanh menu", weight: .semibold, isOn: $appState.isEnabled) // LEANKEYS-HOOK: settings-engine (copy audit H4)
+                Divider().padding(.leading, 12) // LEANKEYS-HOOK: auto-fix
+                SettingsToggleRow("Tự sửa khi gõ", subtitle: "Tắt: phím ra đúng Telex, LeanKeys không tự đổi chữ hay Việt/Anh", isOn: $appState.autoFix) // LEANKEYS-HOOK: auto-fix
                 Divider().padding(.leading, 12)
                 inputMethodRow
                 if appState.currentMethod == .telex {
@@ -1146,7 +1161,8 @@ struct SettingsPageView: View {
     }
 
     private var englishAutoRestoreRow: some View {
-        SettingsToggleRow("Tự khôi phục tiếng Anh", indented: true, isOn: $appState.englishAutoRestore)
+        SettingsToggleRow("Tự khôi phục tiếng Anh", subtitle: appState.autoFix ? nil : "Đang tắt bởi Tự sửa khi gõ", indented: true, isOn: $appState.englishAutoRestore) // LEANKEYS-HOOK: auto-fix
+            .disabled(!appState.autoFix) // LEANKEYS-HOOK: auto-fix
     }
 
     private var shortcutsRow: some View {
@@ -1746,7 +1762,9 @@ struct AutoCapitalizeRow: View {
         SettingsRow {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Tự viết hoa đầu câu").font(.system(size: 13))
-                if appState.autoCapitalize {
+                if !appState.autoFix { // LEANKEYS-HOOK: auto-fix
+                    Text("Đang tắt bởi Tự sửa khi gõ").font(.system(size: 11)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: auto-fix
+                } else if appState.autoCapitalize { // LEANKEYS-HOOK: auto-fix
                     Button { showSheet = true } label: { // LEANKEYS-HOOK: copy (a button: keyboard focus, Space, VoiceOver)
                     Text(subtitleText)
                         .font(.system(size: 11))
@@ -1758,6 +1776,7 @@ struct AutoCapitalizeRow: View {
             }
             Spacer()
             Toggle("Tự viết hoa đầu câu", isOn: $appState.autoCapitalize).toggleStyle(.switch).controlSize(.mini).labelsHidden() // LEANKEYS-HOOK: settings-engine (title: VoiceOver name)
+                .disabled(!appState.autoFix) // LEANKEYS-HOOK: auto-fix
         }
         .sheet(isPresented: $showSheet) {
             AutoCapitalizeExcludedAppsSheet(appState: appState)
@@ -1937,7 +1956,8 @@ extension AppState {
             autoSwitchApplies: EngineRouter.shared.active == .vikey,
             autoSwitchOn: EngineRouter.shared.autoSwitchOn,
             blocked: shouldShowSecureInputWarning,
-            blockingApp: secureInputHolderName.flatMap { $0.isEmpty ? nil : $0 }
+            blockingApp: secureInputHolderName.flatMap { $0.isEmpty ? nil : $0 },
+            autoFix: autoFix
         )
     }
 }
