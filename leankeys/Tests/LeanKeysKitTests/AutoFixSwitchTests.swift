@@ -5,7 +5,7 @@ import VikeyShim
 private let keys: [Character: UInt16] = [
     "a": 0, "b": 11, "c": 8, "d": 2, "e": 14, "f": 3, "g": 5, "h": 4, "i": 34, "j": 38, "k": 40, "l": 37, "m": 46,
     "n": 45, "o": 31, "p": 35, "q": 12, "r": 15, "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7, "y": 16, "z": 6,
-    " ": 49, ".": 47, "\n": 36, "\\": 42,
+    " ": 49, ".": 47, "\n": 36, "\\": 42, "⌫": 51,
 ]
 
 /// The master switch for automatic fixes (spec 2026-11-24), through a router over the real engine.
@@ -59,9 +59,10 @@ final class AutoFixSwitchTests: XCTestCase {
     }
 
     /// Types `text` on a fresh line, applying results as the macOS key handler does.
-    private func type(_ router: EngineRouter, _ text: String, vietnamese: Bool = true) -> String {
-        router.setEnabled(vietnamese)
-        router.clear()
+    /// `vietnamese` nil leaves the router's language alone; `clear` false continues the word being typed.
+    private func type(_ router: EngineRouter, _ text: String, vietnamese: Bool? = true, clear: Bool = true) -> String {
+        if let vietnamese { router.setEnabled(vietnamese) }
+        if clear { router.clear() }
         var out: [Character] = []
         for ch in text {
             guard let code = keys[Character(ch.lowercased())] ?? keys[ch] else { XCTFail("no key for \(ch)"); continue }
@@ -72,7 +73,7 @@ final class AutoFixSwitchTests: XCTestCase {
                 out += inserted
                 if consumed { continue }
             }
-            out.append(ch)
+            if ch == "⌫" { if !out.isEmpty { out.removeLast() } } else { out.append(ch) }
         }
         return String(out)
     }
@@ -133,5 +134,36 @@ final class AutoFixSwitchTests: XCTestCase {
         XCTAssertFalse(learning.doubleKeyFix)
         XCTAssertTrue(router.autoFix)
         XCTAssertTrue(router.autoSwitchOn)
+    }
+
+    /// The doubled-key ⌫ repair lives in VikeyEngine, not UndoLearning: it comes back with the master switch.
+    func testAutoFixBackOnRestoresDoubleKeyRepair() {
+        let router = makeRouter()
+        router.autoFix = false
+        router.autoFix = true
+        XCTAssertEqual(type(router, "hocjj⌫"), "học")
+    }
+
+    /// An explicit English choice made while the switch is off is not undone by turning it back on.
+    func testExplicitEnglishWhileOffStaysAfterBackOn() {
+        let router = makeRouter()
+        router.autoFix = false
+        router.setEnabled(false, explicit: true)
+        router.autoFix = true
+        XCTAssertFalse(router.autoSwitchOn)
+        XCTAssertEqual(type(router, "treen ", vietnamese: nil), "treen ", "auto switch does not resume")
+    }
+
+    func testTogglingMidWordStartsFreshWord() {
+        let router = makeRouter()
+        XCTAssertEqual(type(router, "vie"), "vie")
+        XCTAssertEqual(router.mirror.currentWord, "vie")
+        router.autoFix = false
+        XCTAssertEqual(router.mirror.currentWord, "", "the word is forgotten, nothing was edited")
+        XCTAssertEqual(type(router, "t ", vietnamese: nil, clear: false), "t ", "a fresh word")
+        XCTAssertEqual(type(router, "vie", vietnamese: nil), "vie")
+        router.autoFix = true
+        XCTAssertEqual(router.mirror.currentWord, "")
+        XCTAssertEqual(type(router, "t ", vietnamese: nil, clear: false), "t ")
     }
 }
