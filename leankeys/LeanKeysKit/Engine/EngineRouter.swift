@@ -114,6 +114,20 @@ public final class EngineRouter {
         }
     }
 
+    /// The master switch for automatic fixes, stored under "LeanKeys.autoFix" (on when never set). Off: Vikey types
+    /// pure Telex, and the router skips the stray-key filter, capitals and name learning, and the Return query;
+    /// gõ tắt still expands. The sub-switches are not touched. Applied to Vikey whenever it is built (`refresh`).
+    public var autoFix: Bool {
+        get { settings.autoFix }
+        set {
+            settings.autoFix = newValue
+            vikey?.setPureTelex(!newValue)
+            vikey?.resetContext()
+            mirror.discard()
+            forgetWord()
+        }
+    }
+
     /// `selected`, unless VNI or a failed Vikey start forces Gõ Nhanh.
     public var active: EngineKind {
         selected == .vikey && fallbackReason == nil ? .vikey : .gonhanh
@@ -137,8 +151,11 @@ public final class EngineRouter {
             return .handled(nil)
         }
         let wordWasEmpty = mirror.currentWord.isEmpty
-        let result = dropStrayKey(vikey, keyCode: keyCode, caps: caps, shift: shift, option: option)
-            ?? interceptVikey(vikey, keyCode: keyCode, caps: caps, shift: shift, capitalized: capitalized)
+        // Master switch off: pure Telex, no stray-key filter, capitals or Return query (gõ tắt still runs).
+        let fixing = autoFix
+        let result = (fixing ? dropStrayKey(vikey, keyCode: keyCode, caps: caps, shift: shift, option: option) : nil)
+            ?? interceptVikey(vikey, keyCode: keyCode, caps: caps, shift: shift, capitalized: capitalized,
+                              fixing: fixing)
         // The words a ⌫ undo gave back stay as typed only until they change or the break after them is typed.
         if let restored = restoredByUndo, mirror.phraseText != restored { restoredByUndo = nil }
         // Whether the word now being typed began with the user's own capital (spec 17.1.3).
@@ -152,13 +169,13 @@ public final class EngineRouter {
     }
 
     private func interceptVikey(_ vikey: TypingEngine, keyCode: UInt16, caps: Bool, shift: Bool,
-                                capitalized: AutoCapitalizer.Made?) -> (Int, [Character], Bool)? {
+                                capitalized: AutoCapitalizer.Made?, fixing: Bool) -> (Int, [Character], Bool)? {
         if keyCode == Self.backspaceKey, let capitalized {
             return undoCapitalization(capitalized, vikey: vikey, keyCode: keyCode, caps: caps, shift: shift)
         }
         // Read before anything changes the mirror: the break key commits the word, and may end the phrase.
         let isSpace = keyCode == Self.spaceKey
-        let committed = isSpace || Self.triggersShortcut(keyCode, shift: shift) ? committedWord() : nil
+        let committed = fixing && (isSpace || Self.triggersShortcut(keyCode, shift: shift)) ? committedWord() : nil
         if let result = expandShortcut(keyCode: keyCode, shift: shift) {
             vikey.resetContext()
             observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
@@ -167,7 +184,7 @@ public final class EngineRouter {
         // Vikey D62 keeps Return from fixing a word, for an address bar's autocompletion; elsewhere a message's last
         // word is fixed as at Space. The field is asked only here: one Accessibility query per Return after a word.
         // Not in terminals and code editors, where Return accepts a completion from a popup list (as ruling R12).
-        if Self.returnKeys.contains(keyCode), !mirror.currentWord.isEmpty {
+        if fixing, Self.returnKeys.contains(keyCode), !mirror.currentWord.isEmpty {
             if CodeApps.contains(frontmostBundleID()) {
                 returnFixNote = "returnFix=0 code-app"
             } else if fieldAllowsFixAtReturn() {
@@ -467,6 +484,7 @@ public final class EngineRouter {
             vikey?.setVietnamese(vietnamese)
             vikey?.setAutoSwitch(autoSwitch)
             vikey?.setModernTone(modernTone)
+            vikey?.setPureTelex(!autoFix)
         }
         fallbackReason = vikey == nil ? "vikey-init-failed" : nil
     }

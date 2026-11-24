@@ -27,8 +27,12 @@ public protocol TypingEngine: AnyObject {
     func setModernTone(_ on: Bool)
     /// The next key, when it is Return/Enter, may finish the word being typed as Space would. Off by default.
     func allowFixAtNextReturn()
+    /// Pure Telex: no automatic fix at all (no auto switch, no restore of a wrong spelling, no ⌫ repair of a doubled
+    /// key). Off by default; engines without such fixes ignore it.
+    func setPureTelex(_ on: Bool)
 }
 
 public extension TypingEngine {
     func allowFixAtNextReturn() {}
+    func setPureTelex(_ on: Bool) {}
 }

@@ -8,6 +8,7 @@ public enum EngineKind: String {
 /// LeanKeys' own preferences, kept apart from Gõ Nhanh's under the "LeanKeys." prefix.
 public struct LeanSettings {
     public static let engineKey = "LeanKeys.engine"
+    public static let autoFixKey = "LeanKeys.autoFix"
 
     private let defaults: UserDefaults
 
@@ -19,5 +20,13 @@ public struct LeanSettings {
     public var engine: EngineKind {
         get { defaults.string(forKey: Self.engineKey).flatMap(EngineKind.init(rawValue:)) ?? .vikey }
         nonmutating set { defaults.set(newValue.rawValue, forKey: Self.engineKey) }
+    }
+
+    /// The master switch for every automatic fix (auto switch, restore of a wrong spelling, ⌫ repair of a doubled
+    /// key, capitals, stray key at Enter, finishing a word at Return). Nothing stored reads as on. The sub-switches
+    /// keep their own values whatever this is.
+    public var autoFix: Bool {
+        get { defaults.object(forKey: Self.autoFixKey) as? Bool ?? true }
+        nonmutating set { defaults.set(newValue, forKey: Self.autoFixKey) }
     }
 }
