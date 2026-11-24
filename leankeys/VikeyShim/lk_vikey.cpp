@@ -60,6 +60,7 @@ struct ScreenModel {
 static ScreenModel model;
 static bool doubleKeyFix = true;
 static bool capsLockForNextKey = false;   // lk_vikey_set_caps_lock, for the next lk_vikey_press
+static bool fixAtNextReturn = false;      // lk_vikey_set_fix_at_return, for the next lk_vikey_press
 
 static void resetModel() { model = ScreenModel(); }
 
@@ -415,10 +416,20 @@ int lk_vikey_init(void) {
     return driver ? 1 : 0;
 }
 
-void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
-    if (!out) return;
-    out->deleteCount = 0; out->length = 0; out->languageChanged = 0;
-    if (!driver) return;
+}  // extern "C"
+
+// Vikey's ⌫⌫ undo (D61) of a switch from English back to Vietnamese is kept only when the keys are an English word
+// too ("cos " -> "có ": ⌫⌫ gives "cos" back). Keys with no English reading ("vieejt", "dduowcj") meant the Vietnamese
+// word: a user deleting its last letter ("việt " ⌫⌫ to type "việc") must not be sent back to English with the keys,
+// so the undo is disarmed and Backspace deletes in Vietnamese. Run right after the key, before the fix is reported.
+static void keepSwitchBackUnlessEnglish(int languageBefore) {
+    if (languageBefore != 0 || vLanguage != 1 || !(driver->*member(UndoActiveTag()))) return;
+    if (englishScore(driver->*member(UndoTextTag())) != LK_VIKEY_NOT_A_WORD) return;
+    driver->*member(UndoActiveTag()) = false;
+}
+
+// One key the user pressed: Vikey's edit with the shim's repairs, vetoes and undo bookkeeping.
+static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
     const ScreenModel before = model;
     const bool backspace = macKeyCode == KEY_DELETE;
     VKEdit e;
@@ -430,7 +441,9 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
         if (!backspace) hasLastFix = false;
         const int undosBefore = driver->undos;
         const bool letterKey = isLetterKey(macKeyCode);
+        const int languageBefore = vLanguage;
         e = pressTracked(macKeyCode, shift != 0, now);
+        if (!backspace) keepSwitchBackUnlessEnglish(languageBefore);
         if (letterKey) {
             const bool wordStarted = wordOf(before.line).empty();
             model.wordCapsLock = (wordStarted || before.wordCapsLock) && capsLockForNextKey;
@@ -453,6 +466,27 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
             } else { lastFix = fix; hasLastFix = true; }
         }
     }
+    return e;
+}
+
+extern "C" {
+
+void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
+    if (!out) return;
+    out->deleteCount = 0; out->length = 0; out->languageChanged = 0;
+    const bool fixAtReturn = fixAtNextReturn;
+    fixAtNextReturn = false;
+    if (!driver) return;
+    VKEdit e;
+    if (fixAtReturn && (macKeyCode == KEY_RETURN || macKeyCode == KEY_ENTER) && !currentWord().empty()) {
+        // Return finishes the word as Space does (Vikey checks words at Space, never at Return: D62), the Space
+        // goes again, then Return. The word gets Vikey's fix and the shim's vetoes exactly as at a real Space.
+        e = pressUser(KEY_SPACE, 0, now);
+        e = composeEdits(e, pressTracked(KEY_DELETE, false, now));
+        e = composeEdits(e, pressUser(macKeyCode, shift, now));
+    } else {
+        e = pressUser(macKeyCode, shift, now);
+    }
     out->deleteCount = e.deleteCount;
     const int cap = (int)(sizeof(out->text) / sizeof(out->text[0]));
     const int n = e.text.size() < (size_t)cap ? (int)e.text.size() : cap;
@@ -463,6 +497,10 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
 
 void lk_vikey_set_caps_lock(int on) {
     capsLockForNextKey = on != 0;
+}
+
+void lk_vikey_set_fix_at_return(int on) {
+    fixAtNextReturn = on != 0;
 }
 
 void lk_vikey_set_caps_words(const uint16_t* units, int count) {

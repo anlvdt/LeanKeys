@@ -19,6 +19,11 @@ void lk_vikey_reset_context(void);              // also clears the shim's copy o
 // common syllable with no English reading ("BUIF " -> "BÙI ", "USA " stays), as a veto (Backspace twice gives the
 // keys back): Vikey alone keeps the marks of all capitals only inside a run.
 void lk_vikey_set_caps_lock(int on);
+// The next lk_vikey_press, when it is Return/Enter, may finish the word being typed as Space would (Vikey's auto
+// switch either way: "dduowcj" -> "được" and back to Vietnamese, "púh" -> "push"), then Return is typed. Off, the
+// default, is Vikey D62: Return sends what is on screen (a fix there would remove an address bar's autocompletion).
+// Consumed by the next press, like lk_vikey_set_caps_lock.
+void lk_vikey_set_fix_at_return(int on);
 // Vietnamese words (one per line, any case) that a Caps Lock word keeps even though Vikey's dictionary scores them
 // low: family, middle and given names ("bùi", "nguyễn"). Replaces the previous list.
 void lk_vikey_set_caps_words(const uint16_t* units, int count);

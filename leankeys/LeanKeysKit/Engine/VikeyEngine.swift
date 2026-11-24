@@ -18,7 +18,15 @@ public final class VikeyEngine: TypingEngine {
         words.withUnsafeBufferPointer { lk_vikey_set_caps_words($0.baseAddress, Int32($0.count)) }
     }()
 
+    /// The next Return/Enter may finish the word being typed as Space would (see `lk_vikey_set_fix_at_return`).
+    /// Off by default (Vikey D62); `process` clears it, so it allows one key only.
+    public var fixWordAtReturn = false
+
+    public func allowFixAtNextReturn() { fixWordAtReturn = true }
+
     public func process(keyCode: UInt16, caps: Bool, shift: Bool) -> EngineEdit? {
+        lk_vikey_set_fix_at_return(fixWordAtReturn && Self.returnKeys.contains(keyCode) ? 1 : 0)
+        fixWordAtReturn = false
         let letter = Self.letterKeys.contains(keyCode)
         // The macOS key path passes caps = Shift || Caps Lock, and macOS types capitals when either is held
         // (Shift does not invert Caps Lock). So a letter is upper case exactly when `caps` is set; other keys

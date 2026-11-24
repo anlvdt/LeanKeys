@@ -1612,7 +1612,7 @@ private func keyboardCallback(
         Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log
 
         if let (bs, chars, keyConsumed) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
-            Log.key(keyCode, "enter: bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed)") // LEANKEYS-HOOK: debug-log
+            Log.key(keyCode, "enter: bs=\(bs) chars=\(DebugLog.redact(chars)) consumed=\(keyConsumed) \(EngineRouter.shared.returnFixLog ?? "")") // LEANKEYS-HOOK: debug-log
             sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
 
             if bs > 0 || !chars.isEmpty {
@@ -1623,6 +1623,7 @@ private func keyboardCallback(
                 return nil
             }
         }
+        if let note = EngineRouter.shared.returnFixLog { Log.info("enter: \(note)") } // LEANKEYS-HOOK: debug-log
 
         return Unmanaged.passUnretained(event)
     }

@@ -151,7 +151,9 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertGreaterThan(fix.0, 0, "Vikey fixed the word (precondition)")
         XCTAssertEqual(String(fix.1), "nguyễn ")
         XCTAssertEqual(line(router, vietnamese: false).type("nguyeenx "), "nguyễn ")
-        XCTAssertEqual(line(router, vietnamese: false).type("nguyeenx ⌫⌫"), "nguyeenx", "Vikey's ⌫⌫ undo")
+        // "nguyeenx" is no English word, so the switch back keeps no ⌫⌫ undo (the shim's keepSwitchBackUnlessEnglish):
+        // the second ⌫ deletes a letter of the uncapitalised word.
+        XCTAssertEqual(line(router, vietnamese: false).type("nguyeenx ⌫⌫"), "nguyễ", "plain Backspace, no capital")
     }
 
     func testBackspaceUndoes() {
