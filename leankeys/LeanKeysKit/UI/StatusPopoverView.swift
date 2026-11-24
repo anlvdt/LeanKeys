@@ -31,6 +31,8 @@ public struct StatusPopoverActions {
     public var setAutoFix: (Bool) -> Void
     /// The version a downloaded update installs, when the updater knows it.
     public var newVersion: () -> String?
+    /// The icon in the header (the app's own icon by default; snapshots pass a fixed one).
+    public var appIcon: () -> NSImage
 
     public init(
         snapshot: @escaping () -> StatusSnapshot,
@@ -52,7 +54,8 @@ public struct StatusPopoverActions {
         toggleShortcut: @escaping () -> String? = { nil },
         autoFix: @escaping () -> Bool = { true },
         setAutoFix: @escaping (Bool) -> Void = { _ in },
-        newVersion: @escaping () -> String? = { nil }
+        newVersion: @escaping () -> String? = { nil },
+        appIcon: @escaping () -> NSImage = { NSImage(named: NSImage.applicationIconName) ?? NSImage() }
     ) {
         self.snapshot = snapshot
         self.method = method
@@ -72,6 +75,7 @@ public struct StatusPopoverActions {
         self.autoFix = autoFix
         self.setAutoFix = setAutoFix
         self.newVersion = newVersion
+        self.appIcon = appIcon
     }
 }
 
@@ -88,6 +92,7 @@ public final class StatusPopoverModel: ObservableObject {
     @Published public private(set) var newVersion: String?
 
     private let actions: StatusPopoverActions
+    var appIcon: NSImage { actions.appIcon() }
     /// Set by the controller so the popover closes before Settings opens.
     var closePopover: () -> Void = {}
 
@@ -209,74 +214,154 @@ public struct StatusPopoverView: View {
         self.model = model
     }
 
+    static let settingsHelp = "Cài đặt"
+    static let autoFixTitle = "Tự sửa khi gõ"
+    static let width: CGFloat = 300
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Picker(StatusPopoverView.languagePickerTitle, selection: Binding(
-                get: { model.snapshot.vietnamese },
-                set: { model.choose(vietnamese: $0) }
-            )) {
-                Text("Tiếng Việt").tag(true)
-                Text("English").tag(false)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding(.bottom, 12)
 
-            if let autoSwitchLine = model.snapshot.autoSwitchLine {
-                Text(autoSwitchLine)
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(NSColor.secondaryLabelColor))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .help(model.snapshot.autoSwitchHelp)
-            }
-            if let warningLine = model.snapshot.warningLine {
-                WarningLine(warningLine, help: StatusSnapshot.warningHelp)
-            }
+            LanguageSwitch(vietnamese: model.snapshot.vietnamese) { model.choose(vietnamese: $0) }
 
-            HStack {
-                Text(StatusPopoverView.methodPickerTitle)
-                Spacer()
-                Picker(StatusPopoverView.methodPickerTitle, selection: Binding(
-                    get: { model.method },
-                    set: { model.choose(method: $0) }
-                )) {
-                    Text("Telex").tag(0)
-                    Text("VNI").tag(1)
+            Group {
+                if let warningLine = model.snapshot.warningLine {
+                    WarningLine(warningLine, help: StatusSnapshot.warningHelp)
+                } else if let subLine = model.subLine {
+                    Text(subLine)
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(model.snapshot.autoSwitchHelp)
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
             }
+            .padding(.top, 6)
 
-            UpdateRowView(phase: model.updatePhase, tap: { model.tapUpdateRow() })
+            Divider().padding(.vertical, 10)
 
-            if let suggestionLine = model.suggestionLine {
-                Button { model.openSuggestions() } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "text.badge.plus")
-                            .foregroundColor(.accentColor)
-                        Text(suggestionLine)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(NSColor.secondaryLabelColor))
+            VStack(alignment: .leading, spacing: 10) {
+                row(StatusPopoverView.methodPickerTitle) {
+                    Picker(StatusPopoverView.methodPickerTitle, selection: Binding(
+                        get: { model.method },
+                        set: { model.choose(method: $0) }
+                    )) {
+                        Text("Telex").tag(0)
+                        Text("VNI").tag(1)
                     }
-                    .contentShape(Rectangle())
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(suggestionLine))
+                row(StatusPopoverView.autoFixTitle) {
+                    Toggle(StatusPopoverView.autoFixTitle, isOn: Binding(
+                        get: { model.autoFix },
+                        set: { model.choose(autoFix: $0) }
+                    ))
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .labelsHidden()
+                }
+
+                UpdateRowView(phase: model.updatePhase, newVersion: model.newVersion, tap: { model.tapUpdateRow() })
+
+                if let suggestionLine = model.suggestionLine {
+                    Button { model.openSuggestions() } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "text.badge.plus")
+                                .foregroundColor(.accentColor)
+                            Text(suggestionLine).font(.system(size: 13))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(suggestionLine))
+                }
             }
 
-            Divider()
+            Divider().padding(.vertical, 10)
 
             HStack {
                 Button("Cài đặt…") { model.openSettings() }
                 Spacer()
-                Button(StatusPopoverView.quitLabel) { model.quit() }
+                Button("Thoát") { model.quit() }
+                    .accessibilityLabel(Text(StatusPopoverView.quitLabel))
             }
+            .buttonStyle(.borderless)
+            .font(.system(size: 12))
+            .foregroundColor(Color(NSColor.secondaryLabelColor))
         }
         .padding(14)
-        .frame(width: 280, alignment: .leading)
+        .frame(width: StatusPopoverView.width, alignment: .leading)
+    }
+
+    /// App icon, name and version; the gear opens Settings.
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(nsImage: model.appIcon)
+                .resizable()
+                .frame(width: 18, height: 18)
+                .accessibilityHidden(true)
+            Text("LeanKeys").font(.system(size: 13, weight: .semibold))
+            if !model.version.isEmpty {
+                Text(model.version)
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(NSColor.secondaryLabelColor))
+            }
+            Spacer()
+            Button { model.openSettings() } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(NSColor.secondaryLabelColor))
+            }
+            .buttonStyle(.borderless)
+            .help(StatusPopoverView.settingsHelp)
+            .accessibilityLabel(Text(StatusPopoverView.settingsHelp))
+        }
+    }
+
+    /// A Control-Center-style row: the title on the left, its control on the right.
+    private func row<Control: View>(_ title: String, @ViewBuilder control: () -> Control) -> some View {
+        HStack {
+            Text(title).font(.system(size: 13))
+            Spacer()
+            control()
+        }
+    }
+}
+
+/// The Việt/Anh choice: two equal halves across the full width, the chosen one filled with the accent colour.
+struct LanguageSwitch: View {
+    let vietnamese: Bool
+    let choose: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            segment("Tiếng Việt", selected: vietnamese) { choose(true) }
+            segment("English", selected: !vietnamese) { choose(false) }
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.quaternaryLabelColor).opacity(0.5)))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(StatusPopoverView.languagePickerTitle))
+    }
+
+    private func segment(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                .foregroundColor(selected ? .white : Color(NSColor.labelColor))
+                .frame(maxWidth: .infinity, minHeight: 28)
+                .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Color.accentColor : Color.clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -289,6 +374,10 @@ public final class StatusPopoverController: NSObject, NSPopoverDelegate {
     private let model: StatusPopoverModel
     private let popover = NSPopover()
     private var lastClose: Date?
+    /// While the popover is shown: any click in another app closes it (a menu bar app is often not active, so the
+    /// transient behaviour alone can miss it), and Esc closes it. Removed when the popover closes.
+    private var outsideClickMonitor: Any?
+    private var escMonitor: Any?
 
     public init(model: StatusPopoverModel) {
         self.model = model
@@ -320,9 +409,32 @@ public final class StatusPopoverController: NSObject, NSPopoverDelegate {
         guard Self.shouldOpen(lastClose: lastClose, now: Date()) else { return }
         model.reload()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        addMonitors()
+    }
+
+    private func addMonitors() {
+        removeMonitors()
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] _ in
+            self?.popover.performClose(nil)
+        }
+        escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.popover.isShown, Self.closesOnKey(event.keyCode) else { return event }
+            self.popover.performClose(nil)
+            return nil
+        }
+    }
+
+    private func removeMonitors() {
+        if let monitor = outsideClickMonitor { NSEvent.removeMonitor(monitor) }
+        if let monitor = escMonitor { NSEvent.removeMonitor(monitor) }
+        outsideClickMonitor = nil
+        escMonitor = nil
     }
 
     public func popoverDidClose(_ notification: Notification) {
+        removeMonitors()
         lastClose = Date()
         model.popoverDidClose()
     }
@@ -343,18 +455,19 @@ public enum StatusClickRoute: Equatable {
 /// The update row (spec §16.2): a button, or a status line with a spinner or progress bar, and "Thử lại" on failure.
 struct UpdateRowView: View {
     let phase: PopoverUpdateRow.Phase
+    var newVersion: String? = nil
     let tap: () -> Void
 
     var body: some View {
-        let line = PopoverUpdateRow.line(phase)
+        let line = PopoverUpdateRow.line(phase, newVersion: newVersion)
         let button = PopoverUpdateRow.buttonTitle(phase)
         VStack(alignment: .leading, spacing: 6) {
             if let line {
                 HStack(spacing: 6) {
                     icon
                     Text(line)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        .font(.system(size: phase == .ready ? 13 : 11))
+                        .foregroundColor(phase == .ready ? Color(NSColor.labelColor) : Color(NSColor.secondaryLabelColor))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .help(line)

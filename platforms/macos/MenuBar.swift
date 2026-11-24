@@ -186,7 +186,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
         let iconView = NSImageView(image: AppMetadata.logo)
         iconView.imageScaling = .scaleProportionallyUpOrDown
 
-        let titleLabel = NSTextField(labelWithString: AppMetadata.name)
+        let titleLabel = NSTextField(labelWithString: "\(AppMetadata.name) \(AppMetadata.version)") // LEANKEYS-HOOK: copy (version in the right-click menu)
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
 
         let subtitle = NSTextField(labelWithString: statusSubtitle)
@@ -444,7 +444,12 @@ class MenuBarController: NSObject, NSWindowDelegate {
             openSuggestions: { ShortcutSuggestionsWindow.show(.shared) },
             updatePhase: { UpdateManager.shared.popoverPhase },
             checkForUpdates: { UpdateManager.shared.checkFromPopover() },
-            popoverClosed: { UpdateManager.shared.popoverClosed() }
+            popoverClosed: { UpdateManager.shared.popoverClosed() },
+            version: { AppMetadata.version },
+            toggleShortcut: { AppState.shared.toggleShortcut.displayParts.joined() },
+            autoFix: { AppState.shared.autoFix },
+            setAutoFix: { AppState.shared.autoFix = $0 },
+            newVersion: { UpdateManager.shared.pendingVersion.isEmpty ? nil : UpdateManager.shared.pendingVersion }
         ))
         // Check, download progress and install show while the popover is open (spec §16).
         NotificationCenter.default.publisher(for: .updateStateChanged)
