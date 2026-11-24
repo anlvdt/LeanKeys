@@ -78,9 +78,26 @@ public final class VikeyEngine: TypingEngine {
 
     /// Spec 12.1: Backspace right after a doubled key ("hocjj") gives back the Vietnamese word ("học").
     /// On by default; process-wide, like the engine.
+    /// While pure Telex is on the request is kept and applied when it ends.
     public static func setDoubleKeyFix(_ on: Bool) {
-        lk_vikey_set_double_key_fix(on ? 1 : 0)
+        doubleKeyFixRequested = on
+        lk_vikey_set_double_key_fix(on && !pure ? 1 : 0)
     }
+
+    private static var doubleKeyFixRequested = true
+
+    /// Pure Telex: every automatic fix off (auto switch, restore of a wrong spelling, the ⌫ repair after a doubled
+    /// key); the keys are plain Telex. The values other code requests (`setAutoSwitch`, `setDoubleKeyFix`) stay
+    /// stored while it is on, and take effect again when it ends. Process-wide, like the engine.
+    public func setPureTelex(_ on: Bool) {
+        Self.pure = on
+        Self.applyOptions()
+        lk_vikey_set_double_key_fix(Self.doubleKeyFixRequested && !on ? 1 : 0)
+        lk_vikey_set_restore_wrong_spelling(on ? 0 : 1)
+        resetContext()
+    }
+
+    private static var pure = false
 
     /// Spec 12.2: the user's ⌫⌫ undo of Vikey's fix of a word, once per undo; nil when there is none. Call it on the
     /// key-handling thread, right after `process` (the shim's undo slot has no lock).
@@ -114,7 +131,7 @@ public final class VikeyEngine: TypingEngine {
     private static var options = (modernTone: true, autoSwitch: true, telexStyle: Int32(0))
 
     private static func applyOptions() {
-        lk_vikey_set_options(options.modernTone ? 1 : 0, options.autoSwitch ? 1 : 0, options.telexStyle)
+        lk_vikey_set_options(options.modernTone ? 1 : 0, options.autoSwitch && !pure ? 1 : 0, options.telexStyle)
     }
 
     // MARK: - Mac virtual key codes (vendor/vikey/Engine/platforms/mac.h)

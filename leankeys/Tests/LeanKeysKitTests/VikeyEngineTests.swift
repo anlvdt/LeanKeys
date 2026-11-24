@@ -71,13 +71,47 @@ final class VikeyEngineTests: XCTestCase {
 
     override func tearDown() {
         // Options are process-wide: put back the defaults for the next test.
+        engine?.setPureTelex(false)
         engine?.setAutoSwitch(true)
         engine?.setModernTone(true)
+        VikeyEngine.setDoubleKeyFix(true)
         // A router on the real engine installs its (memory-only) undo learner's fix filter: unregister it.
         lk_vikey_set_fix_filter(nil)
         engine?.setVietnamese(true)
         engine?.resetContext()
         super.tearDown()
+    }
+
+    /// Pure Telex: no auto switch and no restore of a wrong spelling, so every key is plain Telex.
+    func testPureTelexTypesKeysAsTelex() {
+        engine.setPureTelex(true)
+        XCTAssertEqual(Field(engine).type("test push user coss "), "tét púh uẻ cos ")
+        XCTAssertTrue(engine.isVietnamese)
+        engine.setPureTelex(false)
+        engine.setVietnamese(true)
+        engine.resetContext()
+        XCTAssertEqual(Field(engine).type("test "), "test ")
+    }
+
+    /// Requests made while pure are kept, not applied: they take effect once pure is off.
+    func testRequestsDuringPureTelexApplyWhenPureEnds() {
+        engine.setAutoSwitch(false)
+        engine.setPureTelex(true)
+        engine.setAutoSwitch(true)
+        VikeyEngine.setDoubleKeyFix(false)
+        XCTAssertEqual(Field(engine).type("test push user coss "), "tét púh uẻ cos ")
+        XCTAssertEqual(lk_vikey_language(), 1)
+        engine.setPureTelex(false)
+        engine.setVietnamese(true)
+        engine.resetContext()
+        // Auto switch (requested true while pure) is now in effect: English words come back as typed.
+        XCTAssertEqual(Field(engine).type("push "), "push ")
+        // The double-key fix request (false) is in effect too: Backspace after "hocjj" is Vikey's own.
+        engine.setVietnamese(true)
+        engine.resetContext()
+        let f = Field(engine)
+        f.type("hocjj")
+        XCTAssertNotEqual(f.backspace(), "học")
     }
 
     /// Control for the test below: English with auto switch on turns a Vietnamese word back on.

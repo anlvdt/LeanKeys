@@ -626,6 +626,10 @@ void lk_vikey_set_options(int modernOrthography, int autoSwitch, int telexStyle)
     if (driver) driver->autoSwitch = autoSwitch != 0;
 }
 
+void lk_vikey_set_restore_wrong_spelling(int on) {
+    vRestoreIfWrongSpelling = on ? 1 : 0;
+}
+
 int lk_vikey_word_score(int vietnamese, const char* letters) {
     if (!letters) return LK_VIKEY_NOT_A_WORD;
     // vAutoSwitchWordScore compares lowercase keys ("a"-"z") and rejects keys of 39 or more.

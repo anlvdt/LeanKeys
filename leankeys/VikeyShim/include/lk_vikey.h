@@ -54,6 +54,9 @@ int  lk_vikey_take_undo(lk_undo* out);
 void lk_vikey_set_language(int vietnamese);     // 1 = Việt, 0 = Anh; a change clears the copy of the line too (same language: no-op)
 int  lk_vikey_language(void);
 void lk_vikey_set_options(int modernOrthography, int autoSwitch, int telexStyle);
+// On by default: a word with a wrong spelling that ends at a break key comes back as typed ("push", "user").
+// Off (pure Telex, together with auto switch off): the keys stay Telex ("push " -> "púh ").
+void lk_vikey_set_restore_wrong_spelling(int on);
 
 // How common `letters` is as a word, from Vikey's built-in dictionaries (vAutoSwitchWordScore).
 // letters: plain ASCII letters, under 39 of them; case is ignored. Anything else (digits, spaces,
