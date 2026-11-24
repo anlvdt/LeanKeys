@@ -28,3 +28,5 @@ copy	platforms/macos/PerAppConfigModels.swift
 copy	platforms/macos/AppPickerSheet.swift
 copy	platforms/macos/UpdateManager.swift
 copy	platforms/macos/UpdateChecker.swift
+# The Sponsor button pointed at Gõ Nhanh's author (khaphanspace); LeanKeys has none, so the file is deleted.
+FILE	.github/FUNDING.yml
