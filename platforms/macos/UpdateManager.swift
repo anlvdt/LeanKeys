@@ -600,9 +600,11 @@ extension UpdateManager {
     /// LeanKeys installs a downloaded update by itself (spec §13.2), with no dialog: only once no key has been
     /// pressed for 30 s (IdleGate), so never mid-typing; otherwise it looks again every 60 s. A pending update
     /// restored at launch goes the same way. The install is installSafely below.
-    /// Ruling R24: only a build signed with a team (Developer ID) does this. An ad-hoc build would lose its
-    /// Accessibility grant on every update, so it stops at "ready": Gõ Nhanh's "⟳ Khởi động lại để cập nhật" menu
-    /// item, whose click (restartToUpdate) runs the same installSafely.
+    /// Ruling R24 (amended by spec §15): only a build signed with a stable identity (Developer ID or the LeanKeys
+    /// self-signed certificate) does this, and only for an update that meets the running app's designated
+    /// requirement (UpdateInstallPolicy, SafeInstaller.sameIdentity). An ad-hoc build would lose its Accessibility
+    /// grant on every update, so it stops at "ready": Gõ Nhanh's "⟳ Khởi động lại để cập nhật" menu item, whose
+    /// click (restartToUpdate) runs the same installSafely.
     /// Spec §16.3: an update the user asked for from the popover installs at once, without the idle wait.
     private func installWhenIdle() {
         #if DEBUG

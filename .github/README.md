@@ -53,7 +53,7 @@ Các tính năng học và viết hoa chỉ chạy với lõi Vikey (chế độ
 - **Terminal không gõ tiếng Việt** (Terminal, iTerm2, Warp, Ghostty, kitty, WezTerm…). Mật khẩu `sudo`, `ssh`, `git` gõ ở đó không có ô bảo mật, nên LeanKeys để nguyên mọi phím.
 - **Điều khiển từ xa và máy ảo** (UltraViewer/MacViewer, TeamViewer, AnyDesk, Windows App, Parsec, DeskIn, Citrix, VMware, Parallels, UTM…): phím đi thẳng, để bộ gõ bên máy kia xử lý, không bị bỏ dấu hai lần.
 - **Không bao giờ học mật khẩu.** Không học trong ô đăng nhập, terminal, trình soạn code và trình quản lý mật khẩu. Từ trông như mật khẩu (trộn chữ với số hay ký hiệu) không bao giờ được lưu.
-- **Dữ liệu học chỉ nằm trên máy.** Mọi thứ được mã hoá AES-GCM, khoá giữ trong Keychain, không gửi đi đâu. Cụm chưa đủ số lần chỉ được lưu dưới dạng mã băm, không lưu chữ. Mỗi danh sách có nút "Xoá tất cả".
+- **Dữ liệu học chỉ nằm trên máy.** Mọi thứ được mã hoá AES-GCM và không gửi đi đâu. Khoá nằm trong tệp riêng (quyền 0600) cạnh dữ liệu, trong thư mục chỉ tài khoản của bạn đọc được. Vì khoá ở cùng chỗ, mã hoá không che dữ liệu trước chương trình khác chạy dưới tài khoản của bạn hay trước bản sao lưu (Time Machine). Cụm chưa đủ số lần chỉ được lưu dưới dạng mã băm, không lưu chữ. Mỗi danh sách có nút "Xoá tất cả".
 - **Nhật ký gỡ lỗi không chứa chữ bạn gõ.** Chỉ ghi độ dài và phím điều khiển. Tệp nằm trong thư mục riêng của bạn (Gõ Nhanh gốc ghi vào `/tmp`, nơi chương trình khác trên máy đọc được), và tự tắt sau 24 giờ.
 - **App bật hardened runtime**, nên chương trình khác không thể chèn mã vào LeanKeys để mượn quyền Trợ năng.
 

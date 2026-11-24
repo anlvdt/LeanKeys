@@ -18,7 +18,8 @@ public extension Notification.Name {
 
 /// Picks the engine for each key. Vikey is the default (see `LeanSettings.engine`), except under VNI (Vikey here
 /// is Telex only) or when Vikey fails to start, where Gõ Nhanh takes over; Gõ Nhanh when the user picks it.
-/// Driven from the event-tap thread only: no locking.
+/// Driven from the event-tap thread only, which is the main thread (RustBridge adds the tap to the main run loop): no
+/// locking.
 public final class EngineRouter {
     /// The app's router: the only one that asks the focused field at Return (tests pass their own answer).
     public static let shared = EngineRouter(fieldAllowsFixAtReturn: { FocusedField.allowsFixAtReturn() })

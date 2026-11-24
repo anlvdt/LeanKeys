@@ -14,8 +14,8 @@
 #      GitHub Actions on it (the Gõ Nhanh workflows came along): gh api -X PUT
 #      .../actions/permissions -F enabled=false, which is idempotent and runs
 #      before anything is pushed.
-#   5. git tag vX.Y on main; git push origin main vX.Y (only those two refs,
-#      never --force, never --tags)
+#   5. git tag vX.Y on main; git push --atomic origin main vX.Y (only those two
+#      refs, both or neither, never --force, never --tags)
 #   6. gh release create vX.Y dist/LeanKeys-X.Y.dmg -R anlvdt/LeanKeys (the repo has
 #      two remotes, upstream and origin, so gh needs the repo named), notes generated from
 #      Versions.json on main and git log since the previous LeanKeys tag
@@ -24,7 +24,8 @@
 # missing, the version on main differs from dist/READY, or tag vX.Y already
 # exists locally or on origin. If step 5 or 6 fails (or you press ^C), it runs
 # `gh release delete vX.Y --yes`, `git push --delete origin vX.Y` and
-# `git tag -d vX.Y`, keeps dist/READY and exits 1. A main already pushed stays
+# `git tag -d vX.Y`, keeps dist/READY and exits 1. The push is atomic, so a
+# failed push leaves origin as it was; after a failed gh release, main stays
 # pushed (undoing it would need --force).
 #
 #   --dry-run   check dist/ and the tag, print the plan and the release notes;
@@ -145,7 +146,7 @@ Lõi gõ: Gõ Nhanh ${g_tag:-?} · Vikey ${v_tag:-?}
 Thay đổi kỹ thuật${prev:+ từ $prev}:
 ${log:-- (không có commit mới)}"
 
-  local push_cmd="git push origin refs/heads/${main_branch}:refs/heads/$main_branch refs/tags/${tag}:refs/tags/$tag"
+  local push_cmd="git push --atomic origin refs/heads/${main_branch}:refs/heads/$main_branch refs/tags/${tag}:refs/tags/$tag"
   print -r -- "Phát hành LeanKeys $ver ($dmg, nhánh $main_branch):"
   print -r -- "  gh auth status"
   print -r -- "  hdiutil attach $dmg (kiểm tra LeanKeys.app), hdiutil detach"
@@ -228,7 +229,7 @@ ${log:-- (không có commit mới)}"
   git tag "$tag" "refs/heads/$main_branch" || die "không tạo được tag $tag."
   tagged=1
   step "$push_cmd"
-  git push origin "refs/heads/${main_branch}:refs/heads/$main_branch" "refs/tags/${tag}:refs/tags/$tag" ||
+  git push --atomic origin "refs/heads/${main_branch}:refs/heads/$main_branch" "refs/tags/${tag}:refs/tags/$tag" ||
     undo "git push lỗi"
   step "gh release create $tag $dmg --title \"LeanKeys $ver\""
   gh release create "$tag" "$dmg" --title "LeanKeys $ver" --notes "$notes" -R "$gh_repo" || undo "gh release create lỗi"

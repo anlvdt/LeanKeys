@@ -543,9 +543,17 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
     } else {
         e = pressUser(macKeyCode, shift, now);
     }
-    out->deleteCount = e.deleteCount;
     const int cap = (int)(sizeof(out->text) / sizeof(out->text[0]));
-    const int n = e.text.size() < (size_t)cap ? (int)e.text.size() : cap;
+    if (e.text.size() > (size_t)cap) {
+        // Cut short, the edit would leave the screen and the shim's copy of the line apart: let the key through
+        // as typed instead (nothing deleted, nothing inserted) and start over, as a click would. A language switch
+        // still reaches the app, so its Việt/Anh state stays Vikey's.
+        lk_vikey_reset_context();
+        out->languageChanged = e.languageChanged ? 1 : 0;
+        return;
+    }
+    out->deleteCount = e.deleteCount;
+    const int n = (int)e.text.size();
     for (int i = 0; i < n; i++) out->text[i] = (uint16_t)e.text[i];
     out->length = n;
     out->languageChanged = e.languageChanged ? 1 : 0;
@@ -677,7 +685,7 @@ int lk_vikey_types_as_is(const char* letters) {
             continue;
         }
         len -= HookState.backspaceCount;
-        if (len < 0) { ok = false; break; }
+        if (len < 0 || len + HookState.newCharCount + 1 > (int)(sizeof(screen) / sizeof(screen[0]))) { ok = false; break; }
         for (int c = HookState.newCharCount - 1; c >= 0; c--) {
             const Uint32 d = HookState.charData[c];
             screen[len++] = (d & CHAR_CODE_MASK) ? (char16_t)(d & 0xFFFF) : (char16_t)keyCodeToCharacter(d);
