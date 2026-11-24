@@ -25,6 +25,50 @@ final class StatusPopoverTests: XCTestCase {
         }
     }
 
+    // Popover polish (spec 2026-11-24): header version, quick-switch sub-line, auto-fix switch, Esc closes.
+
+    func testSubLineJoinsShortcutAndAutoSwitch() {
+        XCTAssertEqual(StatusPopoverModel.subLine(shortcut: "⌃⇧", autoSwitch: "Tự chuyển Việt/Anh: Bật"),
+                       "Đổi nhanh: ⌃⇧ · Tự chuyển Việt/Anh: Bật")
+        XCTAssertEqual(StatusPopoverModel.subLine(shortcut: nil, autoSwitch: "Tự chuyển Việt/Anh: Bật"),
+                       "Tự chuyển Việt/Anh: Bật", "no dangling separator")
+        XCTAssertEqual(StatusPopoverModel.subLine(shortcut: "⌃⇧", autoSwitch: nil), "Đổi nhanh: ⌃⇧")
+        XCTAssertEqual(StatusPopoverModel.subLine(shortcut: "", autoSwitch: nil), nil, "an empty shortcut is none")
+        XCTAssertNil(StatusPopoverModel.subLine(shortcut: nil, autoSwitch: nil))
+    }
+
+    func testModelReadsVersionAutoFixAndNewVersion() {
+        var autoFix = true
+        var setCalls: [Bool] = []
+        let model = StatusPopoverModel(actions: StatusPopoverActions(
+            snapshot: { StatusSnapshot(vietnamese: true, autoSwitchApplies: false, autoSwitchOn: false, blocked: false, blockingApp: nil) },
+            method: { 0 }, updateReady: { false }, setVietnamese: { _ in }, setMethod: { _ in },
+            installUpdate: {}, openSettings: {}, quit: {},
+            version: { "1.8" }, toggleShortcut: { "⌃⇧" },
+            autoFix: { autoFix }, setAutoFix: { setCalls.append($0); autoFix = $0 }, newVersion: { "1.9" }))
+        XCTAssertEqual(model.version, "1.8")
+        XCTAssertEqual(model.toggleShortcut, "⌃⇧")
+        XCTAssertEqual(model.newVersion, "1.9")
+        XCTAssertTrue(model.autoFix)
+        model.choose(autoFix: false)
+        XCTAssertEqual(setCalls, [false])
+        XCTAssertFalse(model.autoFix, "reloaded after the switch")
+        model.choose(autoFix: false)
+        XCTAssertEqual(setCalls, [false], "no call when unchanged")
+    }
+
+    func testDefaultsKeepOldCallSitesWorking() {
+        let model = StatusPopoverModel(actions: Stub().actions)
+        XCTAssertTrue(model.autoFix)
+        XCTAssertNil(model.toggleShortcut)
+        XCTAssertNil(model.newVersion)
+    }
+
+    func testEscClosesThePopover() {
+        XCTAssertTrue(StatusPopoverController.closesOnKey(53))
+        XCTAssertFalse(StatusPopoverController.closesOnKey(36), "Return does not close")
+    }
+
     func testDoesNotReopenRightAfterTransientClose() {
         let now = Date()
         XCTAssertTrue(StatusPopoverController.shouldOpen(lastClose: nil, now: now))

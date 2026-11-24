@@ -22,6 +22,15 @@ public struct StatusPopoverActions {
     public var checkForUpdates: () -> Void
     /// The popover closed; a finished check's result can be cleared.
     public var popoverClosed: () -> Void
+    /// The app's version, shown in the header.
+    public var version: () -> String
+    /// The Việt/Anh shortcut as the user set it ("⌃⇧"), or nil when there is none.
+    public var toggleShortcut: () -> String?
+    /// The master switch "Tự sửa khi gõ" and how to change it.
+    public var autoFix: () -> Bool
+    public var setAutoFix: (Bool) -> Void
+    /// The version a downloaded update installs, when the updater knows it.
+    public var newVersion: () -> String?
 
     public init(
         snapshot: @escaping () -> StatusSnapshot,
@@ -36,7 +45,14 @@ public struct StatusPopoverActions {
         openSuggestions: @escaping () -> Void = {},
         updatePhase: (() -> PopoverUpdateRow.Phase)? = nil,
         checkForUpdates: @escaping () -> Void = {},
-        popoverClosed: @escaping () -> Void = {}
+        popoverClosed: @escaping () -> Void = {},
+        version: @escaping () -> String = {
+            Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        },
+        toggleShortcut: @escaping () -> String? = { nil },
+        autoFix: @escaping () -> Bool = { true },
+        setAutoFix: @escaping (Bool) -> Void = { _ in },
+        newVersion: @escaping () -> String? = { nil }
     ) {
         self.snapshot = snapshot
         self.method = method
@@ -51,6 +67,11 @@ public struct StatusPopoverActions {
         self.updatePhase = updatePhase
         self.checkForUpdates = checkForUpdates
         self.popoverClosed = popoverClosed
+        self.version = version
+        self.toggleShortcut = toggleShortcut
+        self.autoFix = autoFix
+        self.setAutoFix = setAutoFix
+        self.newVersion = newVersion
     }
 }
 
@@ -61,6 +82,10 @@ public final class StatusPopoverModel: ObservableObject {
     @Published public private(set) var updateReady: Bool
     @Published public private(set) var suggestionCount: Int
     @Published public private(set) var updatePhase: PopoverUpdateRow.Phase
+    @Published public private(set) var version: String
+    @Published public private(set) var toggleShortcut: String?
+    @Published public private(set) var autoFix: Bool
+    @Published public private(set) var newVersion: String?
 
     private let actions: StatusPopoverActions
     /// Set by the controller so the popover closes before Settings opens.
@@ -73,6 +98,15 @@ public final class StatusPopoverModel: ObservableObject {
         self.updateReady = actions.updateReady()
         self.suggestionCount = actions.suggestionCount()
         self.updatePhase = Self.updatePhase(actions)
+        self.version = actions.version()
+        self.toggleShortcut = Self.shortcut(actions)
+        self.autoFix = actions.autoFix()
+        self.newVersion = actions.newVersion()
+    }
+
+    private static func shortcut(_ actions: StatusPopoverActions) -> String? {
+        guard let s = actions.toggleShortcut(), !s.isEmpty else { return nil }
+        return s
     }
 
     private static func updatePhase(_ actions: StatusPopoverActions) -> PopoverUpdateRow.Phase {
@@ -85,6 +119,26 @@ public final class StatusPopoverModel: ObservableObject {
         updateReady = actions.updateReady()
         suggestionCount = actions.suggestionCount()
         updatePhase = Self.updatePhase(actions)
+        version = actions.version()
+        toggleShortcut = Self.shortcut(actions)
+        autoFix = actions.autoFix()
+        newVersion = actions.newVersion()
+    }
+
+    /// The small line under the Việt/Anh control: the quick-switch shortcut and the auto-switch state, joined by
+    /// " · ", or whichever of them exists; nil when neither does.
+    public static func subLine(shortcut: String?, autoSwitch: String?) -> String? {
+        let parts = [shortcut.flatMap { $0.isEmpty ? nil : "Đổi nhanh: \($0)" }, autoSwitch].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    var subLine: String? { Self.subLine(shortcut: toggleShortcut, autoSwitch: snapshot.autoSwitchLine) }
+
+    public func choose(autoFix: Bool) {
+        if autoFix != actions.autoFix() {
+            actions.setAutoFix(autoFix)
+        }
+        reload()
     }
 
     /// "Có N gợi ý gõ tắt", or nil when there are none.
@@ -248,6 +302,9 @@ public final class StatusPopoverController: NSObject, NSPopoverDelegate {
     }
 
     public var isShown: Bool { popover.isShown }
+
+    /// Esc closes the popover.
+    public static func closesOnKey(_ keyCode: UInt16) -> Bool { keyCode == 53 }
 
     /// Pure decision: open unless the popover closed less than `reopenGap` seconds before `now`.
     public static func shouldOpen(lastClose: Date?, now: Date) -> Bool {
