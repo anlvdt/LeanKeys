@@ -63,6 +63,74 @@ final class InjectionTuningTests: XCTestCase {
         XCTAssertEqual(InjectionTuning.settleMicros(.fast, defaults: defaults), 1000)
     }
 
+    func testOtherOverride() {
+        defaults.set(1500, forKey: "LeanKeys.settleMicros.other")
+        XCTAssertEqual(InjectionTuning.settleMicros(.other, defaults: defaults), 1500)
+        XCTAssertEqual(InjectionTuning.settleMicros(.fast, defaults: defaults), 1000, "the other override leaves fast alone")
+    }
+
+    // MARK: - Per-method delay override
+
+    func testDelaysWithoutOverrideAreTheDetectedOnes() {
+        let d = InjectionTuning.delays(for: "slow:notion", bundleID: "com.microsoft.VSCode", (12000, 25000, 12000), defaults: defaults)
+        XCTAssertEqual([d.0, d.1, d.2], [12000, 25000, 12000], "an untuned detection keeps Gõ Nhanh's delays")
+    }
+
+    func testTunedDelays() {
+        let browser = InjectionTuning.delays(for: "emptyChar:browser", bundleID: "com.google.Chrome", (3000, 8000, 3000), defaults: defaults)
+        XCTAssertEqual([browser.0, browser.1, browser.2], [1000, 2000, 1000])
+        let code = InjectionTuning.delays(for: "slow:code", bundleID: "com.microsoft.VSCode", (8000, 25000, 8000), defaults: defaults)
+        XCTAssertEqual([code.0, code.1, code.2], [1000, 3000, 1000])
+    }
+
+    func testTuningOnlyInListedApps() {
+        let ghostty = InjectionTuning.delays(for: "slow:code", bundleID: "com.mitchellh.ghostty", (8000, 25000, 8000),
+                                             defaults: defaults)
+        XCTAssertEqual([ghostty.0, ghostty.1, ghostty.2], [8000, 25000, 8000], "an unmeasured terminal keeps Gõ Nhanh's")
+        let firefox = InjectionTuning.delays(for: "emptyChar:browser", bundleID: "org.mozilla.firefox-unlisted",
+                                             (3000, 8000, 3000), defaults: defaults)
+        XCTAssertEqual([firefox.0, firefox.1, firefox.2], [3000, 8000, 3000])
+        XCTAssertEqual(InjectionTuning.settleMicros(.slow, name: "slow:code", bundleID: "com.mitchellh.ghostty",
+                                                    defaults: defaults), 8000)
+        XCTAssertEqual(InjectionTuning.settleMicros(.other, name: "emptyChar:browser", bundleID: nil, defaults: defaults), 5000)
+        defaults.set("2000,4000,2000", forKey: "LeanKeys.delays.slow:code")
+        let overridden = InjectionTuning.delays(for: "slow:code", bundleID: "com.mitchellh.ghostty", (8000, 25000, 8000),
+                                                defaults: defaults)
+        XCTAssertEqual([overridden.0, overridden.1, overridden.2], [2000, 4000, 2000], "the user's override applies anywhere")
+    }
+
+    func testTunedSettle() {
+        XCTAssertEqual(InjectionTuning.settleMicros(.other, name: "emptyChar:browser", bundleID: "com.google.Chrome", defaults: defaults), 1000)
+        XCTAssertEqual(InjectionTuning.settleMicros(.slow, name: "slow:code", bundleID: "com.microsoft.VSCode", defaults: defaults), 1000)
+        XCTAssertEqual(InjectionTuning.settleMicros(.slow, name: "slow:notion", bundleID: "com.microsoft.VSCode", defaults: defaults), 8000)
+        XCTAssertEqual(InjectionTuning.settleMicros(.other, name: nil, bundleID: "com.microsoft.VSCode", defaults: defaults), 5000)
+        defaults.set(4000, forKey: "LeanKeys.settleMicros.slow")
+        XCTAssertEqual(InjectionTuning.settleMicros(.slow, name: "slow:code", bundleID: "com.microsoft.VSCode", defaults: defaults), 4000,
+                       "the class override still wins")
+    }
+
+    func testDelaysOverrideByMethodName() {
+        defaults.set("1000, 2000,500", forKey: "LeanKeys.delays.emptyChar:browser")
+        let d = InjectionTuning.delays(for: "emptyChar:browser", bundleID: "com.google.Chrome", (3000, 8000, 3000), defaults: defaults)
+        XCTAssertEqual([d.0, d.1, d.2], [1000, 2000, 500])
+        let other = InjectionTuning.delays(for: "slow:notion", bundleID: "com.microsoft.VSCode", (12000, 25000, 12000), defaults: defaults)
+        XCTAssertEqual([other.0, other.1, other.2], [12000, 25000, 12000], "only the named method changes")
+    }
+
+    func testDelaysOverrideIsClampedAndMalformedIsIgnored() {
+        defaults.set("-1,99999,0", forKey: "LeanKeys.delays.slow:notion")
+        let c = InjectionTuning.delays(for: "slow:notion", bundleID: "com.microsoft.VSCode", (12000, 25000, 12000), defaults: defaults)
+        XCTAssertEqual([c.0, c.1, c.2], [0, 30000, 0])
+        for bad in ["1,2", "a,b,c", "1,2,3,4", ""] {
+            defaults.set(bad, forKey: "LeanKeys.delays.slow:notion")
+            let d = InjectionTuning.delays(for: "slow:notion", bundleID: "com.microsoft.VSCode", (12000, 25000, 12000), defaults: defaults)
+            XCTAssertEqual([d.0, d.1, d.2], [12000, 25000, 12000], "\(bad) is ignored")
+            defaults.set(bad, forKey: "LeanKeys.delays.slow:code")
+            let t = InjectionTuning.delays(for: "slow:code", bundleID: "com.microsoft.VSCode", (8000, 25000, 8000), defaults: defaults)
+            XCTAssertEqual([t.0, t.1, t.2], [1000, 3000, 1000], "\(bad) falls back to the tuned delays")
+        }
+    }
+
     // MARK: - Latency harness
 
     func testBlockingModel() {
