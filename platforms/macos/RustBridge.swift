@@ -235,8 +235,8 @@ private class TextInjector {
         }
 
         // LEANKEYS-HOOK-BEGIN: engine-dispatch
-        // Settle time from LeanKeysKit: 1 ms fast, 8 ms slow, 5 ms others; UserDefaults LeanKeys.settleMicros.* overrides.
-        usleep(InjectionTuning.settleMicros(method == .fast ? .fast : method == .slow ? .slow : .other))
+        // Settle time from LeanKeysKit: 1 ms fast, 8 ms slow, 5 ms others, 1 ms for the tuned detections in their apps (InjectionTuning.tuned); UserDefaults LeanKeys.settleMicros.* overrides.
+        usleep(InjectionTuning.settleMicros(method == .fast ? .fast : method == .slow ? .slow : .other, name: DetectionCache.name, bundleID: DetectionCache.bundleID))
         // LEANKEYS-HOOK-END
     }
 
@@ -1786,6 +1786,8 @@ private enum DetectionCache {
     static var result: (method: InjectionMethod, delays: (UInt32, UInt32, UInt32))?
     static var timestamp: CFAbsoluteTime = 0
     static var lastLoggedKey: String = "" // Only log when method+app changes
+    static var name: String? // LEANKEYS-HOOK: engine-dispatch (the detection the cached result came from, for InjectionTuning)
+    static var bundleID: String? // LEANKEYS-HOOK: engine-dispatch
     static let ttl: CFAbsoluteTime = 0.2 // 200ms
 
     /// Snapshot of per-app profile for current app, set on app switch to avoid
@@ -1946,6 +1948,8 @@ private func detectMethod() -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
 
     /// Helper to cache and return result (only logs when method+app changes)
     func cached(_ m: InjectionMethod, _ d: (UInt32, UInt32, UInt32), _ methodName: String) -> (InjectionMethod, (UInt32, UInt32, UInt32)) {
+        let d = InjectionTuning.delays(for: methodName, bundleID: bundleId, d) // LEANKEYS-HOOK: engine-dispatch (tuned delays, LeanKeys.delays.<name> override)
+        DetectionCache.name = methodName; DetectionCache.bundleID = bundleId // LEANKEYS-HOOK: engine-dispatch
         // Store base detection result (before overrides) for UI hint
         DetectionCache.setDetectedDefault(for: bundleId, value: (method: "\(m)", delays: d))
         if m == .passthrough { DetectionCache.set(m, d, logKey: "\(methodName) [\(bundleId)]"); return (m, d) } // LEANKEYS-HOOK: engine-dispatch (no per-app override replaces pass-through)
