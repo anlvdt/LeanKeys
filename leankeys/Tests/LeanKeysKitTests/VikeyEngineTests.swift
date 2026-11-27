@@ -434,6 +434,24 @@ final class VikeyEngineTests: XCTestCase {
         }
     }
 
+    /// Right after Krông, a word whose keys are an English or name word comes back as typed: Telex alone joins
+    /// "ana" into "ân". Away from Krông, Vikey's "ân" stays.
+    func testWordAfterKrongKeepsItsKeys() {
+        for (keys, shown) in [("kroong ana ", "krông ana "), ("kroong ana. ", "krông ana. "), ("kroong nawng ", "krông năng "),
+                              ("ana ", "ân ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            let field = Field(engine)
+            XCTAssertEqual(field.type(keys), shown, keys)
+            XCTAssertEqual(field.type("tooi "), shown + "tôi ", "Vietnamese after \(keys)")
+        }
+        engine.resetContext()
+        let field = Field(engine)
+        XCTAssertEqual(field.type("kroong ana "), "krông ana ")
+        field.backspace()
+        XCTAssertEqual(field.backspace(), "krông ân", "Backspace twice gives Vikey's word back")
+    }
+
     /// Backspace twice right after "Krông" gives back the keys as typed.
     func testInitialKrBackspaceTwiceGivesKeysBack() {
         let field = Field(engine)

@@ -55,6 +55,8 @@ struct ScreenModel {
     bool lastKeyReplaced = false;        // the last key was not Backspace and its edit deleted something
     std::u16string wordBeforeLastKey;    // the current word just before the last key (any key)
     bool wordCapsLock = false;           // every letter of the current word was typed with Caps Lock on
+    std::u16string wordKeys;             // the letter keys the user pressed for the current word, with Shift case
+    bool wordKeysKnown = false;          // false once a Backspace or a shim edit inside the word makes them unknown
 };
 
 static ScreenModel model;
@@ -550,6 +552,27 @@ static bool typeInitialKr(const ScreenModel& before, VKEdit& e) {
     return true;
 }
 
+// MARK: - The word after Krông
+//
+// Telex joins a vowel typed after a final consonant to the vowel before it ("ana" -> "ân"), and Vikey keeps "Ân"
+// (more common than "ana"). Right after a word with the initial kr (Krông, which the shim typed), the next word is
+// part of a place name: Krông Ana, Krông Pa. When the keys of that word are an English (or name) word and the screen
+// shows something else, the keys come back. Backspace twice gives Vikey's word back.
+static bool keepKeysAfterKr(const ScreenModel& before, VKEdit& e) {
+    const std::u16string shown = wordOf(before.line);
+    if (shown.empty() || e.deleteCount != 0 || !before.wordKeysKnown) return false;
+    for (char16_t c : e.text) if (isWordLetter(c)) return false;
+    const std::u16string& keys = before.wordKeys;
+    if (keys.empty() || keys == shown || keys.size() > kFixWordMax || shown.size() > kFixWordMax) return false;
+    const std::u16string previous = previousWordBefore(before.line.size() - shown.size());
+    if (previous.size() < 3 || previous[0] != u'k' || previous[1] != u'r' || isAscii(previous)) return false;
+    if (englishScore(keys) == LK_VIKEY_NOT_A_WORD) return false;
+    showAtBreak(before, e, shown, keys, keys, e.text);
+    veto.fix.after = shown;      // Backspace twice gives "Ân" back, in Vietnamese
+    veto.languageAfterFix = 1;
+    return true;
+}
+
 extern "C" {
 
 int lk_vikey_init(void) {
@@ -642,6 +665,13 @@ static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
         if (letterKey) {
             const bool wordStarted = wordOf(before.line).empty();
             model.wordCapsLock = (wordStarted || before.wordCapsLock) && capsLockForNextKey;
+            if (wordStarted) { model.wordKeys.clear(); model.wordKeysKnown = true; }
+            for (size_t k = 0; k < 26; k++) {
+                if (kLetterKeys[k] != macKeyCode) continue;
+                model.wordKeys += (char16_t)((shift ? 'A' : 'a') + k);
+            }
+        } else if (backspace) {
+            model.wordKeysKnown = false;
         }
         if (driver->undos != undosBefore) {
             if (hasLastFix) queueUndo(lastFix, false);
@@ -651,7 +681,8 @@ static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
         if (backspace) {
             if (doubleKeyFix) repairDoubleKey(before, now, e);
         } else if (!letterKey && languageBefore == 1 && vLanguage == 1 &&
-                   !(driver->*member(UndoActiveTag())) && (keepFinalK(before, e) || typeInitialKr(before, e))) {
+                   !(driver->*member(UndoActiveTag())) && (keepFinalK(before, e) || typeInitialKr(before, e) ||
+                                                           keepKeysAfterKr(before, e))) {
             // kept or typed a place name; nothing for the fix filter
         } else if (fixOfLastKey(e, fix)) {
             if (capsLockKeeps(before, fix)) {
