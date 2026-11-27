@@ -6,7 +6,7 @@ import VikeyShim
 private let macKey: [Character: UInt16] = [
     "a": 0, "b": 11, "c": 8, "d": 2, "e": 14, "f": 3, "g": 5, "h": 4, "i": 34, "j": 38, "k": 40, "l": 37, "m": 46,
     "n": 45, "o": 31, "p": 35, "q": 12, "r": 15, "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7, "y": 16, "z": 6,
-    " ": 49, ",": 43, ".": 47, "\n": 36,
+    " ": 49, ",": 43, ".": 47, "\n": 36, "'": 39,
 ]
 private let kBackspace: UInt16 = 51
 private let kLeftArrow: UInt16 = 123
@@ -450,6 +450,19 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertEqual(field.type("kroong ana "), "krông ana ")
         field.backspace()
         XCTAssertEqual(field.backspace(), "krông ân", "Backspace twice gives Vikey's word back")
+    }
+
+    /// Glued to one letter and an apostrophe (Cư M'gar), a word whose keys are an English or name word comes back as
+    /// typed: Vikey alone reads "gar" after the apostrophe as "gả". "laaps" is no English word: R'Lấp stays.
+    func testWordAfterLetterApostropheKeepsItsKeys() {
+        for (keys, shown) in [("cuw m'gar ", "cư m'gar "), ("cuw m'gar. ", "cư m'gar. "), ("r'laaps ", "r'lấp "),
+                              ("ea h'leo ", "ea h'leo ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            let field = Field(engine)
+            XCTAssertEqual(field.type(keys), shown, keys)
+            XCTAssertEqual(field.type("tooi "), shown + "tôi ", "Vietnamese after \(keys)")
+        }
     }
 
     /// Backspace twice right after "Krông" gives back the keys as typed.
