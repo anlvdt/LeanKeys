@@ -552,20 +552,32 @@ static bool typeInitialKr(const ScreenModel& before, VKEdit& e) {
     return true;
 }
 
-// MARK: - The word after Krông
+// MARK: - The word after Krông, or after M' / H' / R'
 //
 // Telex joins a vowel typed after a final consonant to the vowel before it ("ana" -> "ân"), and Vikey keeps "Ân"
-// (more common than "ana"). Right after a word with the initial kr (Krông, which the shim typed), the next word is
-// part of a place name: Krông Ana, Krông Pa. When the keys of that word are an English (or name) word and the screen
-// shows something else, the keys come back. Backspace twice gives Vikey's word back.
+// (more common than "ana"); after an apostrophe it starts a new word and reads "gar" as "gả". Right after a word with
+// the initial kr (Krông, which the shim typed), or glued to one letter and an apostrophe (Cư M'gar, Ea H'Leo, Đắk
+// R'Lấp), the word is part of a place or people's name: Krông Ana, M'gar. When the keys of that word are an English
+// (or name) word and the screen shows something else, the keys come back ("laaps" is none, so R'Lấp stays).
+// Backspace twice gives Vikey's word back.
+
+// The word starting at `start` in `line` is glued to one letter and an apostrophe at the start of a word ("M'gar").
+static bool afterLetterApostrophe(const std::u16string& line, size_t start) {
+    if (start < 2 || (line[start - 1] != u'\'' && line[start - 1] != u'\u2019') || !isAsciiLetter(line[start - 2]))
+        return false;
+    return start == 2 || !isWordLetter(line[start - 3]);
+}
+
 static bool keepKeysAfterKr(const ScreenModel& before, VKEdit& e) {
     const std::u16string shown = wordOf(before.line);
     if (shown.empty() || e.deleteCount != 0 || !before.wordKeysKnown) return false;
     for (char16_t c : e.text) if (isWordLetter(c)) return false;
     const std::u16string& keys = before.wordKeys;
     if (keys.empty() || keys == shown || keys.size() > kFixWordMax || shown.size() > kFixWordMax) return false;
-    const std::u16string previous = previousWordBefore(before.line.size() - shown.size());
-    if (previous.size() < 3 || previous[0] != u'k' || previous[1] != u'r' || isAscii(previous)) return false;
+    const size_t start = before.line.size() - shown.size();
+    const std::u16string previous = previousWordBefore(start);
+    const bool afterKr = previous.size() >= 3 && previous[0] == u'k' && previous[1] == u'r' && !isAscii(previous);
+    if (!afterKr && !afterLetterApostrophe(before.line, start)) return false;
     if (englishScore(keys) == LK_VIKEY_NOT_A_WORD) return false;
     showAtBreak(before, e, shown, keys, keys, e.text);
     veto.fix.after = shown;      // Backspace twice gives "Ân" back, in Vietnamese
