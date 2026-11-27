@@ -493,6 +493,36 @@ static bool finalKKeeps(const std::u16string& shown, const std::u16string& keys)
     return false;
 }
 
+// A tone key typed after the final k ("ddawks", "lawks", "bukj"): Vikey cannot put the tone on the word any more and
+// shows it as a letter ("đăks"). The word with the tone on its last vowel ("đắk", as every closed syllable takes it),
+// or empty when `shown` is not a consonant, a vowel, a final k and one tone key.
+static std::u16string toneAfterFinalK(const std::u16string& shown) {
+    if (shown.size() < 3) return u"";
+    const char16_t toneKey = shown.back();
+    const char tone = (char)(toneKey | 32);
+    if (toneKey > 127 || (tone != 's' && tone != 'f' && tone != 'r' && tone != 'x' && tone != 'j')) return u"";
+    std::u16string base = shown.substr(0, shown.size() - 1);
+    if ((base.back() | 32) != 'k' || hasTone(base)) return u"";
+    // A consonant first, as in every such name ("oks" is no word to mark).
+    const char16_t first = (char16_t)(isAsciiLetter(base[0]) ? (base[0] | 32) : 'd');   // đ/Đ is the one non-ASCII
+    if (first == 'a' || first == 'e' || first == 'i' || first == 'o' || first == 'u' || first == 'y' ||
+        (!isAsciiLetter(base[0]) && base[0] != 0x111 && base[0] != 0x110)) return u"";
+    for (size_t i = base.size(); i-- > 0;) {
+        const char16_t c = base[i];
+        std::string keys;
+        if (isAsciiLetter(c)) keys = std::string(1, (char)c);
+        else if (const LKTelexLetter* m = telexLetter(c)) keys = m->keys;
+        else return u"";
+        const char first = (char)(keys[0] | 32);
+        if (first != 'a' && first != 'e' && first != 'i' && first != 'o' && first != 'u' && first != 'y') continue;
+        for (const LKTelexLetter& m : kTelexMap) {
+            if (m.tone == tone && keys == m.keys) { base[i] = m.c; return base; }
+        }
+        return u"";
+    }
+    return u"";
+}
+
 // The break key's edit `e` (made after the model `before`) ends with `word` on screen in place of the word `shown`
 // there before the key, then the break characters `breakText`. Backspace twice gives `keys` back, in English.
 static void showAtBreak(const ScreenModel& before, VKEdit& e, const std::u16string& shown, const std::u16string& word,
@@ -519,8 +549,22 @@ static bool keepFinalK(const ScreenModel& before, VKEdit& e) {
     while (n < e.text.size() && isAsciiLetter(e.text[n])) n++;
     const std::u16string keys = e.text.substr(0, n), rest = e.text.substr(n);
     for (char16_t c : rest) if (isWordLetter(c)) return false;
-    if (keys.empty() || !finalKKeeps(shown, keys)) return false;
-    showAtBreak(before, e, shown, shown, keys, rest);
+    if (keys.empty()) return false;
+    // "đăks" (tone typed after the k) becomes "đắk".
+    const std::u16string word = (shown.back() | 32) == 'k' ? shown : toneAfterFinalK(shown);
+    if (word.empty() || !finalKKeeps(word, keys)) return false;
+    showAtBreak(before, e, shown, word, keys, rest);
+    return true;
+}
+
+// Vikey left a word with a tone key after the final k as plain letters ("bukj "): put the tone on it ("bụk ").
+static bool toneFinalKAtBreak(const ScreenModel& before, VKEdit& e) {
+    const std::u16string shown = wordOf(before.line);
+    if (shown.empty() || e.deleteCount != 0 || !isAscii(shown)) return false;
+    for (char16_t c : e.text) if (isWordLetter(c)) return false;
+    const std::u16string word = toneAfterFinalK(shown);
+    if (word.empty() || !finalKKeeps(word, shown)) return false;
+    showAtBreak(before, e, shown, word, shown, e.text);
     return true;
 }
 
@@ -693,7 +737,7 @@ static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
         if (backspace) {
             if (doubleKeyFix) repairDoubleKey(before, now, e);
         } else if (!letterKey && languageBefore == 1 && vLanguage == 1 &&
-                   !(driver->*member(UndoActiveTag())) && (keepFinalK(before, e) || typeInitialKr(before, e) ||
+                   !(driver->*member(UndoActiveTag())) && (keepFinalK(before, e) || toneFinalKAtBreak(before, e) || typeInitialKr(before, e) ||
                                                            keepKeysAfterKr(before, e))) {
             // kept or typed a place name; nothing for the fix filter
         } else if (fixOfLastKey(e, fix)) {
