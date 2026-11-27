@@ -383,6 +383,30 @@ final class VikeyEngineTests: XCTestCase {
         }
     }
 
+    /// A doubled tone key typed for the letter itself inside a word neither Vikey dictionary knows ("desskin" for
+    /// "deskin") keeps the one letter the screen showed: Vikey alone puts both back at the break ("desskin ").
+    /// English words and compounds with the pair in an English word stay as Vikey types them. (Field types no capitals:
+    /// it never sets `caps`.)
+    func testDoubledToneKeyInsideUnknownWordKeepsOneLetter() {
+        for (keys, shown) in [("desskin ", "deskin "), ("laffkin ", "lafkin "), ("desskin, ", "deskin, "),
+                              ("mirrorless ", "mirrorless "), ("classic ", "classic "), ("boss ", "boss ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            let field = Field(engine)
+            XCTAssertEqual(field.type(keys), shown, keys)
+            XCTAssertEqual(field.type("chuwa "), shown + "chưa ", "Vietnamese after \(keys)")
+        }
+    }
+
+    /// Backspace twice right after gives back the keys as typed, in English.
+    func testDoubledToneKeyInsideUnknownWordBackspaceTwiceGivesKeysBack() {
+        let field = Field(engine)
+        XCTAssertEqual(field.type("desskin "), "deskin ")
+        field.backspace()
+        XCTAssertEqual(field.backspace(), "desskin")
+        XCTAssertEqual(field.type(" "), "desskin ")
+    }
+
     /// Bringing Vietnamese back leaves Vikey's own Backspace alone: the first ⌫ takes the break and the word goes on.
     func testDoubledKeyComebackLeavesBackspaceAlone() {
         let field = Field(engine)
