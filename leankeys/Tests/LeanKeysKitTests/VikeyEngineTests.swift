@@ -407,6 +407,29 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertEqual(field.type(" "), "desskin ")
     }
 
+    /// Central Highlands place names write final c as k (Đắk Lắk, Đắk Nông, Đăk Lăk). Vikey has no syllable with a final
+    /// k and puts the keys back at the break; the shim keeps the word. English words with a final k stay English.
+    /// (Field types no capitals, so the names are lower case here.)
+    func testPlaceNamesWithFinalKStay() {
+        for (keys, shown) in [("ddawsk lawsk ", "đắk lắk "), ("ddawsk noong ", "đắk nông "), ("ddawk lawk ", "đăk lăk "),
+                              ("ddawsk, lawsk. ", "đắk, lắk. "), ("task desk ask ", "task desk ask ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            let field = Field(engine)
+            XCTAssertEqual(field.type(keys), shown, keys)
+            XCTAssertEqual(field.type("tooi "), shown + "tôi ", "Vietnamese after \(keys)")
+        }
+    }
+
+    /// Backspace twice right after a kept place name gives back the keys as typed.
+    func testPlaceNameWithFinalKBackspaceTwiceGivesKeysBack() {
+        let field = Field(engine)
+        XCTAssertEqual(field.type("ddawsk "), "đắk ")
+        field.backspace()
+        XCTAssertEqual(field.backspace(), "ddawsk")
+        XCTAssertEqual(field.type(" "), "ddawsk ")
+    }
+
     /// Bringing Vietnamese back leaves Vikey's own Backspace alone: the first ⌫ takes the break and the word goes on.
     func testDoubledKeyComebackLeavesBackspaceAlone() {
         let field = Field(engine)
