@@ -55,6 +55,8 @@ struct ScreenModel {
     bool lastKeyReplaced = false;        // the last key was not Backspace and its edit deleted something
     std::u16string wordBeforeLastKey;    // the current word just before the last key (any key)
     bool wordCapsLock = false;           // every letter of the current word was typed with Caps Lock on
+    std::u16string wordKeys;             // the letter keys the user pressed for the current word, with Shift case
+    bool wordKeysKnown = false;          // false once a Backspace or a shim edit inside the word makes them unknown
 };
 
 static ScreenModel model;
@@ -412,6 +414,165 @@ static bool capsLockKeeps(const ScreenModel& before, const Fix& fix) {
     return score != LK_VIKEY_NOT_A_WORD && score >= kCapsVietnameseFloor;
 }
 
+// MARK: - A doubled tone key inside an unknown word
+//
+// Telex users double a tone key to type the letter itself: "dess" shows "des", and the word goes on in English
+// ("desskin" shows "deskin"). At the break Vikey (D19, vAutoSwitchFixDoubledKey) puts every key back ("desskin ")
+// when neither spelling is an English word and the keys have two vowel groups, which it reads as a literal it must
+// keep as typed. For a lower-case word (a capital first letter at most) that turns the user's "ss" into two letters,
+// so LeanKeys keeps what the screen showed, as Gõ Nhanh does. English words ("boss", "classic"), identifiers with an
+// inner capital ("getUserss") and words typed in capitals stay as Vikey decides. Backspace twice still gives the keys
+// back (the veto's reverse undo).
+
+static bool isToneKey(char16_t c) {
+    c = (char16_t)(c | 32);
+    return c == 's' || c == 'f' || c == 'r' || c == 'x' || c == 'j';
+}
+
+// Vikey's fix `fix` of the word just finished, right after a doubled key, put back the doubled tone key the screen
+// showed once: keep the word as shown instead?
+static bool doubledToneKeyKeeps(const Fix& fix) {
+    const std::u16string& shown = fix.before, &keys = fix.after;
+    if (keys.size() != shown.size() + 1 || shown.size() < 2) return false;
+    for (size_t i = 0; i < keys.size(); i++) {
+        if (!isAsciiLetter(keys[i])) return false;
+        if (i > 0 && isUpper(keys[i])) return false;
+    }
+    size_t i = 0;
+    while (i < shown.size() && shown[i] == keys[i]) i++;
+    if (keys.compare(i + 1, std::u16string::npos, shown, i, std::u16string::npos) != 0) return false;
+    // The key that went is a tone key next to the same letter: one of a doubled pair.
+    if (!isToneKey(keys[i])) return false;
+    // The pair: keys[pair] and keys[pair + 1]. The scan above stops at the first of two equal letters.
+    size_t pair;
+    if (i + 1 < keys.size() && (keys[i + 1] | 32) == (keys[i] | 32)) pair = i;
+    else if (i > 0 && (keys[i - 1] | 32) == (keys[i] | 32)) pair = i - 1;
+    else return false;
+    if (englishScore(keys) != LK_VIKEY_NOT_A_WORD || englishScore(shown) != LK_VIKEY_NOT_A_WORD) return false;
+    // An English word with both letters of the pair inside the keys ("mirror" in "mirrorless", "miss" in
+    // "missworld"): an English compound Vikey does not list, typed as spelled. Vikey keeps it.
+    for (size_t start = 0; start <= pair; start++) {
+        for (size_t end = pair + 2; end <= keys.size(); end++) {
+            if (end - start >= 4 && englishScore(keys.substr(start, end - start)) != LK_VIKEY_NOT_A_WORD) return false;
+        }
+    }
+    return true;
+}
+
+// MARK: - Final k in place names
+//
+// Central Highlands names write final c as k: Đắk Lắk, Đắk Nông, Đăk Glei, Krông Búk. Vikey has no syllable with a
+// final k (only teencode "ừk"), so at the break it puts the keys back as a wrong spelling ("ddawsk ", "lawsk "),
+// staying in Vietnamese and arming no ⌫⌫ undo. LeanKeys keeps the word on screen when its keys are no English word
+// and the same word with c ("đắc", "lắc"; with a sắc tone when it has none: "đăk" -> "đắc") is Vietnamese.
+// Backspace twice still gives the keys back (the veto's reverse undo).
+
+static bool hasTone(const std::u16string& word) {
+    for (char16_t c : word) {
+        const LKTelexLetter* m = telexLetter(c);
+        if (m && m->tone) return true;
+    }
+    return false;
+}
+
+// `shown` (the word on screen before the break) came back as `keys`: keep `shown`?
+static bool finalKKeeps(const std::u16string& shown, const std::u16string& keys) {
+    if (shown.size() < 2 || shown.size() > kFixWordMax || keys.size() > kFixWordMax || isAscii(shown)) return false;
+    if ((shown.back() | 32) != 'k' || !isAscii(keys) || englishScore(keys) != LK_VIKEY_NOT_A_WORD) return false;
+    // The syllable is well formed: with another stop final in place of k it is a word ("búk" -> "bút"; Vikey's
+    // dictionary has no "búc").
+    for (const char16_t* final : {u"c", u"t", u"p", u"ch"}) {
+        std::u16string word = shown.substr(0, shown.size() - 1) + final;
+        std::string telex;
+        if (!telexKeys(word, telex) || telex.size() + 1 > kMaxScoredKeys) continue;
+        if (vAutoSwitchWordScore(1, telex.c_str(), nullptr, nullptr) != LK_VIKEY_NOT_A_WORD) return true;
+        if (hasTone(word)) continue;
+        telex += 's';
+        if (vAutoSwitchWordScore(1, telex.c_str(), nullptr, nullptr) != LK_VIKEY_NOT_A_WORD) return true;
+    }
+    return false;
+}
+
+// The break key's edit `e` (made after the model `before`) ends with `word` on screen in place of the word `shown`
+// there before the key, then the break characters `breakText`. Backspace twice gives `keys` back, in English.
+static void showAtBreak(const ScreenModel& before, VKEdit& e, const std::u16string& shown, const std::u16string& word,
+                        const std::u16string& keys, const std::u16string& breakText) {
+    e.deleteCount = word == shown ? 0 : (int)shown.size();
+    e.text = (word == shown ? u"" : word) + breakText;
+    model.line = before.line;
+    applyToModel(e);
+    veto = Veto();
+    veto.fix.before = word;
+    veto.fix.after = keys;
+    veto.fix.previous = previousWordBefore(before.line.size() - shown.size());
+    veto.languageAfterFix = 0;   // the keys come back as typed, in English (as Vikey types them there)
+    veto.active = true;
+    veto.capsLock = true;   // the shim's own rule: no undo event on reverse
+}
+
+// A break key in Vietnamese replaced the word on screen with its keys: keep a place name with a final k instead.
+// `before` is the model before the key, `e` Vikey's edit for it. Returns true and rewrites `e` when it keeps.
+static bool keepFinalK(const ScreenModel& before, VKEdit& e) {
+    const std::u16string shown = wordOf(before.line);
+    if (shown.empty() || e.deleteCount != (int)shown.size()) return false;
+    size_t n = 0;
+    while (n < e.text.size() && isAsciiLetter(e.text[n])) n++;
+    const std::u16string keys = e.text.substr(0, n), rest = e.text.substr(n);
+    for (char16_t c : rest) if (isWordLetter(c)) return false;
+    if (keys.empty() || !finalKKeeps(shown, keys)) return false;
+    showAtBreak(before, e, shown, shown, keys, rest);
+    return true;
+}
+
+// MARK: - Initial kr in place names
+//
+// Krông Búk, Krông Pắc, Krông Ana: Vikey has no initial kr, so it types the rest of the word as plain letters
+// ("kroong") and leaves it at the break. LeanKeys types the rest at the break as it would after c ("coong" ->
+// "công") and puts kr back in front: "Krông". Only for keys that are no English word, a lower-case rest, and a rest
+// that the Telex keys change.
+static bool typeInitialKr(const ScreenModel& before, VKEdit& e) {
+    const std::u16string shown = wordOf(before.line);
+    if (shown.size() < 3 || shown.size() > kFixWordMax || e.deleteCount != 0 || !isAscii(shown)) return false;
+    if ((shown[0] | 32) != 'k' || (shown[1] | 32) != 'r') return false;
+    for (char16_t c : e.text) if (isWordLetter(c)) return false;
+    if (englishScore(shown) != LK_VIKEY_NOT_A_WORD) return false;
+    std::string telex = "c";
+    for (size_t i = 2; i < shown.size(); i++) {
+        if (shown[i] < 'a' || shown[i] > 'z') return false;
+        telex += (char)shown[i];
+    }
+    if (telex.size() > kMaxScoredKeys) return false;
+    Uint16 rendered[64];
+    int length = 0;
+    if (vAutoSwitchWordScore(1, telex.c_str(), rendered, &length) == LK_VIKEY_NOT_A_WORD || length < 2) return false;
+    if (rendered[0] != u'c') return false;
+    const std::u16string word = shown.substr(0, 2) + std::u16string(rendered + 1, rendered + length);
+    if (word == shown) return false;
+    showAtBreak(before, e, shown, word, shown, e.text);
+    return true;
+}
+
+// MARK: - The word after Krông
+//
+// Telex joins a vowel typed after a final consonant to the vowel before it ("ana" -> "ân"), and Vikey keeps "Ân"
+// (more common than "ana"). Right after a word with the initial kr (Krông, which the shim typed), the next word is
+// part of a place name: Krông Ana, Krông Pa. When the keys of that word are an English (or name) word and the screen
+// shows something else, the keys come back. Backspace twice gives Vikey's word back.
+static bool keepKeysAfterKr(const ScreenModel& before, VKEdit& e) {
+    const std::u16string shown = wordOf(before.line);
+    if (shown.empty() || e.deleteCount != 0 || !before.wordKeysKnown) return false;
+    for (char16_t c : e.text) if (isWordLetter(c)) return false;
+    const std::u16string& keys = before.wordKeys;
+    if (keys.empty() || keys == shown || keys.size() > kFixWordMax || shown.size() > kFixWordMax) return false;
+    const std::u16string previous = previousWordBefore(before.line.size() - shown.size());
+    if (previous.size() < 3 || previous[0] != u'k' || previous[1] != u'r' || isAscii(previous)) return false;
+    if (englishScore(keys) == LK_VIKEY_NOT_A_WORD) return false;
+    showAtBreak(before, e, shown, keys, keys, e.text);
+    veto.fix.after = shown;      // Backspace twice gives "Ân" back, in Vietnamese
+    veto.languageAfterFix = 1;
+    return true;
+}
+
 extern "C" {
 
 int lk_vikey_init(void) {
@@ -497,12 +658,20 @@ static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
         const int undosBefore = driver->undos;
         const bool letterKey = isLetterKey(macKeyCode);
         const int languageBefore = vLanguage;
+        const bool afterDoubledKey = doubledKeyFlip;
         e = pressTracked(macKeyCode, shift != 0, now);
         if (!backspace) keepSwitchBackUnlessEnglish(languageBefore);
         comeBackAfterDoubledKey(macKeyCode, shift, languageBefore, e);
         if (letterKey) {
             const bool wordStarted = wordOf(before.line).empty();
             model.wordCapsLock = (wordStarted || before.wordCapsLock) && capsLockForNextKey;
+            if (wordStarted) { model.wordKeys.clear(); model.wordKeysKnown = true; }
+            for (size_t k = 0; k < 26; k++) {
+                if (kLetterKeys[k] != macKeyCode) continue;
+                model.wordKeys += (char16_t)((shift ? 'A' : 'a') + k);
+            }
+        } else if (backspace) {
+            model.wordKeysKnown = false;
         }
         if (driver->undos != undosBefore) {
             if (hasLastFix) queueUndo(lastFix, false);
@@ -511,10 +680,31 @@ static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
         Fix fix;
         if (backspace) {
             if (doubleKeyFix) repairDoubleKey(before, now, e);
+        } else if (!letterKey && languageBefore == 1 && vLanguage == 1 &&
+                   !(driver->*member(UndoActiveTag())) && (keepFinalK(before, e) || typeInitialKr(before, e) ||
+                                                           keepKeysAfterKr(before, e))) {
+            // kept or typed a place name; nothing for the fix filter
         } else if (fixOfLastKey(e, fix)) {
             if (capsLockKeeps(before, fix)) {
                 vetoFix(before, macKeyCode, shift != 0, now, e, fix);
                 veto.capsLock = true;
+            } else if (languageBefore == 1 && finalKKeeps(fix.before, fix.after)) {
+                // A place name with a final k that Vikey switched to English instead ("búk " -> "busk ").
+                vetoFix(before, macKeyCode, shift != 0, now, e, fix);
+                veto.capsLock = true;   // the shim's own rule: no undo event on reverse
+            } else if (afterDoubledKey && doubledToneKeyKeeps(fix)) {
+                vetoFix(before, macKeyCode, shift != 0, now, e, fix);
+                veto.capsLock = true;   // the shim's own rule, as for Caps Lock: no undo event on reverse
+                veto.languageAfterFix = 0;   // the keys come back as typed, in English (Vikey's language for them)
+                // The undo inside vetoFix put English back; the word was no English word, so Vietnamese comes back
+                // for the next one, as comeBackAfterDoubledKey does.
+                if (vLanguage != 1) {
+                    vLanguage = 1;
+                    startNewSession();
+                    vAutoSwitchForget();
+                }
+                e.languageChanged = languageBefore != 1;
+                model.languageAfterLastKey = 1;
             } else if (fixFilter) {
                 const lk_fix c = toC(fix);
                 if (fixFilter(&c) == 1) vetoFix(before, macKeyCode, shift != 0, now, e, fix);
