@@ -481,6 +481,20 @@ final class VikeyEngineTests: XCTestCase {
         XCTAssertTrue(engine.isVietnamese)
     }
 
+    /// The tone key typed after the final k ("ddawks", "lawks", "bukj") puts the tone on the word too: Vikey shows
+    /// it as a letter ("đăks") and puts the keys back at the break. English words ("asks", "desks") and words with a
+    /// vowel first ("oks") stay.
+    func testToneAfterFinalKPlacesTheTone() {
+        for (keys, shown) in [("ddawks r'laaps ", "đắk r'lấp "), ("ddawks lawks ", "đắk lắk "), ("kroong buks ", "krông búk "),
+                              ("bukj ", "bụk "), ("asks desks ", "asks desks "), ("oks ", "oks ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            let field = Field(engine)
+            XCTAssertEqual(field.type(keys), shown, keys)
+            XCTAssertEqual(field.type("tooi "), shown + "tôi ", "Vietnamese after \(keys)")
+        }
+    }
+
     /// Backspace twice right after a kept place name gives back the keys as typed.
     func testPlaceNameWithFinalKBackspaceTwiceGivesKeysBack() {
         let field = Field(engine)
