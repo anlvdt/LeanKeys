@@ -421,6 +421,35 @@ final class VikeyEngineTests: XCTestCase {
         }
     }
 
+    /// Krông Búk, Krông Pắc, Krông Nô: Vikey has no initial kr and switches "búk" to English ("busk"); the shim types
+    /// the rest after kr as after c and keeps "búk". English words starting with kr stay.
+    func testPlaceNamesWithInitialKrAndBukStay() {
+        for (keys, shown) in [("kroong busk ", "krông búk "), ("kroong pawsc ", "krông pắc "), ("kroong noo ", "krông nô "),
+                              ("kroong. ", "krông. "), ("krona kraft ", "krona kraft ")] {
+            engine.setVietnamese(true)
+            engine.resetContext()
+            let field = Field(engine)
+            XCTAssertEqual(field.type(keys), shown, keys)
+            XCTAssertEqual(field.type("tooi "), shown + "tôi ", "Vietnamese after \(keys)")
+        }
+    }
+
+    /// Backspace twice right after "Krông" gives back the keys as typed.
+    func testInitialKrBackspaceTwiceGivesKeysBack() {
+        let field = Field(engine)
+        XCTAssertEqual(field.type("kroong "), "krông ")
+        field.backspace()
+        XCTAssertEqual(field.backspace(), "kroong")
+    }
+
+    /// After "desskin" kept as "deskin", Vietnamese comes back: a following word that is no dictionary word
+    /// ("đăk") is still typed in Vietnamese.
+    func testDoubledToneKeyKeptBringsVietnameseBack() {
+        let field = Field(engine)
+        XCTAssertEqual(field.type("desskin ddawk "), "deskin đăk ")
+        XCTAssertTrue(engine.isVietnamese)
+    }
+
     /// Backspace twice right after a kept place name gives back the keys as typed.
     func testPlaceNameWithFinalKBackspaceTwiceGivesKeysBack() {
         let field = Field(engine)
