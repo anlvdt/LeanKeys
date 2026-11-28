@@ -54,6 +54,8 @@ public final class PredictionController: ObservableObject {
     private var lastAnchorTime: CFAbsoluteTime = 0
     private var pendingRefresh: DispatchWorkItem?
     private var refreshToken: UInt64 = 0
+    private var navigator = SuggestionListNavigator()
+    private var now: () -> CFAbsoluteTime = CFAbsoluteTimeGetCurrent
 
     public init(
         defaults: UserDefaults = .standard,
@@ -191,6 +193,10 @@ public final class PredictionController: ObservableObject {
         }
         pendingRefresh?.cancel()
         refreshToken &+= 1
+        if navigator.selectedIndex != nil {
+            navigator.typing()
+            panel.setSelectedIndex(nil)
+        }
         let item = DispatchWorkItem { [weak self] in
             self?.refreshNow(router: router, bundleID: bundleID, isVietnamese: isVietnamese,
                              atWordStartAfterSpace: atWordStartAfterSpace)
@@ -264,13 +270,42 @@ public final class PredictionController: ObservableObject {
         }
     }
 
-    private func present(candidates: [PredictionCandidate], anchor: CaretLocator.CaretAnchor, token: UInt64) {
+    func present(candidates: [PredictionCandidate], anchor: CaretLocator.CaretAnchor, token: UInt64) {
         guard enabled, token == refreshToken else { return }
+        if candidates.map(\.display) != currentCandidates.map(\.display) || !panel.isVisible {
+            navigator.listChanged(count: candidates.count, at: now())
+        }
         currentCandidates = candidates
-        panel.show(candidates: candidates, anchor: anchor) { [weak self] idx in
+        panel.show(candidates: candidates, anchor: anchor, selectedIndex: navigator.selectedIndex) { [weak self] idx in
             self?.acceptFromClick(at: idx)
         }
     }
+
+    /// Test hook: shows `candidates` as if a refresh had just resolved the caret.
+    func presentForTesting(_ candidates: [PredictionCandidate], anchor: CaretLocator.CaretAnchor,
+                           clock: @escaping () -> CFAbsoluteTime) {
+        now = clock
+        present(candidates: candidates, anchor: anchor, token: refreshToken)
+    }
+
+    /// ↓ / ↑ / Tab / Enter / Esc while the list shows (spec 2026-11-28-prediction-dropdown). `.accept(i)` is left
+    /// to the caller (`acceptCandidate`), which owns the injection; every other effect is applied here.
+    public func handleListKey(_ key: SuggestionListKey) -> SuggestionListAction {
+        guard isVisible else { return .pass }
+        let action = navigator.handle(key, now: now())
+        switch action {
+        case .swallow:
+            panel.setSelectedIndex(navigator.selectedIndex)
+        case .passAndHide, .dismiss:
+            hide()
+        case .pass, .accept:
+            break
+        }
+        return action
+    }
+
+    /// Row the user moved to with ↓/↑, if any.
+    public var selectedIndex: Int? { isVisible ? navigator.selectedIndex : nil }
 
     /// Accepts candidate `index` (from Tab / ⌥1–⌥3 in the event tap). Returns the edit for `RustBridge` to inject.
     public func acceptCandidate(at index: Int, router: EngineRouter, isVietnamese: Bool) -> (Int, [Character])? {
@@ -282,6 +317,7 @@ public final class PredictionController: ObservableObject {
         pendingRefresh = nil
         refreshToken &+= 1
         currentCandidates = []
+        navigator.listChanged(count: 0, at: now())
         lastAnchor = nil
         panel.hide()
 
@@ -313,6 +349,7 @@ public final class PredictionController: ObservableObject {
         pendingRefresh = nil
         refreshToken &+= 1
         currentCandidates = []
+        navigator.listChanged(count: 0, at: now())
         panel.hide()
     }
 }

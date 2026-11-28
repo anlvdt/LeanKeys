@@ -1723,15 +1723,31 @@ private func keyboardCallback(
     }
     Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log (after pass-through: nothing logged in a sign-in field)
     // LEANKEYS-HOOK-BEGIN: engine-dispatch
-    // 4A+: Accept (Tab, Option+1..3), dismiss (Esc), or hide on plain cursor movement.
+    // 4A+ list (spec 2026-11-28-prediction-dropdown): ↓/↑ select, Tab/Enter accept, Esc hides; Option+1..3 accept;
+    // other plain cursor movement hides.
     if PredictionController.shared.isVisible {
-        if keyCode == UInt16(KeyCode.tab), !hasCmdOrCtrl, !hasOption, !shift,
-           let (bs, chars) = PredictionController.shared.acceptCandidate(
-               at: 0, router: .shared, isVietnamese: EngineRouter.shared.currentVietnamese
-           )
-        {
-            sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
-            return nil
+        let listKey: SuggestionListKey? = switch keyCode {
+        case UInt16(KeyCode.downArrow): .down
+        case UInt16(KeyCode.upArrow): .up
+        case UInt16(KeyCode.tab): .tab
+        case UInt16(KeyCode.returnKey), UInt16(KeyCode.enter): .enter
+        case UInt16(KeyCode.esc): .escape
+        default: nil
+        }
+        if let listKey, !hasCmdOrCtrl, !hasOption, !shift {
+            switch PredictionController.shared.handleListKey(listKey) {
+            case .accept(let index):
+                if let (bs, chars) = PredictionController.shared.acceptCandidate(
+                    at: index, router: .shared, isVietnamese: EngineRouter.shared.currentVietnamese
+                ) {
+                    sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
+                    return nil
+                }
+            case .swallow, .dismiss:
+                return nil
+            case .pass, .passAndHide:
+                break
+            }
         }
         if hasOption, !hasCmdOrCtrl, !shift {
             let optIndex: Int? = switch keyCode {
@@ -1748,10 +1764,6 @@ private func keyboardCallback(
                 sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
                 return nil
             }
-        }
-        if keyCode == UInt16(KeyCode.esc), !hasCmdOrCtrl, !hasOption, !shift {
-            PredictionController.shared.dismiss()
-            return nil
         }
         let plainNavKeys: Set<UInt16> = [
             UInt16(KeyCode.leftArrow), UInt16(KeyCode.rightArrow),

@@ -24,10 +24,12 @@ Cách đo: dùng `leankeys/Tests/LeanKeysKitTests/PredictionLatencyBenchTests.sw
 | AX khi app rảnh (Chrome) | hàng AX | 0,5 | 0,2 | 56 |
 | `panel.show`, lần hiện đầu | main | 8,7 | 14,6 | 55 |
 | `panel.show`, chữ thay đổi | main | 0,5 | 2,8 | 7,1 |
-| + SwiftUI/CA commit và vẽ sau khi đổi chữ | main | **6,0** | **9,9** | 18,6 |
+| + SwiftUI/CA commit và vẽ sau khi đổi chữ (đo dồn dập, không theo nhịp gõ) | main | 6,0 | 9,9 | 18,6 |
+| **Thanh SwiftUI 1.14: đổi chữ, gồm cả commit, đo theo nhịp gõ 60 ms** | main | **21,8–22,6** | **30,8–33,3** | 36,6 |
+| Danh sách AppKit mới, cùng phép đo | main | **6,0–6,4** | **10,4–11,2** | 15,1 |
 | `panel.show`, chữ không đổi | main | 0,5 | 2,6 | 7,5 |
 
-Event tap chạy trên **main thread**: `KeyboardHookManager.start()` được gọi từ `MenuBar`, nguồn sự kiện gắn vào `CFRunLoopGetCurrent()`. Vì vậy `DispatchQueue.main.async` không đưa việc ra khỏi đường gõ phím. Mỗi lần thanh gợi ý đổi chữ, main thread mất khoảng 6–10 ms để vẽ. Nếu phím kế tiếp đến đúng lúc đó, nó phải chờ ngần ấy thời gian.
+Event tap chạy trên **main thread**: `KeyboardHookManager.start()` được gọi từ `MenuBar`, nguồn sự kiện gắn vào `CFRunLoopGetCurrent()`. Vì vậy `DispatchQueue.main.async` không đưa việc ra khỏi đường gõ phím. Đo theo nhịp gõ, mỗi lần thanh SwiftUI 1.14 đổi chữ, main thread mất khoảng 22 ms (p95 khoảng 31 ms) để vẽ. Nếu phím kế tiếp đến đúng lúc đó, nó phải chờ ngần ấy thời gian. Lần đo đầu (6 ms) gọi vẽ dồn dập, nhanh hơn tốc độ màn hình, nên ra số thấp hơn thực tế.
 
 ### Từ lúc bấm phím đến lúc thanh gợi ý cập nhật (mô phỏng từ các số đo trên)
 
@@ -75,7 +77,7 @@ Nguyên nhân, xếp theo mức ảnh hưởng:
    - ⌥1 làm cùng việc với Tab, còn ô của nó lại ghi "Tab".
    - ⌥2 và ⌥3 trên bàn phím US vốn gõ ra ™ và £.
    - Ô đầu đổi 36 % số phím, nên khi đưa tay tới Tab thì chữ dưới tay đã khác.
-6. **Main thread.** Mỗi lần đổi chữ mất khoảng 6 ms, p95 10 ms, để vẽ SwiftUI trên đúng luồng xử lý phím. Chưa gây trễ thấy được, nhưng thanh càng đổi nhiều thì càng tốn.
+6. **Main thread.** Mỗi lần đổi chữ, thanh SwiftUI mất khoảng 22 ms (p95 31 ms) trên đúng luồng xử lý phím. Gõ 50–80 ms mỗi phím thì phần này đã chiếm một phần lớn thời gian giữa hai phím. Đây có thể là một phần lý do khiến gõ phím thấy chậm. Danh sách AppKit mới hạ còn khoảng 6 ms.
 
 ## 3. Đối chiếu
 

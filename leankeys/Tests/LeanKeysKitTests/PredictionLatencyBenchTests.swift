@@ -160,48 +160,52 @@ final class PredictionLatencyBenchTests: XCTestCase {
     func testPanelShowCost() throws {
         try XCTSkipUnless(enabled)
         _ = NSApplication.shared
-        let panel = CandidatePanelController()
         let anchor = CaretLocator.CaretAnchor(rect: CGRect(x: 400, y: 500, width: 2, height: 18), isFieldFallback: false)
         func cands(_ seed: Int) -> [PredictionCandidate] {
             (0..<3).map { i in
                 PredictionCandidate(id: "c\(seed)-\(i)", display: ["cảm ơn bạn", "kiểm tra lại", "được không"][i] + " \(seed)",
-                                    insertion: "x ", deleteCount: 0, kind: .word, score: 1)
+                                    insertion: "x ", deleteCount: 2, kind: .word, score: 1)
             }
         }
-        var first: [Double] = [], changed: [Double] = [], same: [Double] = [], moved: [Double] = []
-        var commitChanged: [Double] = []
         func spin() -> Double {
             let t = CFAbsoluteTimeGetCurrent()
             CATransaction.flush()
             RunLoop.current.run(mode: .default, before: Date())
             return (CFAbsoluteTimeGetCurrent() - t) * 1000
         }
-        for round in 0..<40 {
-            panel.hide(); _ = spin()
-            var t = CFAbsoluteTimeGetCurrent()
-            panel.show(candidates: cands(round), anchor: anchor) { _ in }
-            first.append((CFAbsoluteTimeGetCurrent() - t) * 1000); _ = spin()
-            for i in 1...10 {
-                t = CFAbsoluteTimeGetCurrent()
-                panel.show(candidates: cands(round * 100 + i), anchor: anchor) { _ in }
-                changed.append((CFAbsoluteTimeGetCurrent() - t) * 1000)
-                commitChanged.append(spin())
-                t = CFAbsoluteTimeGetCurrent()
-                panel.show(candidates: cands(round * 100 + i), anchor: anchor) { _ in }
-                same.append((CFAbsoluteTimeGetCurrent() - t) * 1000); _ = spin()
-                let a2 = CaretLocator.CaretAnchor(rect: anchor.rect.offsetBy(dx: CGFloat(i * 7), dy: 0), isFieldFallback: false)
-                t = CFAbsoluteTimeGetCurrent()
-                panel.show(candidates: cands(round * 100 + i), anchor: a2) { _ in }
-                moved.append((CFAbsoluteTimeGetCurrent() - t) * 1000); _ = spin()
+        // Paced like typing (one update per keystroke, 60 ms apart), so the window server is not flooded with
+        // commits faster than the display refresh, which would measure frame back-pressure instead of our work.
+        let pace = 0.06
+        let legacy = LegacyCandidatePanelController()
+        let current = CandidatePanelController()
+        let impls: [(String, (Int, CaretLocator.CaretAnchor) -> Void, () -> Void)] = [
+            ("v1.14 SwiftUI bar", { seed, a in legacy.show(candidates: cands(seed), anchor: a) { _ in } }, { legacy.hide() }),
+            ("AppKit list", { seed, a in current.show(candidates: cands(seed), anchor: a) { _ in } }, { current.hide() }),
+        ]
+        var out: [String: Any] = [:]
+        for (name, show, hide) in impls {
+            var changed: [Double] = [], same: [Double] = []
+            for round in 0..<12 {
+                hide(); _ = spin()
+                show(round * 100, anchor); _ = spin()
+                Thread.sleep(forTimeInterval: pace)
+                for i in 1...10 {
+                    var t = CFAbsoluteTimeGetCurrent()
+                    show(round * 100 + i, anchor)
+                    changed.append((CFAbsoluteTimeGetCurrent() - t) * 1000 + spin())
+                    Thread.sleep(forTimeInterval: pace)
+                    t = CFAbsoluteTimeGetCurrent()
+                    show(round * 100 + i, anchor)
+                    same.append((CFAbsoluteTimeGetCurrent() - t) * 1000 + spin())
+                    Thread.sleep(forTimeInterval: pace)
+                }
             }
+            hide()
+            print("[bench] \(name) texts changed (show + commit): \(Self.stats(changed))")
+            print("[bench] \(name) texts same    (show + commit): \(Self.stats(same))")
+            out[name] = ["changed": changed, "same": same]
         }
-        panel.hide()
-        print("[bench] panel.show first:          \(Self.stats(first))")
-        print("[bench] panel.show texts changed:  \(Self.stats(changed))")
-        print("[bench]   + CA commit/render:      \(Self.stats(commitChanged))")
-        print("[bench] panel.show same texts:     \(Self.stats(same))")
-        print("[bench] panel.show moved only:     \(Self.stats(moved))")
-        dump("panel.json", ["first": first, "changed": changed, "commit": commitChanged, "same": same, "moved": moved])
+        dump("panel.json", out)
     }
 
     // MARK: - 3. CaretLocator (AX) against running apps
