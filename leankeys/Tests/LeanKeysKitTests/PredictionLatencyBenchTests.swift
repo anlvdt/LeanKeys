@@ -240,6 +240,120 @@ final class PredictionLatencyBenchTests: XCTestCase {
         }
     }
 
+    // MARK: - 1c. Ours vs macOS QuickType (NSSpellChecker candidates) on the same positions
+
+    private static func quickType(_ text: String, checker: NSSpellChecker, tag: Int) -> ([String], Double) {
+        let orth = NSOrthography(dominantScript: "Latn", languageMap: ["Latn": ["vi", "en"]])
+        var out: [String] = []
+        var done = false
+        let t0 = CFAbsoluteTimeGetCurrent()
+        _ = checker.requestCandidates(forSelectedRange: NSRange(location: (text as NSString).length, length: 0), in: text,
+                                      types: NSTextCheckingAllSystemTypes, options: [.orthography: orth],
+                                      inSpellDocumentWithTag: tag) { _, r in
+            out = r.compactMap { $0.replacementString?.trimmingCharacters(in: .whitespaces) }
+            done = true
+        }
+        while !done { RunLoop.current.run(until: Date().addingTimeInterval(0.001)) }
+        return (out, (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+    }
+
+    func testOursVersusQuickType() throws {
+        try XCTSkipUnless(enabled)
+        _ = NSApplication.shared
+        let lines = try corpusLines()
+        let split = lines.count * 2 / 3
+        let ctx = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: false, now: Date())
+        let personal = PersonalPredictionModel(store: nil)
+        personal.enabled = true
+        for l in lines[..<split] { personal.observe(CommittedPhrase(text: l), context: ctx) }
+        let engine = PredictionEngine(corpus: .shared, personal: personal, dictionary: VikeyDictionaryCompleter.shared)
+        let checker = NSSpellChecker.shared
+        _ = checker.setLanguage("vi")
+        let tag = NSSpellChecker.uniqueSpellDocumentTag()
+        _ = Self.quickType("Hôm nay mình ", checker: checker, tag: tag)
+        // name -> (n, top1, top3) for after-space and 2-letters-typed
+        var r: [String: [Int]] = [:]
+        func score(_ key: String, _ rows: [String], _ target: String, typed: String) {
+            let firsts = rows.map { $0.lowercased().split(separator: " ").first.map(String.init) ?? "" }
+                .filter { !$0.isEmpty && $0 != typed.lowercased() }
+            var v = r[key] ?? [0, 0, 0]
+            v[0] += 1
+            if firsts.first == target { v[1] += 1 }
+            if firsts.prefix(3).contains(target) { v[2] += 1 }
+            r[key] = v
+        }
+        var lat: [Double] = []
+        var count = 0
+        let limit = Int(ProcessInfo.processInfo.environment["LEANKEYS_BENCH_QT_N"] ?? "600") ?? 600
+        outer: for line in lines[split...] {
+            let ws = Self.words(line)
+            guard ws.count >= 2 else { continue }
+            for wi in 1..<ws.count {
+                count += 1
+                if count > limit { break outer }
+                let prev = Array(ws[..<wi])
+                let target = ws[wi].lowercased()
+                for typed in ["", String(ws[wi].prefix(2))] where typed.isEmpty || target.count >= 3 {
+                    let phase = typed.isEmpty ? "next" : "mid2"
+                    let ours = engine.predict(PredictionQuery(previousWords: prev, currentWord: typed, followsNonSpaceBreak: false,
+                                                              atWordStartAfterSpace: typed.isEmpty, isVietnamese: true)).map(\.display)
+                    let (qt, ms) = Self.quickType(prev.joined(separator: " ") + " " + typed, checker: checker, tag: tag)
+                    lat.append(ms)
+                    // Merge: learned (personal) rows first, then QuickType, then ours.
+                    let learned = engine.predict(PredictionQuery(previousWords: prev, currentWord: typed, followsNonSpaceBreak: false,
+                                                                 atWordStartAfterSpace: typed.isEmpty, isVietnamese: true))
+                        .filter(\.isPersonal).map(\.display)
+                    score("\(phase) ours", ours, target, typed: typed)
+                    score("\(phase) quicktype", qt, target, typed: typed)
+                    score("\(phase) learned+quicktype", learned + qt, target, typed: typed)
+                }
+            }
+        }
+        for k in r.keys.sorted() {
+            let v = r[k]!
+            print(String(format: "[bench] vsQT %-24@ n=%d top1=%.1f%% top3=%.1f%%", k, v[0], 100.0 * Double(v[1]) / Double(v[0]), 100.0 * Double(v[2]) / Double(v[0])))
+        }
+        print("[bench] vsQT quicktype latency: \(Self.stats(lat))")
+    }
+
+    // MARK: - 1d. Next-word precision by confidence: show only when likely right?
+
+    func testNextWordPrecisionByScore() throws {
+        try XCTSkipUnless(enabled)
+        let lines = try corpusLines()
+        let split = lines.count * 2 / 3
+        let ctx = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: false, now: Date())
+        let personal = PersonalPredictionModel(store: nil)
+        personal.enabled = true
+        for l in lines[..<split] { personal.observe(CommittedPhrase(text: l), context: ctx) }
+        let engine = PredictionEngine(corpus: .shared, personal: personal, dictionary: nil)
+        var samples: [(score: Double, gap: Double, personal: Bool, right: Bool)] = []
+        for line in lines[split...] {
+            let ws = Self.words(line)
+            guard ws.count >= 2 else { continue }
+            for wi in 1..<ws.count {
+                let rows = engine.predict(PredictionQuery(previousWords: Array(ws[..<wi]), currentWord: "", followsNonSpaceBreak: false,
+                                                          atWordStartAfterSpace: true, isVietnamese: true))
+                guard let top = rows.first else { samples.append((0, 0, false, false)); continue }
+                let first = top.display.lowercased().split(separator: " ").first.map(String.init) ?? ""
+                let gap = rows.count > 1 ? top.score - rows[1].score : top.score
+                samples.append((top.score, gap, top.isPersonal, first == ws[wi].lowercased()))
+            }
+        }
+        let n = Double(samples.count)
+        for th in [0.0, 60, 100, 150, 200, 260, 320] {
+            let sel = samples.filter { $0.score >= th && $0.score > 0 }
+            let right = sel.filter(\.right).count
+            print(String(format: "[bench] nextPrecision score>=%3.0f: shown %5.1f%% of word starts, row 1 right %5.1f%%", th,
+                         100.0 * Double(sel.count) / n, 100.0 * Double(right) / Double(max(1, sel.count))))
+        }
+        for p in [true, false] {
+            let sel = samples.filter { $0.score > 0 && $0.personal == p }
+            print(String(format: "[bench] nextPrecision personal=%@: shown %5.1f%%, right %5.1f%%", p ? "yes" : "no ",
+                         100.0 * Double(sel.count) / n, 100.0 * Double(sel.filter(\.right).count) / Double(max(1, sel.count))))
+        }
+    }
+
     // MARK: - 2. CandidatePanelController.show (SwiftUI) cost on the main thread
 
     func testPanelShowCost() throws {
@@ -350,3 +464,4 @@ final class PredictionLatencyBenchTests: XCTestCase {
         dump("ax-live.json", out)
     }
 }
+

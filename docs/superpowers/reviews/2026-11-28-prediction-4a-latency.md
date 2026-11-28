@@ -99,3 +99,16 @@ Nguyên nhân, xếp theo mức ảnh hưởng:
 
 - Chọn cách nào cho mục 1: (a) hiện khi tay dừng, hay (b) chỉ hiện ở đầu từ mới?
 - Bản bị revert lag vì phải chờ mới hiện, hay vì kiểu chữ chìm?
+
+## 5. Đo lại độ chính xác (sau khi người dùng nói "8 % quá thấp")
+
+Đo trên cùng phần câu thử (600 vị trí, `testOursVersusQuickType`):
+
+| | Từ kế tiếp, chưa gõ chữ nào: ô đầu / 3 ô | Sau khi gõ 2 chữ: ô đầu / 3 ô |
+|---|---|---|
+| LeanKeys | 7,3 % / 13,7 % | 52,9 % / 69,1 % |
+| macOS QuickType (`NSSpellChecker.requestCandidates`, có tiếng Việt, p95 18 ms) | 10,8 % / 20,2 % | 44,5 % / 57,7 % |
+| Cụm đã học xếp trước, rồi tới QuickType | 9,0 % / 17,8 % | 49,7 % / 67,0 % |
+
+- Lọc theo điểm số không giúp hiện ít mà đúng hơn (`testNextWordPrecisionByScore`). Ở mọi ngưỡng, ô đầu chỉ đúng 12–17 %, vì điểm của gợi ý đúng và gợi ý sai không khác nhau rõ.
+- Kết luận: với câu chat ngắn, có trộn tiếng Anh, đoán từ kế tiếp trước khi gõ chữ nào chỉ đúng khoảng 10 %, kể cả mô hình của Apple. Khi đã gõ 1–2 chữ thì đúng khoảng 50–70 %.
