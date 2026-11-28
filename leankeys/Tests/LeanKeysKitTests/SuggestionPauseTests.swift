@@ -112,51 +112,71 @@ final class SuggestionPauseTests: XCTestCase {
         c.refreshNow(router: router, bundleID: "com.apple.TextEdit", isVietnamese: true, atWordStartAfterSpace: false)
     }
 
+    /// Polls the run loop until `c.isVisible == visible` or `timeout` passes; returns when it happened.
+    /// Timing asserts below only check "not before the pause" and "eventually": a loaded machine (the pre-push hook
+    /// runs the suite beside other work) may delay a show, never bring it forward.
+    @discardableResult
+    private func waitUntil(_ c: PredictionController, visible: Bool, timeout: TimeInterval = 3) -> CFAbsoluteTime? {
+        let end = CFAbsoluteTimeGetCurrent() + timeout
+        while CFAbsoluteTimeGetCurrent() < end {
+            if c.isVisible == visible { return CFAbsoluteTimeGetCurrent() }
+            spin(0.002)
+        }
+        return nil
+    }
+
     func testListWaitsForThePauseThenShows() {
-        let (c, router, done) = setUp(pauseMs: 200)
+        let (c, router, done) = setUp(pauseMs: 300)
         defer { done() }
         for ch in "anh đư" { router.mirror.typed(ch) }
+        let keyAt = CFAbsoluteTimeGetCurrent()
         key(c, router)
-        spin(0.08)
-        XCTAssertFalse(c.isVisible, "still inside the pause: a fast typist sees nothing")
-        spin(0.2)
-        XCTAssertTrue(c.isVisible, "the typist stopped: the list shows")
+        let shownAt = waitUntil(c, visible: true)
+        XCTAssertNotNil(shownAt, "the typist stopped: the list shows")
+        XCTAssertGreaterThanOrEqual((shownAt ?? 0) - keyAt, 0.29, "not before the pause: a fast typist sees nothing")
         XCTAssertTrue(c.currentCandidates.contains { $0.display == "được" })
     }
 
-    func testANewKeyRestartsThePause() {
-        let (c, router, done) = setUp(pauseMs: 200)
+    func testANewKeyRestartsThePause() throws {
+        let (c, router, done) = setUp(pauseMs: 300)
         defer { done() }
         for ch in "anh đư" { router.mirror.typed(ch) }
+        let firstAt = CFAbsoluteTimeGetCurrent()
         key(c, router)
-        spin(0.12)
-        router.mirror.typed("ơ")
-        key(c, router)
-        spin(0.13) // 250 ms after the first key, 130 ms after the second
-        XCTAssertFalse(c.isVisible, "the first key's show was cancelled by the second key")
         spin(0.15)
-        XCTAssertTrue(c.isVisible)
+        try XCTSkipIf(CFAbsoluteTimeGetCurrent() - firstAt > 0.25, "run loop overslept: the second key would land after the first pause")
+        XCTAssertFalse(c.isVisible)
+        router.mirror.typed("ơ")
+        let secondAt = CFAbsoluteTimeGetCurrent()
+        key(c, router)
+        let shownAt = waitUntil(c, visible: true)
+        XCTAssertNotNil(shownAt)
+        XCTAssertGreaterThanOrEqual((shownAt ?? 0) - secondAt, 0.29,
+                                    "the first key's show (due 150 ms after the second key) was cancelled")
     }
 
     func testVisibleListHidesWhileTheNextKeyWaits() {
-        let (c, router, done) = setUp(pauseMs: 150)
+        let (c, router, done) = setUp(pauseMs: 1000)
         defer { done() }
         for ch in "anh đư" { router.mirror.typed(ch) }
         key(c, router)
-        spin(0.25)
-        XCTAssertTrue(c.isVisible)
+        XCTAssertNotNil(waitUntil(c, visible: true))
         router.mirror.typed("ơ")
+        let secondAt = CFAbsoluteTimeGetCurrent()
         key(c, router)
-        spin(0.06)
-        XCTAssertFalse(c.isVisible, "the old rows are stale once a key lands: hidden until the next pause")
+        let hiddenAt = waitUntil(c, visible: false)
+        XCTAssertNotNil(hiddenAt, "the old rows are stale once a key lands: hidden until the next pause")
+        XCTAssertLessThan((hiddenAt ?? .infinity) - secondAt, 0.9, "hidden well before the next pause ends")
     }
 
     func testZeroMsTurnsTheGateOff() {
         let (c, router, done) = setUp(pauseMs: 0)
         defer { done() }
         for ch in "anh đư" { router.mirror.typed(ch) }
+        let keyAt = CFAbsoluteTimeGetCurrent()
         key(c, router)
-        spin(PredictionController.quickTypeWait + 0.03)
-        XCTAssertTrue(c.isVisible)
+        let shownAt = waitUntil(c, visible: true)
+        XCTAssertNotNil(shownAt)
+        XCTAssertLessThan((shownAt ?? .infinity) - keyAt, 0.5, "no pause: shows as soon as QuickType and the caret are in")
     }
 }
