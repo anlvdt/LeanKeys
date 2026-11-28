@@ -80,6 +80,9 @@ public final class EngineRouter {
     /// Whether Vikey's automatic switch is on (see `setEnabled`).
     public var autoSwitchOn: Bool { autoSwitch }
 
+    /// Current effective Vietnamese/English state tracked on the event-tap thread.
+    public var currentVietnamese: Bool { vietnamese }
+
     /// `makeVikey` runs at most once, the first time Vikey is needed. `undoLearning` runs at most once too, and only
     /// when that engine is the real `VikeyEngine`: the default (`UndoLearning.shared`, which opens the saved rules)
     /// is never built for a stub engine or a router that never uses Vikey. `now` (seconds, monotonic) and
@@ -467,6 +470,14 @@ public final class EngineRouter {
     public func discardPending() {
         mirror.discard()
         forgetWord()
+    }
+
+    /// Updates `mirror` and resets Vikey's word context after the user accepts a 4A+ prediction candidate.
+    /// Does not emit the unfinished phrase so chained predictions (`Tab` -> `Tab`) keep the preceding words.
+    public func resetWordAfterPrediction(deleteCount: Int, inserted: [Character]) {
+        vikey?.resetContext()
+        forgetWord()
+        mirror.apply(deleteCount: deleteCount, insert: inserted)
     }
 
     /// Gõ Nhanh's input method: 0 = Telex, 1 = VNI.

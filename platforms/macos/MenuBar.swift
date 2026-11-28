@@ -163,6 +163,12 @@ class MenuBarController: NSObject, NSWindowDelegate {
             existingReplacements: { AppState.shared.shortcuts.map(\.value) },
             addShortcut: { AppState.shared.addLearnedShortcut(trigger: $0, text: $1) }
         )
+        // 4A+: next-word, phrase and sentence prediction (bar + personal learning opt-in).
+        PredictionController.shared.start(
+            router: .shared,
+            shortcuts: { AppState.shared.shortcuts.filter(\.isEnabled).map { ($0.key, $0.value) } },
+            inject: { bs, chars in RustBridge.injectPrediction(backspace: bs, chars: chars) }
+        )
         // LEANKEYS-HOOK-END
         updateMenu()
     }

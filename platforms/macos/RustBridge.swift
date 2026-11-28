@@ -252,7 +252,26 @@ private class TextInjector {
         usleep(InjectionTuning.settleMicros(method == .fast ? .fast : method == .slow ? .slow : .other, name: DetectionCache.name, bundleID: DetectionCache.bundleID))
         // LEANKEYS-HOOK-END
     }
-
+    // LEANKEYS-HOOK-BEGIN: engine-dispatch
+    /// Injects text outside a CGEventTap callback (e.g., clicking a 4A+ prediction pill).
+    func injectExternal(bs: Int, text: String, method: InjectionMethod, delays: (UInt32, UInt32, UInt32)) {
+        semaphore.wait()
+        defer { semaphore.signal() }
+        switch method {
+        case .selection:
+            injectViaSelection(bs: bs, text: text, delays: delays)
+        case .emptyCharPrefix:
+            injectViaBackspace(bs: bs, text: text, delays: delays, emptyCharPrefix: true)
+        case .charByChar:
+            injectViaBackspace(bs: bs, text: text, delays: delays, charByChar: true)
+        case .slow, .fast, .axDirect, .syncProxy:
+            injectViaBackspace(bs: bs, text: text, delays: delays)
+        case .passthrough:
+            return
+        }
+        usleep(InjectionTuning.settleMicros(method == .fast ? .fast : method == .slow ? .slow : .other, name: DetectionCache.name, bundleID: DetectionCache.bundleID))
+    }
+    // LEANKEYS-HOOK-END
     // MARK: - Injection Methods
 
     /// Standard backspace injection: delete N chars, then type replacement
@@ -810,6 +829,14 @@ class RustBridge {
             addShortcut(trigger: shortcut.key, replacement: shortcut.value)
         }
     }
+    // LEANKEYS-HOOK-BEGIN: engine-dispatch
+    /// Injects an accepted 4A+ prediction candidate triggered by mouse click on the candidate bar.
+    static func injectPrediction(backspace bs: Int, chars: [Character]) {
+        let (method, delays) = detectMethod()
+        guard method != .passthrough else { return }
+        TextInjector.shared.injectExternal(bs: bs, text: String(chars), method: method, delays: delays)
+    }
+    // LEANKEYS-HOOK-END
 }
 
 // MARK: - Accessibility Keyboard Detection
@@ -1107,12 +1134,14 @@ class KeyboardHookManager {
             return
         case .becameBlocked:
             EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
+            PredictionController.shared.hide() // LEANKEYS-HOOK: engine-dispatch
             RustBridge.clearBufferAll()
             let holder = SecureInputHolder.currentName()
             AppState.shared.setSecureInputBlocked(true, holderName: holder)
             Log.info("secure input: blocked by \(holder ?? "unknown process")")
         case .becameAvailable:
             EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
+            PredictionController.shared.hide() // LEANKEYS-HOOK: engine-dispatch
             RustBridge.clearBufferAll()
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
@@ -1142,6 +1171,8 @@ class KeyboardHookManager {
             if isClickOnAccessibilityKeyboard(NSEvent.mouseLocation) {
                 return
             }
+            if PredictionController.shared.containsScreenPoint(NSEvent.mouseLocation) { return } // LEANKEYS-HOOK: engine-dispatch
+            PredictionController.shared.hide() // LEANKEYS-HOOK: engine-dispatch
             RustBridge.clearBufferAll() // Clear everything including word history
             DetectionCache.expire() // LEANKEYS-HOOK: engine-dispatch
             skipWordRestoreAfterClick = true
@@ -1627,6 +1658,7 @@ private func keyboardCallback(
     // then clear buffer. Engine sets pending_capitalize when it sees Enter key.
     // Also handle auto-restore and shortcut results (same as ESC handling)
     if keyCode == 0x24 || keyCode == 0x4C { // Return (0x24) or Enter/Numpad (0x4C)
+        PredictionController.shared.hide() // LEANKEYS-HOOK: engine-dispatch
         if isDiscordFocusedContext() {
             RustBridge.clearBufferAll()
             return Unmanaged.passUnretained(event)
@@ -1685,10 +1717,53 @@ private func keyboardCallback(
     // These apps handle text input remotely and cannot receive macOS text injection
     if method == .passthrough {
         EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
+        PredictionController.shared.hide() // LEANKEYS-HOOK: engine-dispatch
         RustBridge.clearBuffer() // LEANKEYS-HOOK: engine-dispatch
         return Unmanaged.passUnretained(event)
     }
     Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log (after pass-through: nothing logged in a sign-in field)
+    // LEANKEYS-HOOK-BEGIN: engine-dispatch
+    // 4A+: Accept (Tab, Option+1..3), dismiss (Esc), or hide on plain cursor movement.
+    if PredictionController.shared.isVisible {
+        if keyCode == UInt16(KeyCode.tab), !hasCmdOrCtrl, !hasOption, !shift,
+           let (bs, chars) = PredictionController.shared.acceptCandidate(
+               at: 0, router: .shared, isVietnamese: EngineRouter.shared.currentVietnamese
+           )
+        {
+            sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
+            return nil
+        }
+        if hasOption, !hasCmdOrCtrl, !shift {
+            let optIndex: Int? = switch keyCode {
+            case 0x12: 0 // 1
+            case 0x13: 1 // 2
+            case 0x14: 2 // 3
+            default: nil
+            }
+            if let optIndex,
+               let (bs, chars) = PredictionController.shared.acceptCandidate(
+                   at: optIndex, router: .shared, isVietnamese: EngineRouter.shared.currentVietnamese
+               )
+            {
+                sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
+                return nil
+            }
+        }
+        if keyCode == UInt16(KeyCode.esc), !hasCmdOrCtrl, !hasOption, !shift {
+            PredictionController.shared.dismiss()
+            return nil
+        }
+        let plainNavKeys: Set<UInt16> = [
+            UInt16(KeyCode.leftArrow), UInt16(KeyCode.rightArrow),
+            UInt16(KeyCode.upArrow), UInt16(KeyCode.downArrow),
+            UInt16(KeyCode.home), UInt16(KeyCode.end),
+            UInt16(KeyCode.pageUp), UInt16(KeyCode.pageDown),
+        ]
+        if plainNavKeys.contains(keyCode) {
+            PredictionController.shared.hide()
+        }
+    }
+    // LEANKEYS-HOOK-END
 
     // Arrow keys with any modifier (Cmd/Option/Shift) that moves cursor - clear buffer
     // Cmd+Arrow: move by line, Option+Arrow: move by word, Shift+Arrow: select
@@ -1706,6 +1781,7 @@ private func keyboardCallback(
     ]
     let hasModifier = flags.contains(.maskCommand) || flags.contains(.maskAlternate) || flags.contains(.maskShift)
     if navigationKeys.contains(keyCode), hasModifier {
+        PredictionController.shared.hide() // LEANKEYS-HOOK: engine-dispatch
         RustBridge.clearBuffer()
         return Unmanaged.passUnretained(event)
     }
@@ -1716,6 +1792,7 @@ private func keyboardCallback(
         // Cmd+T/N/W switches tab/window, Cmd+A/V/X/Z modifies text, Cmd+1-9 switches tabs, etc.
         // Issue #365: without this, buffer leaks across tab switches (Cmd+T) in browsers.
         EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
+        PredictionController.shared.hide() // LEANKEYS-HOOK: engine-dispatch
         RustBridge.clearBufferAll()
         return Unmanaged.passUnretained(event)
     }
@@ -1724,6 +1801,7 @@ private func keyboardCallback(
     // Clear engine buffer so state doesn't become stale after word deletion
     if keyCode == KeyCode.backspace, hasOption {
         EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
+        PredictionController.shared.hide() // LEANKEYS-HOOK: engine-dispatch
         RustBridge.clearBuffer()
         return Unmanaged.passUnretained(event)
     }
@@ -1735,6 +1813,7 @@ private func keyboardCallback(
         if let (bs, chars, _) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
             Log.key(keyCode, "backspace: bs=\(bs) chars=\(DebugLog.redact(chars))\(EngineRouter.shared.languageLog)") // LEANKEYS-HOOK: debug-log
             sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
+            schedulePredictionRefresh(keyCode: keyCode) // LEANKEYS-HOOK: engine-dispatch
             return nil
         }
 
@@ -1747,6 +1826,7 @@ private func keyboardCallback(
         // Don't reset skipWordRestoreAfterClick here - keep skipping until a real letter is typed
 
         // Pass through backspace to delete the character
+        schedulePredictionRefresh(keyCode: keyCode) // LEANKEYS-HOOK: engine-dispatch
         return Unmanaged.passUnretained(event)
     }
 
@@ -1795,15 +1875,30 @@ private func keyboardCallback(
             if bs > 0, !chars.isEmpty {
                 TextInjector.shared.postBreakKey(keyCode: keyCode, shift: shift)
             } else {
+                schedulePredictionRefresh(keyCode: keyCode) // LEANKEYS-HOOK: engine-dispatch
                 return Unmanaged.passUnretained(event)
             }
         }
+        schedulePredictionRefresh(keyCode: keyCode) // LEANKEYS-HOOK: engine-dispatch
         return nil
     }
 
+    schedulePredictionRefresh(keyCode: keyCode) // LEANKEYS-HOOK: engine-dispatch
     return Unmanaged.passUnretained(event)
 }
 
+// LEANKEYS-HOOK-BEGIN: engine-dispatch
+private func schedulePredictionRefresh(keyCode: UInt16) {
+    guard PredictionController.shared.enabled else { return }
+    let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+    PredictionController.shared.scheduleRefresh(
+        router: .shared,
+        bundleID: bundleID,
+        isVietnamese: EngineRouter.shared.currentVietnamese,
+        atWordStartAfterSpace: keyCode == KeyCode.space
+    )
+}
+// LEANKEYS-HOOK-END
 // MARK: - Helper Functions
 
 // MARK: - Text Replacement

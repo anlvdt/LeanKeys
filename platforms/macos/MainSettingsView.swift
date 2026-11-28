@@ -1126,6 +1126,8 @@ struct SettingsPageView: View {
                 shortcutsRow
                 Divider().padding(.leading, 12) // LEANKEYS-HOOK: settings-engine
                 LearnSettingsSection(model: .shared, part: .general) // LEANKEYS-HOOK: settings-engine
+                Divider().padding(.leading, 12) // LEANKEYS-HOOK: settings-engine
+                PredictionSettingsSection(model: .shared, part: .general) // LEANKEYS-HOOK: settings-engine
                 Divider().padding(.leading, 12)
                 SettingsToggleRow("Nhớ Việt/Anh theo từng ứng dụng", subtitle: "Quay lại ứng dụng nào thì dùng lại ngôn ngữ đã chọn ở đó", isOn: $appState.perAppModeEnabled) // LEANKEYS-HOOK: copy
                 Divider().padding(.leading, 12)

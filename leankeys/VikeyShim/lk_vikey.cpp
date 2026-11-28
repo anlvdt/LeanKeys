@@ -1457,4 +1457,43 @@ int lk_vikey_types_as_is(const char* letters) {
     return ok ? 1 : 0;
 }
 
+int lk_vikey_completions(int vietnamese, const char* prefix, char out[][32], int* scores, int maxOut) {
+    if (!prefix || !prefix[0] || !out || !scores || maxOut <= 0) return 0;
+    const int capped = maxOut > 16 ? 16 : maxOut;
+    char clean[30];
+    int n = 0;
+    for (; prefix[n]; n++) {
+        if (n >= (int)sizeof(clean) - 1) return 0;
+        char c = prefix[n];
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        if (c < 'a' || c > 'z') return 0;
+        clean[n] = c;
+    }
+    if (n == 0) return 0;
+    clean[n] = 0;
+    return vAutoSwitchCompletions(vietnamese ? 1 : 0, clean, out, scores, capped);
+}
+
+int lk_vikey_render_telex(const char* letters, uint16_t* out, int maxOut) {
+    if (!letters || !out || maxOut <= 0) return 0;
+    char key[40];
+    int n = 0;
+    for (; letters[n]; n++) {
+        if (n >= (int)sizeof(key) - 1) return 0;
+        char c = letters[n];
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        if (c < 'a' || c > 'z') return 0;
+        key[n] = c;
+    }
+    if (n == 0) return 0;
+    key[n] = 0;
+    lk_vikey_init();
+    Uint16 rendered[64];
+    int renderedLen = 0;
+    int score = vAutoSwitchWordScore(1, key, rendered, &renderedLen);
+    if (score == LK_VIKEY_NOT_A_WORD || renderedLen <= 0 || renderedLen > maxOut) return 0;
+    for (int i = 0; i < renderedLen; i++) out[i] = rendered[i];
+    return renderedLen;
+}
+
 }

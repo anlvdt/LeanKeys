@@ -114,6 +114,16 @@ int  lk_vikey_convert_last_word(double now, lk_edit* out);
 // on screen. Ignored unless the word there has the same length and the same letters apart from case.
 void lk_vikey_set_last_word_case(const uint16_t* units, int length);
 
+// Prefix completions from Vikey's built-in dictionary (`vAutoSwitchCompletions`), sorted best score first.
+// vietnamese = 1 searches Telex-keyed Vietnamese syllables; vietnamese = 0 searches English words.
+// Returns the number of entries written (up to `maxOut`, capped at 16). Safe with NULL/empty input.
+int lk_vikey_completions(int vietnamese, const char* prefix, char out[][32], int* scores, int maxOut);
+
+// Renders ASCII Telex `letters` (under 39 chars) into Unicode UTF-16 `out` using Vikey's word scorer/renderer.
+// Returns the rendered UTF-16 unit count when valid, or 0 if not a valid Vietnamese word / invalid input.
+// Call on the key-handling thread only.
+int lk_vikey_render_telex(const char* letters, uint16_t* out, int maxOut);
+
 #ifdef __cplusplus
 }
 #endif

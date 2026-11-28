@@ -32,6 +32,9 @@ final class PrivacyDefaultsTests: XCTestCase {
         XCTAssertFalse(learning.privacyNoticePending, "a fresh install has nothing to tell")
         XCTAssertFalse(defaults.bool(forKey: ShortcutSuggestionsModel.enabledKey), "Gợi ý gõ tắt is off")
         XCTAssertFalse(defaults.bool(forKey: ShortcutSuggestionsModel.consentKey))
+        XCTAssertFalse(defaults.bool(forKey: PredictionController.enabledKey), "Gợi ý từ & câu tiếp theo is off")
+        XCTAssertFalse(defaults.bool(forKey: PredictionController.learnKey), "Học gợi ý câu is off until the user agrees")
+        XCTAssertFalse(defaults.bool(forKey: PredictionController.learnConsentKey))
     }
 
     func testDebugLogKeepFileIsNotShipped() {
@@ -48,6 +51,8 @@ final class PrivacyDefaultsTests: XCTestCase {
         XCTAssertTrue(UndoLearningSection.consentText.contains("Dữ liệu chỉ nằm trên máy này"))
         XCTAssertTrue(UndoLearningSection.consentText.contains("không bao giờ gửi đi đâu"))
         XCTAssertTrue(LearnSettingsSection.consentText.contains("không bao giờ gửi đi đâu"))
+        XCTAssertTrue(PredictionSettingsSection.consentText.contains("Dữ liệu chỉ nằm trên máy này"))
+        XCTAssertTrue(PredictionSettingsSection.consentText.contains("không bao giờ gửi đi đâu"))
         XCTAssertEqual(UndoLearningSection.consentTitle, "Cho LeanKeys nhớ từ bạn sửa?")
         XCTAssertEqual(UndoLearningSection.consentConfirm, "Cho phép")
         XCTAssertEqual(UndoLearningSection.consentCancel, "Không")
@@ -172,5 +177,43 @@ final class PrivacyDefaultsTests: XCTestCase {
         learning.userCapitalized("Shopee", previous: nil)
         learning.userCapitalized("Shopee", previous: nil)
         XCTAssertTrue(names.names.isEmpty, "unknown app (nil bundleID) must fail closed")
+    }
+
+    func testPredictionLearnRequiresConsentAndWritesNoFilesBeforeConsent() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let url = dir.appendingPathComponent("prediction.bin")
+        let personal = PersonalPredictionModel(store: KeychainEncryptedFileStore(url: url, keychainService: "test.predict"))
+        let controller = PredictionController(
+            defaults: defaults,
+            personal: personal,
+            corpus: BuiltInPredictionCorpus(data: .bundled),
+            dictionary: nil,
+            onLearnerQueue: { $0() },
+            onMain: { $0() }
+        )
+
+        XCTAssertFalse(controller.enabled)
+        XCTAssertFalse(controller.learnEnabled)
+        controller.phraseCommitted(CommittedPhrase(text: "Chào bạn hôm nay"))
+        controller.phraseCommitted(CommittedPhrase(text: "Chào bạn hôm nay"))
+
+        let beforeConsent = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+        XCTAssertTrue(beforeConsent.isEmpty, "expected no prediction store or key files before consent, found \(beforeConsent)")
+
+        XCTAssertEqual(controller.setLearnEnabled(true), .needsConsent)
+        XCTAssertFalse(controller.learnEnabled)
+        XCTAssertTrue(controller.learnConsentPending)
+
+        controller.cancelLearnConsent()
+        XCTAssertFalse(controller.learnEnabled)
+        XCTAssertFalse(defaults.bool(forKey: PredictionController.learnConsentKey))
+
+        _ = controller.setLearnEnabled(true)
+        controller.confirmLearnConsent()
+        XCTAssertTrue(controller.learnEnabled)
+        XCTAssertTrue(defaults.bool(forKey: PredictionController.learnConsentKey))
     }
 }

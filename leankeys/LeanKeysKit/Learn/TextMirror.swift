@@ -22,6 +22,13 @@ public final class TextMirror {
 
     public var onWord: ((CommittedWord) -> Void)?
     public var onPhrase: ((CommittedPhrase) -> Void)?
+    private var phraseObservers: [(CommittedPhrase) -> Void] = []
+
+    /// Registers an additional listener for committed phrases without overwriting `onPhrase` (used by 4A+ prediction
+    /// alongside 4B shortcut suggestions).
+    public func addPhraseObserver(_ observer: @escaping (CommittedPhrase) -> Void) {
+        phraseObservers.append(observer)
+    }
 
     /// Text since the last phrase boundary. Once the phrase overflows, only the current word is kept.
     private var buffer: [Character] = []
@@ -80,6 +87,15 @@ public final class TextMirror {
     /// letters and digits, punctuation dropped. Empty while the word being typed is unknown.
     public var phraseWords: [String] {
         phraseText.map { Self.words(in: $0) } ?? []
+    }
+
+    /// Completed words in the current phrase strictly before the word currently being typed (`currentWord`).
+    /// Immediately after typing Space, `currentWord` is empty and this returns all preceding words in the phrase;
+    /// mid-word, this drops the partial word being typed. Returns empty when the word boundary is unknown.
+    public var recentWordsBeforeCurrent: [String] {
+        guard !wordUnknown else { return [] }
+        let before = String(buffer[..<wordStart])
+        return Self.words(in: before)
     }
 
     /// The word being typed is the phrase's first, as far as the mirror knows. Also true when what comes before it
@@ -196,7 +212,11 @@ public final class TextMirror {
         // "Hả?!": the last terminator was pending, the ones before it went into the buffer.
         while let last = text.last, Self.sentenceEnds.contains(last) { text.removeLast() }
         text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty, text.count <= Self.phraseLimit { onPhrase?(CommittedPhrase(text: text)) }
+        if !text.isEmpty, text.count <= Self.phraseLimit {
+            let phrase = CommittedPhrase(text: text)
+            onPhrase?(phrase)
+            for observer in phraseObservers { observer(phrase) }
+        }
     }
 
     private func append(_ c: Character) {
