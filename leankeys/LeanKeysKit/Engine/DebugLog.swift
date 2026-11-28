@@ -36,12 +36,22 @@ public enum DebugLog {
     /// the file, so a log nobody remembers switching on must not keep recording typing rhythm.
     public static let maxAge: TimeInterval = 24 * 3600
 
-    /// Whether the log is on, after deleting a log file created more than `maxAge` ago. Read once at launch and on
-    /// each refresh of the log switch.
-    public static func isOnAfterExpiry(path: String = path, now: Date = Date()) -> Bool {
+    /// `~/Library/Logs/LeanKeys/debug.keep`: on the developer's own Mac only, this file keeps the log on past `maxAge`
+    /// (spec 2026-11-28-privacy-opt-in §4). The app never creates it and a release never ships it; like the log file it
+    /// sits in the user's 0700 folder, so only the user's own processes can create it.
+    public static let keepPath: String = ((path as NSString).deletingLastPathComponent as NSString)
+        .appendingPathComponent("debug.keep")
+
+    /// The switch's subtitle in Nâng cao (one line; the full path is in its tooltip).
+    public static let settingsSubtitle = "Chỉ ghi trên máy này, không chứa chữ bạn gõ, không gửi đi đâu"
+
+    /// Whether the log is on, after deleting a log file created more than `maxAge` ago (unless `keepPath` exists).
+    /// Read once at launch and on each refresh of the log switch.
+    public static func isOnAfterExpiry(path: String = path, keepPath: String = keepPath, now: Date = Date()) -> Bool {
         let fm = FileManager.default
         guard let attributes = try? fm.attributesOfItem(atPath: path) else { return false }
-        if let created = attributes[.creationDate] as? Date, now.timeIntervalSince(created) > maxAge {
+        if !fm.fileExists(atPath: keepPath), let created = attributes[.creationDate] as? Date,
+           now.timeIntervalSince(created) > maxAge {
             try? fm.removeItem(atPath: path)
             return false
         }

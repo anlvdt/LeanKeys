@@ -71,5 +71,9 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | V6 | ⌃⌫ đổi từ vừa gõ · VS Code, Cursor | Gõ một từ Telex (`cos `), bấm ⌃⌫ (ở đây ⌃⌫ đi thẳng tới app, xoá một từ như thường), rồi gõ tiếp `toi thich`: không có chữ nào bị ăn hay mọc thêm, từ mới ra đúng "tôi thích". | — | [ ] |
 | V7 | ⌃⌫ · VNI hoặc Gõ Nhanh | Chọn kiểu gõ VNI, hoặc "Chỉ dùng Gõ Nhanh": ⌃⌫ làm như trước (trả lại phím gốc của từ đang gõ). Khi Gõ Nhanh không có gì để trả lại (vừa gõ xong từ, hoặc đầu dòng), phím tới được app và xoá một từ như thường. | [ ] | — |
 | V8 | ⌃⌫ · từ sau khi đổi sang phím thô | Vikey, tiếng Việt: gõ `cos `, bấm ⌃⌫ ra "cos " (sang tiếng Anh), rồi gõ `toi thich `: ra "tôi thích " bằng tiếng Việt, Vikey tự quay lại tiếng Việt. Thử thêm: giữ ⌃⌫ sau `cos `: từ chỉ đổi một lần, không nhấp nháy. | — | [ ] |
+| P7 | Quyền riêng tư · máy sạch | Cài bản mới trên một tài khoản macOS chưa từng dùng LeanKeys. Cài đặt › Nâng cao: "Nhớ từ bạn sửa", "Gợi ý gõ tắt", "Nhật ký gỡ lỗi" đều tắt. Bật "Nhớ từ bạn sửa": hiện hộp "Cho LeanKeys nhớ từ bạn sửa?" có câu "Dữ liệu chỉ nằm trên máy này… không bao giờ gửi đi đâu"; bấm "Không" thì công tắc vẫn tắt. | [ ] | — |
+| P8 | Quyền riêng tư · người đang dùng | Trên máy đã học vài từ (chưa từng tự gạt công tắc), cài bản mới: ô nổi hiện thẻ "LeanKeys giờ chỉ tự học khi bạn cho phép…"; "Bật lại…" hỏi đồng ý rồi bật, "Để tắt" thì thẻ không hiện lại. Danh sách "Từ đã học" vẫn còn. | [ ] | — |
 
-Chỉ gõ `yes` khi cả 79 ô đều đạt.
+Quy tắc phát hành (spec 2026-11-28-privacy-opt-in §5): bản phát hành không học và không ghi nhật ký gì từ chữ người dùng gõ khi họ chưa đồng ý. `sync/release.sh` tự chạy `swift test --filter PrivacyDefaultsTests` và từ chối DMG có `debug.keep`; máy phát triển bật hết chỉ bằng cài đặt của máy đó.
+
+Chỉ gõ `yes` khi cả 81 ô đều đạt.

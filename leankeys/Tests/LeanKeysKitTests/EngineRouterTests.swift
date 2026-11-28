@@ -61,6 +61,7 @@ final class EngineRouterTests: XCTestCase {
         super.setUp()
         suiteName = "EngineRouterTests.\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)
+        defaults.set(true, forKey: UndoLearning.learningKey) // These tests describe learning the user agreed to (privacy opt-in): a stored "on" counts as consent.
         fake = FakeEngine()
         factoryCalls = 0
     }

@@ -33,6 +33,12 @@ public struct StatusPopoverActions {
     public var newVersion: () -> String?
     /// The icon in the header (the app's own icon by default; snapshots pass a fixed one).
     public var appIcon: () -> NSImage
+    /// The one-time privacy card (spec 2026-11-28-privacy-opt-in §3) is to be shown.
+    public var privacyNotice: () -> Bool
+    /// "Bật lại…": ask for consent and turn learning on if given. Either way the card is answered.
+    public var enableLearning: () -> Void
+    /// "Để tắt": the card is answered, learning stays off.
+    public var dismissPrivacyNotice: () -> Void
 
     public init(
         snapshot: @escaping () -> StatusSnapshot,
@@ -55,7 +61,10 @@ public struct StatusPopoverActions {
         autoFix: @escaping () -> Bool = { true },
         setAutoFix: @escaping (Bool) -> Void = { _ in },
         newVersion: @escaping () -> String? = { nil },
-        appIcon: @escaping () -> NSImage = { NSImage(named: NSImage.applicationIconName) ?? NSImage() }
+        appIcon: @escaping () -> NSImage = { NSImage(named: NSImage.applicationIconName) ?? NSImage() },
+        privacyNotice: @escaping () -> Bool = { false },
+        enableLearning: @escaping () -> Void = {},
+        dismissPrivacyNotice: @escaping () -> Void = {}
     ) {
         self.snapshot = snapshot
         self.method = method
@@ -76,6 +85,9 @@ public struct StatusPopoverActions {
         self.setAutoFix = setAutoFix
         self.newVersion = newVersion
         self.appIcon = appIcon
+        self.privacyNotice = privacyNotice
+        self.enableLearning = enableLearning
+        self.dismissPrivacyNotice = dismissPrivacyNotice
     }
 }
 
@@ -90,6 +102,7 @@ public final class StatusPopoverModel: ObservableObject {
     @Published public private(set) var toggleShortcut: String?
     @Published public private(set) var autoFix: Bool
     @Published public private(set) var newVersion: String?
+    @Published public private(set) var privacyNotice: Bool
 
     private let actions: StatusPopoverActions
     var appIcon: NSImage { actions.appIcon() }
@@ -107,6 +120,7 @@ public final class StatusPopoverModel: ObservableObject {
         self.toggleShortcut = Self.shortcut(actions)
         self.autoFix = actions.autoFix()
         self.newVersion = actions.newVersion()
+        self.privacyNotice = actions.privacyNotice()
     }
 
     private static func shortcut(_ actions: StatusPopoverActions) -> String? {
@@ -128,6 +142,7 @@ public final class StatusPopoverModel: ObservableObject {
         toggleShortcut = Self.shortcut(actions)
         autoFix = actions.autoFix()
         newVersion = actions.newVersion()
+        privacyNotice = actions.privacyNotice()
     }
 
     /// The small line under the Việt/Anh control: the quick-switch shortcut and the auto-switch state, joined by
@@ -206,6 +221,21 @@ public final class StatusPopoverModel: ObservableObject {
     func quit() {
         actions.quit()
     }
+
+    /// The privacy card's text (spec 2026-11-28-privacy-opt-in §3).
+    public static let privacyNoticeText = "LeanKeys giờ chỉ tự học khi bạn cho phép. Những từ đã học vẫn được giữ trên máy."
+    public static let privacyNoticeEnable = "Bật lại…"
+    public static let privacyNoticeKeepOff = "Để tắt"
+
+    public func enableLearning() {
+        actions.enableLearning()
+        reload()
+    }
+
+    public func dismissPrivacyNotice() {
+        actions.dismissPrivacyNotice()
+        reload()
+    }
 }
 
 public struct StatusPopoverView: View {
@@ -245,6 +275,23 @@ public struct StatusPopoverView: View {
                 }
             }
             .padding(.top, 6)
+
+            if model.privacyNotice {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(StatusPopoverModel.privacyNoticeText)
+                        .font(.system(size: 11))
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 8) {
+                        Button(StatusPopoverModel.privacyNoticeEnable) { model.enableLearning() }
+                        Button(StatusPopoverModel.privacyNoticeKeepOff) { model.dismissPrivacyNotice() }
+                        Spacer()
+                    }
+                    .controlSize(.small)
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.quaternaryLabelColor).opacity(0.3)))
+                .padding(.top, 8)
+            }
 
             Divider().padding(.vertical, 10)
 

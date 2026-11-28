@@ -47,10 +47,25 @@ final class DebugLogTests: XCTestCase {
         FileManager.default.createFile(atPath: file, contents: Data("I: x".utf8),
                                        attributes: [.creationDate: created])
 
-        XCTAssertTrue(DebugLog.isOnAfterExpiry(path: file, now: created.addingTimeInterval(23 * 3600)))
+        XCTAssertTrue(DebugLog.isOnAfterExpiry(path: file, keepPath: file + ".keep", now: created.addingTimeInterval(23 * 3600)))
         XCTAssertTrue(FileManager.default.fileExists(atPath: file))
-        XCTAssertFalse(DebugLog.isOnAfterExpiry(path: file, now: created.addingTimeInterval(25 * 3600)))
+        XCTAssertFalse(DebugLog.isOnAfterExpiry(path: file, keepPath: file + ".keep", now: created.addingTimeInterval(25 * 3600)))
         XCTAssertFalse(FileManager.default.fileExists(atPath: file), "a log older than a day is deleted")
-        XCTAssertFalse(DebugLog.isOnAfterExpiry(path: file, now: created))
+        XCTAssertFalse(DebugLog.isOnAfterExpiry(path: file, keepPath: file + ".keep", now: created))
+    }
+
+    /// Spec 2026-11-28-privacy-opt-in §4: on the developer's Mac a `debug.keep` file keeps the log past a day.
+    func testKeepFileKeepsLogOn() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("debug.log").path
+        let keep = dir.appendingPathComponent("debug.keep").path
+        let created = Date(timeIntervalSince1970: 1_800_000_000)
+        FileManager.default.createFile(atPath: file, contents: Data(), attributes: [.creationDate: created])
+        FileManager.default.createFile(atPath: keep, contents: Data())
+        XCTAssertTrue(DebugLog.isOnAfterExpiry(path: file, keepPath: keep, now: created.addingTimeInterval(30 * 24 * 3600)))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file))
+        XCTAssertEqual(DebugLog.keepPath, (DebugLog.path as NSString).deletingLastPathComponent + "/debug.keep")
     }
 }

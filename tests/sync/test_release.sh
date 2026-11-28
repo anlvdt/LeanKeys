@@ -17,6 +17,8 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 unset LEANKEYS_RELEASE_ASSUME_YES LEANKEYS_TTY
+# The privacy gate's real command (swift test) needs the package; the test repos are bare copies.
+export LEANKEYS_PRIVACY_GATE_CMD=true
 
 base="$(mktemp -d)"
 trap '[[ -n ${KEEP:-} ]] || rm -rf "$base"' EXIT
@@ -47,6 +49,7 @@ if [[ "$1" == attach ]]; then
   mkdir -p "$mp/LeanKeys.app/Contents/MacOS"
   print '#!/bin/sh' > "$mp/LeanKeys.app/Contents/MacOS/LeanKeys"
   chmod +x "$mp/LeanKeys.app/Contents/MacOS/LeanKeys"
+  [[ -n "${FAKE_DMG_KEEP:-}" ]] && : > "$mp/LeanKeys.app/Contents/debug.keep"
 fi
 exit 0
 EOF
@@ -151,6 +154,27 @@ test_dry_run_prints_plan() {
   check $0 "no local tag" not local_tag v1.1 &&
   check $0 "READY kept" [ -f "$repo/dist/READY" ] &&
   check $0 "plan confirms before touching GitHub" out_before "chờ gõ yes" "actions/permissions"
+}
+
+test_privacy_gate_refuses() {
+  setup privacygate
+  ready 1.1
+  LEANKEYS_PRIVACY_GATE_CMD=false LEANKEYS_RELEASE_ASSUME_YES=1 run_release
+  check $0 "exit 1" is_rc 1 &&
+  check $0 "names the rule" out_has "PrivacyDefaultsTests" &&
+  check $0 "nothing called" nothing_called &&
+  check $0 "no local tag" not local_tag v1.1 &&
+  check $0 "READY kept" [ -f "$repo/dist/READY" ]
+}
+
+test_debug_keep_in_dmg_refused() {
+  setup debugkeep
+  ready 1.1
+  FAKE_DMG_KEEP=1 LEANKEYS_RELEASE_ASSUME_YES=1 run_release
+  check $0 "exit 1" is_rc 1 &&
+  check $0 "names debug.keep" out_has "debug.keep" &&
+  check $0 "no local tag" not local_tag v1.1 &&
+  check $0 "not pushed" not remote_tag v1.1
 }
 
 test_missing_dmg_exits_1() {
@@ -378,7 +402,7 @@ test_developer_id_release_passes() {
   check $0 "release created" log_has "gh release create v1.1"
 }
 
-for t in test_no_ready_exits_1 test_dry_run_prints_plan test_missing_dmg_exits_1 \
+for t in test_no_ready_exits_1 test_dry_run_prints_plan test_privacy_gate_refuses test_debug_keep_in_dmg_refused test_missing_dmg_exits_1 \
   test_existing_local_tag_refused test_existing_remote_tag_refused \
   test_failure_cleans_up test_first_release_creates_repo test_not_confirmed_aborts \
   test_piped_yes_without_tty_refuses test_existing_origin_disables_actions_before_push \

@@ -159,6 +159,7 @@ final class VikeyEngineTests: XCTestCase {
     func testNonExplicitOffThroughRouterStillSwitchesBack() {
         let suite = "VikeyEngineTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(true, forKey: UndoLearning.learningKey)
         defer { defaults.removePersistentDomain(forName: suite) }
         let engine = self.engine!
         let router = EngineRouter(defaults: defaults, makeVikey: { engine },
@@ -175,6 +176,7 @@ final class VikeyEngineTests: XCTestCase {
                                    app: String? = "com.tinyspeck.slackmacgap") -> (text: String, asked: Int) {
         let suite = "VikeyEngineTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(true, forKey: UndoLearning.learningKey)
         defer { defaults.removePersistentDomain(forName: suite) }
         let engine = self.engine!
         var asked = 0
@@ -230,6 +232,7 @@ final class VikeyEngineTests: XCTestCase {
     func testExplicitOffThroughRouterStaysEnglish() {
         let suite = "VikeyEngineTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(true, forKey: UndoLearning.learningKey)
         defer { defaults.removePersistentDomain(forName: suite) }
         let engine = self.engine!
         let router = EngineRouter(defaults: defaults, makeVikey: { engine },

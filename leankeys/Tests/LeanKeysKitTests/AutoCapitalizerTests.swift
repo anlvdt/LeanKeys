@@ -67,6 +67,7 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertNotNil(engine, "lk_vikey_init failed")
         suiteName = "AutoCapitalizerTests.\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)
+        defaults.set(true, forKey: UndoLearning.learningKey) // These tests describe learning the user agreed to (privacy opt-in): a stored "on" counts as consent.
         cleanEngine()
     }
 

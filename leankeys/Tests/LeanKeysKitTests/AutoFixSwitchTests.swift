@@ -23,6 +23,7 @@ final class AutoFixSwitchTests: XCTestCase {
         XCTAssertNotNil(engine, "lk_vikey_init failed")
         suiteName = "AutoFixSwitchTests.\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)
+        defaults.set(true, forKey: UndoLearning.learningKey) // These tests describe learning the user agreed to (privacy opt-in): a stored "on" counts as consent.
         returnQueries = 0
         cleanEngine()
     }

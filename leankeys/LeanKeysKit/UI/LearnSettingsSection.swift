@@ -14,7 +14,7 @@ public enum LearnSettingsPart {
 public struct LearnSettingsSection: View {
     static let toggleTitle = "Gợi ý gõ tắt"
     static let toggleSubtitle = "Cho địa chỉ, số điện thoại… bạn hay gõ lại. Chỉ lưu trên máy này."
-    static let consentText = "LeanKeys sẽ đếm các cụm bạn gõ lặp lại (địa chỉ, số điện thoại, mã số thuế…) để gợi ý gõ tắt. Dữ liệu chỉ nằm trên máy này, được mã hoá, và bạn xoá được bất cứ lúc nào. Không học trong ô mật khẩu. Gợi ý bạn thêm vào Bảng gõ tắt được lưu như các gõ tắt khác, không mã hoá."
+    static let consentText = "LeanKeys sẽ đếm các cụm bạn gõ lặp lại (địa chỉ, số điện thoại, mã số thuế…) để gợi ý gõ tắt. Dữ liệu chỉ nằm trên máy này, được mã hoá, không bao giờ gửi đi đâu, và bạn xoá được bất cứ lúc nào. Không học trong ô mật khẩu. Gợi ý bạn thêm vào Bảng gõ tắt được lưu như các gõ tắt khác, không mã hoá."
     static let consentConfirm = "Bật"
     static let consentCancel = "Huỷ"
     static let advancedTitle = "Gợi ý gõ tắt"

@@ -25,6 +25,12 @@ public final class UndoLearning: ObservableObject {
     public static let autoCapitalizeKey = "LeanKeys.autoCapitalize"
     /// Spec 17.3: "Bỏ phím \ ] ' lỡ bấm cùng Enter".
     public static let strayEnterKey = "LeanKeys.strayEnter"
+    /// Privacy (spec 2026-11-28-privacy-opt-in): "Nhớ từ bạn sửa" is off until the user agrees on the consent sheet.
+    public static let learningConsentKey = "LeanKeys.undoLearning.consented"
+    /// The one-time move of existing users to the off-by-default rule (phương án A) has run.
+    public static let privacyAppliedKey = "LeanKeys.privacyDefaultsApplied"
+    /// The popover's one-time card "LeanKeys giờ chỉ tự học khi bạn cho phép" is still to be shown.
+    public static let privacyNoticeKey = "LeanKeys.privacyNoticePending"
 
     /// The app's instance: rules in `undo-rules.bin`, learned names in `learned-names.bin`, switches in
     /// `UserDefaults.standard`.
@@ -55,10 +61,18 @@ public final class UndoLearning: ObservableObject {
         }
     }
 
-    /// Spec 12.2. Off: the filter keeps nothing and no undo is recorded; the rules stay.
-    @Published public var learning: Bool {
+    /// Spec 12.2. Off: the filter keeps nothing and no undo is recorded; the rules stay. Off by default, and turned on
+    /// only through `setLearning(true)` once the user has agreed (`confirmLearningConsent()`).
+    @Published public internal(set) var learning: Bool {
         didSet { defaults.set(learning, forKey: Self.learningKey) }
     }
+
+    /// The consent sheet for "Nhớ từ bạn sửa" is up, waiting for `confirmLearningConsent()` or
+    /// `cancelLearningConsent()`.
+    @Published public private(set) var learningConsentPending = false
+
+    /// The popover shows its one-time card: learning was turned off by the privacy change while learned data exists.
+    @Published public private(set) var privacyNoticePending: Bool
 
     /// Spec 17.1. Off: nothing is capitalised and no name is learned; learned names and rules stay.
     @Published public var autoCapitalize: Bool {
@@ -111,7 +125,19 @@ public final class UndoLearning: ObservableObject {
         rules = book.rules
         pinnedWords = book.pinnedWords
         doubleKeyFix = defaults.object(forKey: Self.doubleKeyFixKey) as? Bool ?? true
-        learning = defaults.object(forKey: Self.learningKey) as? Bool ?? true
+        // Phương án A, once: a user who never set the switch follows the new default (off); one who set it keeps it,
+        // and a stored "on" counts as consent. The card is shown only when there is learned data to come back to.
+        if !defaults.bool(forKey: Self.privacyAppliedKey) {
+            if let stored = defaults.object(forKey: Self.learningKey) as? Bool {
+                if stored { defaults.set(true, forKey: Self.learningConsentKey) }
+            } else if !book.rules.isEmpty || !book.pinnedWords.isEmpty || !names.names.isEmpty {
+                defaults.set(true, forKey: Self.privacyNoticeKey)
+            }
+            defaults.set(true, forKey: Self.privacyAppliedKey)
+        }
+        learning = (defaults.object(forKey: Self.learningKey) as? Bool ?? false)
+            && defaults.bool(forKey: Self.learningConsentKey)
+        privacyNoticePending = defaults.bool(forKey: Self.privacyNoticeKey)
         autoCapitalize = defaults.object(forKey: Self.autoCapitalizeKey) as? Bool ?? true
         strayEnter = defaults.object(forKey: Self.strayEnterKey) as? Bool ?? true
         book.onChange = { [weak self] in
@@ -123,6 +149,55 @@ public final class UndoLearning: ObservableObject {
             guard let self else { return }
             self.names = self.learnedNames.names
         }
+    }
+
+    // MARK: Consent (spec 2026-11-28-privacy-opt-in §2)
+
+    /// The "Nhớ từ bạn sửa" switch. On, the first time, returns `.needsConsent` and changes nothing yet.
+    @discardableResult
+    public func setLearning(_ on: Bool) -> LearnEnableResult {
+        if on {
+            guard defaults.bool(forKey: Self.learningConsentKey) else {
+                learningConsentPending = true
+                return .needsConsent
+            }
+            learning = true
+            dismissPrivacyNotice()
+            return .enabled
+        }
+        learningConsentPending = false
+        learning = false
+        return .disabled
+    }
+
+    /// The user agreed on the consent sheet: learning starts.
+    public func confirmLearningConsent() {
+        defaults.set(true, forKey: Self.learningConsentKey)
+        learningConsentPending = false
+        learning = true
+        dismissPrivacyNotice()
+    }
+
+    /// The user closed the consent sheet without agreeing: learning stays off.
+    public func cancelLearningConsent() {
+        learningConsentPending = false
+    }
+
+    /// "Bật lại…" on the popover card: asks with the consent alert (the Settings card's text) and turns learning on
+    /// if the user agrees. The card is answered either way.
+    public func askConsentAndEnable(ask: (String, String, String, String) -> Bool) {
+        dismissPrivacyNotice()
+        if defaults.bool(forKey: Self.learningConsentKey) { learning = true; return }
+        if ask(UndoLearningSection.consentTitle, UndoLearningSection.consentText,
+               UndoLearningSection.consentConfirm, UndoLearningSection.consentCancel) {
+            confirmLearningConsent()
+        }
+    }
+
+    /// The popover's one-time card was answered ("Bật lại…" or "Để tắt").
+    public func dismissPrivacyNotice() {
+        privacyNoticePending = false
+        defaults.set(false, forKey: Self.privacyNoticeKey)
     }
 
     /// Registers the C filter (answered by this instance) and applies the double-key switch to the shim. Idempotent.
@@ -206,7 +281,7 @@ public final class UndoLearning: ObservableObject {
     /// check stays here (ruling R4: it replays the engine), and the context is probed only for a word `LearnedNames`
     /// could count (ruling R14); the count is recorded on the queue.
     func userCapitalized(_ word: String, previous: String?) {
-        guard autoCapitalize, LearnedNames.looksLikeTypedName(word.precomposedStringWithCanonicalMapping),
+        guard autoCapitalize, learning, LearnedNames.looksLikeTypedName(word.precomposedStringWithCanonicalMapping),
               let probe = includedProbe(), !CodeApps.contains(probe.bundleID),
               let sighting = learnedNames.sighting(word: word, previous: previous) else { return }
         record(probe) { [learnedNames] in learnedNames.record(sighting) }

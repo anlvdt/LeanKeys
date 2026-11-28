@@ -6,7 +6,7 @@
 # does. The version comes from dist/READY. Steps:
 #   1. gh auth status
 #   2. mounts the DMG read-only, checks it holds LeanKeys.app signed with a
-#      stable identity (not ad-hoc), then detaches
+#      stable identity (not ad-hoc) and no debug.keep file, then detaches
 #   3. prints sync/manual-checklist.md and waits for you to type "yes"
 #   4. only after that "yes" (ruling R27): no remote "origin": gh repo create
 #      anlvdt/LeanKeys --public --source . --remote origin (if the GitHub repo
@@ -20,7 +20,12 @@
 #      two remotes, upstream and origin, so gh needs the repo named), notes generated from
 #      Versions.json on main and git log since the previous LeanKeys tag
 #   7. removes dist/READY
-# Refuses (exit 1) before doing anything when dist/READY or the DMG is
+# Privacy rule (spec 2026-11-28-privacy-opt-in §5): a release must not learn or
+# log anything the user types until the user agrees. Before step 1 (and with
+# --dry-run) it runs `swift test --filter PrivacyDefaultsTests` on this tree and
+# refuses if it fails. The developer's own Mac may have everything switched on:
+# those are settings on that Mac, never in the DMG.
+# Refuses (exit 1) before doing anything when the privacy gate fails, dist/READY or the DMG is
 # missing, the version on main differs from dist/READY, or tag vX.Y already
 # exists locally or on origin. If step 5 or 6 fails (or you press ^C), it runs
 # `gh release delete vX.Y --yes`, `git push --delete origin vX.Y` and
@@ -41,6 +46,7 @@
 #   LEANKEYS_RELEASE_ASSUME_YES   1 skips the "yes" prompt (with a fake gh)
 #   LEANKEYS_TTY                  file to read the confirmation from instead
 #                                 of /dev/tty (to simulate "no terminal")
+#   LEANKEYS_PRIVACY_GATE_CMD     command run instead of the swift test privacy gate
 #
 # Exit: 0 published (or --dry-run plan printed), 1 refused, cancelled or failed.
 
@@ -128,6 +134,11 @@ main() {
   git remote get-url origin >/dev/null 2>&1 && has_origin=1
   (( has_origin )) && check_remote_tag
 
+  # Privacy gate: everything that writes down what the user types is off until the user agrees.
+  step "privacy gate"
+  ${(z)${LEANKEYS_PRIVACY_GATE_CMD:-swift test --filter PrivacyDefaultsTests}} >/dev/null 2>&1 ||
+    die "Kiểm tra quyền riêng tư không qua (swift test --filter PrivacyDefaultsTests): bản phát hành phải tắt mọi tính năng tự học và ghi nhật ký cho tới khi người dùng đồng ý."
+
   # Release notes: engine versions + first-parent log since the previous LeanKeys tag.
   local prev range log
   prev="$(git tag -l 'v*' --merged "refs/heads/$main_branch" --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+$' | head -n 1)"
@@ -184,6 +195,8 @@ ${log:-- (không có commit mới)}"
       die "$dmg được ký ad-hoc (không có chữ ký ổn định); người dùng sẽ mất quyền Trợ năng. Build lại với LeanKeys Self-Signed hoặc Developer ID, hoặc đặt LEANKEYS_ALLOW_ADHOC_RELEASE=1 nếu cố ý."
     print -r -- "LEANKEYS_ALLOW_ADHOC_RELEASE=1: phát hành bản ad-hoc có chủ ý."
   fi
+  [[ -z "$(find "$mnt/LeanKeys.app" -name debug.keep -print -quit 2>/dev/null)" ]] ||
+    die "$dmg chứa debug.keep: tệp này chỉ dành cho máy phát triển, nhật ký sẽ không tự tắt ở máy người dùng."
   detach_dmg
   print -r -- "$dmg có LeanKeys.app."
 

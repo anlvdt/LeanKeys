@@ -65,9 +65,10 @@ struct AdvancedSettingsView: View {
             SettingsRow {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Nhật ký gỡ lỗi").font(.system(size: 13, weight: .medium)) // LEANKEYS-HOOK: copy
-                    Text("Ghi cách xử lý phím vào ~/Library/Logs/LeanKeys/debug.log, không ghi chữ bạn gõ") // LEANKEYS-HOOK: debug-log
+                    Text(DebugLog.settingsSubtitle) // LEANKEYS-HOOK: debug-log
                         .font(.system(size: 11))
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
+                        .lineLimit(1).help("Ghi cách xử lý phím vào ~/Library/Logs/LeanKeys/debug.log. " + DebugLog.settingsSubtitle + ".") // LEANKEYS-HOOK: debug-log
                 }
                 Spacer()
                 LogToggleButton(isEnabled: $logEnabled)

@@ -33,6 +33,11 @@ public struct UndoLearningSection: View {
     static let removeAllConfirmMessage = "Mọi từ đã học, từ ghim và tên đã học sẽ bị xoá. Không hoàn tác được."
     static let removeAllConfirm = "Xoá"
     static let removeAllCancel = "Huỷ"
+    /// Privacy consent for "Nhớ từ bạn sửa" (spec 2026-11-28-privacy-opt-in §2).
+    public static let consentTitle = "Cho LeanKeys nhớ từ bạn sửa?"
+    public static let consentText = "LeanKeys sẽ ghi lại những từ bạn sửa bằng ⌫⌫ hoặc ⌃⌫ và những tên bạn tự viết hoa, để lần sau gõ đúng ngay. Dữ liệu chỉ nằm trên máy này, được mã hoá, không bao giờ gửi đi đâu. Không học trong ô mật khẩu, terminal và các app bạn loại trừ. Bạn xem và xoá được bất cứ lúc nào ở Cài đặt › Nâng cao."
+    public static let consentConfirm = "Cho phép"
+    public static let consentCancel = "Không"
 
     /// Rows are a fixed height so the list can be lazy and still size itself; past `maxListHeight` it scrolls.
     private static let rowHeight: CGFloat = 24
@@ -61,7 +66,8 @@ public struct UndoLearningSection: View {
 
             toggleRow(Self.doubleKeyFixTitle, subtitle: Self.doubleKeyFixSubtitle, isOn: $model.doubleKeyFix)
             Divider().padding(.leading, 12)
-            toggleRow(Self.learningTitle, subtitle: Self.learningSubtitle, isOn: $model.learning)
+            toggleRow(Self.learningTitle, subtitle: Self.learningSubtitle,
+                      isOn: Binding(get: { model.learning }, set: { model.setLearning($0) }))
             Divider().padding(.leading, 12)
             toggleRow(Self.autoCapitalizeTitle, subtitle: Self.autoCapitalizeSubtitle, isOn: $model.autoCapitalize)
             Divider().padding(.leading, 12)
@@ -100,6 +106,13 @@ public struct UndoLearningSection: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 0.5))
         .sheet(isPresented: $showPinSheet) { pinSheet }
+        .alert(Self.consentTitle, isPresented: Binding(get: { model.learningConsentPending },
+                                                       set: { if !$0 { model.cancelLearningConsent() } })) {
+            Button(Self.consentConfirm) { model.confirmLearningConsent() }
+            Button(Self.consentCancel, role: .cancel) { model.cancelLearningConsent() }
+        } message: {
+            Text(Self.consentText)
+        }
         .alert(Self.removeAllConfirmTitle, isPresented: $confirmRemoveAll) {
             Button(Self.removeAllConfirm, role: .destructive) { model.removeAll(); pinResult = nil }
             Button(Self.removeAllCancel, role: .cancel) {}

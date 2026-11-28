@@ -452,7 +452,20 @@ class MenuBarController: NSObject, NSWindowDelegate {
             newVersion: {
                 StatusPopoverModel.displayedNewVersion(UpdateManager.shared.pendingVersion,
                                                        ready: UpdateManager.shared.isReadyToInstall)
-            }
+            },
+            privacyNotice: { UndoLearning.shared.privacyNoticePending },
+            enableLearning: {
+                UndoLearning.shared.askConsentAndEnable { title, text, confirm, cancel in
+                    let alert = NSAlert()
+                    alert.messageText = title
+                    alert.informativeText = text
+                    alert.addButton(withTitle: confirm)
+                    alert.addButton(withTitle: cancel)
+                    NSApp.activate(ignoringOtherApps: true)
+                    return alert.runModal() == .alertFirstButtonReturn
+                }
+            },
+            dismissPrivacyNotice: { UndoLearning.shared.dismissPrivacyNotice() }
         ))
         // Check, download progress and install show while the popover is open (spec §16).
         NotificationCenter.default.publisher(for: .updateStateChanged)
