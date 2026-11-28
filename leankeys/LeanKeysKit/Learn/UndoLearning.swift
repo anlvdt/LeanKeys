@@ -124,6 +124,7 @@ public final class UndoLearning: ObservableObject {
     public func install() {
         Self.installed = self
         lk_vikey_set_fix_filter(undoFixFilter)
+        lk_vikey_set_convert_filter(undoConvertFilter)
         VikeyEngine.setDoubleKeyFix(doubleKeyFix)
     }
 
@@ -132,18 +133,44 @@ public final class UndoLearning: ObservableObject {
         guard Self.installed === self else { return }
         Self.installed = nil
         lk_vikey_set_fix_filter(nil)
+        lk_vikey_set_convert_filter(nil)
     }
 
     /// What the C filter answers: keep `before` (typed after `previous`) as typed.
+    /// A pinned word ("Từ của tôi") is kept as typed too; with the learning switch off pins stop applying (spec 8.8).
     func filterDecision(before: String, previous: String) -> Bool {
-        learning && book.shouldKeep(before: before, previous: previous)
+        guard learning else { return false }
+        return book.shouldKeep(before: before, previous: previous)
+            || (before.allSatisfy(\.isASCII) && book.isPinned(before.lowercased()))
+    }
+
+    /// What the C convert filter answers: convert the raw keys `keys`, shown as `shown` (typed after `previous`), at
+    /// the break key. A word shown as its raw keys can only go to Telex, so only a rule of the direction fits; a
+    /// pinned word converts to Telex only. Learning off: nothing applies, pins included.
+    func convertDecision(keys: String, shown: String, previous: String) -> Bool {
+        guard learning else { return false }
+        let toRaw = shown.lowercased() != keys
+        return book.shouldConvert(keys: keys, previous: previous, toRaw: toRaw) || (toRaw && book.isPinned(keys))
     }
 
     /// After each key Vikey handled: takes the shim's undo event, if any, and records it unless learning is off or
     /// the user is typing somewhere excluded. The event is always taken, so a skipped one never lingers.
     func afterPress(engine: VikeyEngine) {
         guard let undo = engine.takeUndo(), learning, let probe = includedProbe() else { return }
-        record(probe) { [book] in book.record(before: undo.before, previous: undo.previous, reverse: undo.reverse) }
+        switch undo.kind {
+        case 0:
+            record(probe) { [book] in book.record(before: undo.before, previous: undo.previous, reverse: undo.reverse) }
+        case 1, 2:
+            // Kind 1: a ⌃⌫ convert of `before` into `after`. Kind 2: the undo of a rule's convert of `before` into
+            // `after` (the shim queues the rule's own fix), so both say the direction the same way.
+            guard !undo.keys.isEmpty else { return }
+            let toRaw = undo.after.lowercased() == undo.keys
+            record(probe) { [book] in
+                book.recordConvert(keys: undo.keys, previous: undo.previous, toRaw: toRaw, reverse: undo.kind == 2)
+            }
+        default:
+            return
+        }
     }
 
     // MARK: Capitalisation (spec 17.1)
@@ -274,4 +301,14 @@ private let undoFixFilter: lk_fix_filter = { fix in
     let before = VikeyEngine.string(fix.pointee.before, fix.pointee.beforeLength)
     let previous = VikeyEngine.string(fix.pointee.previous, fix.pointee.previousLength)
     return learning.filterDecision(before: before, previous: previous) ? 1 : 0
+}
+
+/// The shim's convert filter, asked at a break key when Vikey made no fix: 1 converts the word. `after` is empty
+/// when the conversion is the Telex form, which only renders once this says 1.
+private let undoConvertFilter: lk_convert_filter = { fix in
+    guard let fix, let learning = UndoLearning.installed else { return 0 }
+    let keys = VikeyEngine.string(fix.pointee.keys, fix.pointee.keysLength)
+    let shown = VikeyEngine.string(fix.pointee.before, fix.pointee.beforeLength)
+    let previous = VikeyEngine.string(fix.pointee.previous, fix.pointee.previousLength)
+    return learning.convertDecision(keys: keys, shown: shown, previous: previous) ? 1 : 0
 }

@@ -12,6 +12,7 @@ private let macKey: [Character: UInt16] = [
     "n": 45, "o": 31, "p": 35, "q": 12, "r": 15, "s": 1, "t": 17, "u": 32, "v": 9, "w": 13, "x": 7, "y": 16, "z": 6,
     " ": 49, ",": 43, ".": 47, "⌫": 51,
 ]
+private let ctrlBackspace: Character = "⌃"
 
 /// A text field driven by the engine as the router drives it: each key, then `afterPress` when `learning` is set.
 private final class Field {
@@ -27,6 +28,15 @@ private final class Field {
     @discardableResult
     func type(_ keys: String) -> String {
         for ch in keys {
+            if ch == ctrlBackspace {
+                // ⌃⌫: the convert call, applied like a key.
+                if let edit = engine.convertLastWord() {
+                    text.removeLast(min(edit.deleteCount, text.count))
+                    text.append(contentsOf: edit.text)
+                }
+                learning?.afterPress(engine: engine)
+                continue
+            }
             guard let code = macKey[Character(ch.lowercased())] else { XCTFail("no mac key for \(ch)"); continue }
             let own: Character? = ch == "⌫" ? nil : ch
             if let edit = engine.process(keyCode: code, caps: ch.isUppercase, shift: ch.isUppercase) {
@@ -71,6 +81,7 @@ final class UndoLearningTests: XCTestCase {
 
     private func cleanEngine() {
         lk_vikey_set_fix_filter(nil)
+        lk_vikey_set_convert_filter(nil)
         while engine.takeUndo() != nil {}
         VikeyEngine.setDoubleKeyFix(true)
         engine.setVietnamese(true)
@@ -157,6 +168,102 @@ final class UndoLearningTests: XCTestCase {
 
         learning.learning = true
         XCTAssertTrue(learning.filterDecision(before: "cos", previous: "thich"))
+    }
+
+    // MARK: ⌃⌫ convert events and pinned words
+
+    func testRecordsConvertEvent() {
+        let book = UndoRuleBook(store: nil)
+        let learning = makeLearning(book)
+        learning.install()
+        let field = Field(engine, learning)
+        XCTAssertEqual(field.type("toi uong beer "), "toi uong bể ")
+        XCTAssertEqual(field.type("⌃"), "toi uong beer ")
+        field.type("n")
+        settle(learning)
+        XCTAssertTrue(book.shouldConvert(keys: "beer", previous: "uong", toRaw: true))
+        XCTAssertFalse(book.shouldConvert(keys: "beer", previous: "uong", toRaw: false))
+    }
+
+    func testRuleReverseRecorded() {
+        let book = UndoRuleBook(store: nil)
+        book.recordConvert(keys: "beer", previous: "uong", toRaw: true, reverse: false)
+        let learning = makeLearning(book)
+        learning.install()
+        let field = Field(engine, learning)
+        XCTAssertEqual(field.type("toi uong beer "), "toi uong beer ", "the learned rule converts at the break")
+        XCTAssertEqual(field.type("⌃"), "toi uong bể ", "⌃⌫ gives Vikey's word back")
+        field.type("n")
+        settle(learning)
+        XCTAssertFalse(book.shouldConvert(keys: "beer", previous: "uong", toRaw: true), "the reverse blocks the rule")
+        engine.setVietnamese(true)
+        engine.resetContext()
+        let again = Field(engine, learning)
+        XCTAssertEqual(again.type("toi uong beer "), "toi uong bể ")
+    }
+
+    func testPinnedWordConverts() {
+        let book = UndoRuleBook(store: nil)
+        _ = book.pin(["mix"])
+        let learning = makeLearning(book)
+        learning.install()
+        XCTAssertEqual(Field(engine, learning).type("mix "), "mix ")
+        XCTAssertTrue(learning.convertDecision(keys: "mix", shown: "mĩ", previous: ""))
+        XCTAssertFalse(learning.convertDecision(keys: "mix", shown: "mix", previous: ""), "already the raw keys")
+        learning.learning = false
+        XCTAssertFalse(learning.convertDecision(keys: "mix", shown: "mĩ", previous: ""), "switch off: pins stop too")
+        engine.setVietnamese(true)  // the convert left the line in English
+        engine.resetContext()
+        XCTAssertEqual(Field(engine, learning).type("mix "), "mĩ ")
+    }
+
+    func testPinnedWordKeptAsTyped() {
+        let book = UndoRuleBook(store: nil)
+        _ = book.pin(["cos"])
+        let learning = makeLearning(book)
+        XCTAssertTrue(learning.filterDecision(before: "COS", previous: ""))
+        XCTAssertFalse(learning.filterDecision(before: "có", previous: ""), "only ASCII words")
+        learning.learning = false
+        XCTAssertFalse(learning.filterDecision(before: "cos", previous: ""))
+    }
+
+    func testLearningOffAppliesNothing() {
+        let book = UndoRuleBook(store: nil)
+        book.recordConvert(keys: "beer", previous: "uong", toRaw: true, reverse: false)
+        let learning = makeLearning(book)
+        learning.install()
+        learning.learning = false
+        let field = Field(engine, learning)
+        XCTAssertEqual(field.type("toi uong beer "), "toi uong bể ")
+        XCTAssertEqual(field.type("⌃"), "toi uong beer ")
+        field.type("n")
+        settle(learning)
+        XCTAssertEqual(book.rules.count, 1, "nothing recorded: the one rule is as it was")
+        XCTAssertTrue(book.shouldConvert(keys: "beer", previous: "uong", toRaw: true))
+    }
+
+    func testNoConvertLearningInSecureFieldOrExcludedApp() {
+        defaults.set(["com.example.private"], forKey: ShortcutSuggestionsModel.excludedAppsKey)
+        let contexts = [
+            LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: true, now: Date()),
+            LearnContext(bundleID: "com.apple.TextEdit", secureInput: true, secureField: true, now: Date()),
+            LearnContext(bundleID: "com.1password.1password", secureInput: false, secureField: false, now: Date()),
+            LearnContext(bundleID: "com.example.private", secureInput: false, secureField: false, now: Date()),
+        ]
+        let book = UndoRuleBook(store: nil)
+        let learning = makeLearning(book)
+        learning.install()
+        for context in contexts {
+            self.context = context
+            engine.resetContext()
+            let field = Field(engine, learning)
+            field.type("toi uong beer ")
+            field.type("⌃n")
+            XCTAssertNil(engine.takeUndo(), "the event is drained even when it is not learned")
+        }
+        settle(learning)
+        XCTAssertTrue(book.rules.isEmpty)
+        XCTAssertFalse(book.shouldConvert(keys: "beer", previous: "uong", toRaw: true))
     }
 
     func testDoubleKeyFixToggleReachesShim() {
