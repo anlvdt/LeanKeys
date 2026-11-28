@@ -262,7 +262,9 @@ public final class PredictionController: ObservableObject {
         )
         let candidates = engine.predict(query)
         trace.predicted()
+        // QuickType only where its rows can pass `SuggestionGate`: completing the word being typed.
         let askQuickType = quickType != nil && engine.accepts(query)
+            && query.currentWord.count >= SuggestionGate.minTypedLetters
         guard !candidates.isEmpty || askQuickType else {
             hide()
             return
@@ -324,19 +326,18 @@ public final class PredictionController: ObservableObject {
         presentPending()
     }
 
-    /// Shows the pending refresh once its anchor is known and QuickType answered or `quickTypeWait` ran out. A late
-    /// QuickType answer updates the shown rows once.
+    /// Shows the pending refresh once its anchor is known and QuickType answered or `quickTypeWait` ran out, through
+    /// `SuggestionGate`. Shown once: a QuickType answer that comes later is dropped, never redrawn (stable rows).
     private func presentPending() {
-        guard var p = pending, p.token == refreshToken, let anchor = p.anchor else { return }
+        guard var p = pending, p.token == refreshToken, let anchor = p.anchor, p.shown == nil else { return }
         let ready = !p.askedQuickType || p.quickType != nil || p.waitedOut
         guard ready else { return }
-        let rows = p.quickType.map { PredictionEngine.merge(ours: p.ours, quickType: $0, phase: p.phase, query: p.query) } ?? p.ours
-        let texts = rows.map(\.display)
-        if p.shown == texts { return }
-        p.shown = texts
+        let merged = p.quickType.map { PredictionEngine.merge(ours: p.ours, quickType: $0, phase: p.phase, query: p.query) } ?? p.ours
+        let rows = SuggestionGate.apply(merged, phase: p.phase, query: p.query)
+        p.shown = rows.map(\.display)
         pending = p
         guard !rows.isEmpty else {
-            if p.quickType != nil || !p.askedQuickType { hideKeepingPending() }
+            hideKeepingPending()
             return
         }
         present(candidates: rows, anchor: anchor, token: p.token)

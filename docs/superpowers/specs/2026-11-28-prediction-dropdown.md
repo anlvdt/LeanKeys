@@ -60,3 +60,24 @@ Gõ Nhanh xử lý Enter ở đầu `keyboardCallback`, trước khối 4A+, và
 - QuickType trả kết quả bất đồng bộ (p50 4,8 ms, p95 8,5 ms). Danh sách chờ QuickType tối đa 25 ms rồi mới hiện lần đầu, chạy song song với việc tìm vị trí con trỏ qua AX. Nếu QuickType trả lời muộn hơn, danh sách cập nhật thêm một lần.
 - Không hỏi QuickType khi đang gõ giữa URL hay mã, và không hỏi ở những app/ô đã bị loại trừ như ô mật khẩu. Chữ chỉ được gửi tới dịch vụ chính tả của macOS, chạy ngay trên máy này.
 - Đã sửa một lỗi của `c092ca0`: những tiền tố 2 chữ cũng là một từ (`đi` trong `điện`) bị gợi ý đi trước chiếm chỗ, làm độ chính xác ô đầu giữa từ tụt xuống 18 %. Giờ gợi ý đi trước được xếp dưới các gợi ý hoàn thành từ. Chỉ khi từ đã gõ dài từ 3 chữ trở lên thì gợi ý đi trước mới được xếp lên trước.
+
+## Luật hiển thị (`SuggestionGate`, theo `docs/superpowers/reviews/2026-11-28-prediction-research.md`)
+
+1. Ở đầu từ mới, và với gợi ý dạng "từ vừa gõ + từ kế tiếp", chỉ hiện cụm bạn đã gõ ít nhất 2 lần. Từ do máy đoán chỉ đúng khoảng 10 % (QuickType cũng vậy), và điểm số không phân biệt được gợi ý đúng với gợi ý sai. Vì vậy ở chỗ này QuickType cũng không được hỏi.
+2. Gợi ý hoàn thành từ chỉ hiện khi đã gõ ít nhất 2 chữ.
+3. Dòng nào cũng phải tiết kiệm được ít nhất 2 phím Telex so với gõ tay. Bấm Tab tính là 1 phím.
+4. Hiện tối đa 2 dòng.
+5. Tab nhận gợi ý ngay sau 120 ms. Thời gian này ngắn hơn phản xạ của người, nên phím Tab bấm trước khi kịp nhìn thấy danh sách vẫn là Tab.
+6. Danh sách chỉ vẽ một lần cho mỗi phím. Kết quả QuickType về muộn hơn 25 ms thì bỏ, không vẽ lại.
+7. Danh sách nằm gần con trỏ, như trước.
+
+Đo bằng `testGatedPolicyVersusUngated` (500 từ, có QuickType, kết quả lệch khoảng ±3 điểm giữa các lần chạy):
+
+| | Danh sách hiện | Dòng 1 đúng khi hiện | Liếc phí công | Phím Telex tiết kiệm (Tab khi dòng 1 đúng) |
+|---|---|---|---|---|
+| Không lọc | 96 % | 28 % | 70 % | 30 % |
+| **Có lọc: từ 2 chữ, tiết kiệm ≥ 2 phím (đang dùng)** | 38 % | 26 % | 28 % | 17 % |
+| Từ 2 chữ, tiết kiệm ≥ 3 phím | 28 % | 20 % | 22 % | 13,5 % |
+| Từ 3 chữ, tiết kiệm ≥ 3 phím | 20 % | 18 % | 17 % | 8 % |
+
+Cách duy nhất để biết bản nào thật sự nhanh hơn cho riêng bạn là đo tốc độ gõ của chính bạn trong ba chế độ: luôn hiện, có lọc, và tắt hẳn.

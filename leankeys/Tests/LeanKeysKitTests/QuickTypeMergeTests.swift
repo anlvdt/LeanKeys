@@ -78,33 +78,44 @@ final class QuickTypeMergeTests: XCTestCase {
         return (c, router, { c.hide(); defaults.removePersistentDomain(forName: suite) })
     }
 
-    func testQuickTypeAnswerLeadsTheNextWordList() {
-        let source = FakeSource()
-        let (c, router, done) = setUp(source)
-        defer { done() }
-        for ch in "cảm ơn " { router.mirror.typed(ch) }
-        c.refreshNow(router: router, bundleID: "com.apple.TextEdit", isVietnamese: true, atWordStartAfterSpace: true)
-        XCTAssertEqual(source.requests, ["cảm ơn "])
-        spin(0.005)
-        XCTAssertFalse(c.isVisible, "waits for QuickType (up to quickTypeWait) before the first show")
-        source.pending[0](["anh", "bạn"])
-        spin(0.01)
-        XCTAssertTrue(c.isVisible)
-        XCTAssertEqual(c.currentCandidates.first?.display, "anh")
-    }
-
-    func testOurRowsShowWhenQuickTypeIsLateAndALateAnswerMergesIn() {
+    func testWordStartAsksNoQuickTypeAndShowsOnlyLearnedPhrases() {
         let source = FakeSource()
         let (c, router, done) = setUp(source)
         defer { done() }
         for ch in "cảm " { router.mirror.typed(ch) }
         c.refreshNow(router: router, bundleID: "com.apple.TextEdit", isVietnamese: true, atWordStartAfterSpace: true)
         spin(PredictionController.quickTypeWait + 0.03)
-        XCTAssertTrue(c.isVisible)
-        XCTAssertEqual(c.currentCandidates.first?.display, "ơn")
-        source.pending[0](["thấy"])
+        XCTAssertTrue(source.requests.isEmpty, "next-word guesses are gated out, so QuickType is not asked")
+        XCTAssertFalse(c.isVisible, "the built-in 'ơn' is a guess, not a learned phrase: silent at a word start")
+    }
+
+    func testMidWordWaitsForQuickTypeThenShowsGatedRows() {
+        let source = FakeSource()
+        let (c, router, done) = setUp(source)
+        defer { done() }
+        for ch in "anh đư" { router.mirror.typed(ch) }
+        c.refreshNow(router: router, bundleID: "com.apple.TextEdit", isVietnamese: true, atWordStartAfterSpace: false)
+        XCTAssertEqual(source.requests, ["anh đư"])
+        spin(0.005)
+        XCTAssertFalse(c.isVisible, "waits for QuickType (up to quickTypeWait) before the first show")
+        source.pending[0](["đư", "được", "đứng"])
         spin(0.01)
-        XCTAssertEqual(c.currentCandidates.first?.display, "thấy")
+        XCTAssertTrue(c.isVisible)
+        XCTAssertLessThanOrEqual(c.currentCandidates.count, SuggestionGate.maxRows)
+        XCTAssertTrue(c.currentCandidates.contains { $0.display == "được" })
+    }
+
+    func testLateQuickTypeAnswerIsDroppedNotRedrawn() {
+        let source = FakeSource()
+        let (c, router, done) = setUp(source)
+        defer { done() }
+        for ch in "anh đư" { router.mirror.typed(ch) }
+        c.refreshNow(router: router, bundleID: "com.apple.TextEdit", isVietnamese: true, atWordStartAfterSpace: false)
+        spin(PredictionController.quickTypeWait + 0.03)
+        let before = c.currentCandidates.map(\.display)
+        source.pending[0](["đưỡng"])
+        spin(0.01)
+        XCTAssertEqual(c.currentCandidates.map(\.display), before, "rows stay put once shown")
     }
 
     func testNoQuickTypeRequestMidURL() {

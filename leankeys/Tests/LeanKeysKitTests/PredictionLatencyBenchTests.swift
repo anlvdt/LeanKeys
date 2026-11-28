@@ -353,6 +353,77 @@ final class PredictionLatencyBenchTests: XCTestCase {
         print("[bench] vsQT quicktype latency: \(Self.stats(lat))")
     }
 
+    // MARK: - 1e. Display rules: glances, precision of a shown row 1, Telex keys saved (Tab on an exact row 1)
+
+    func testGatedPolicyVersusUngated() throws {
+        try XCTSkipUnless(enabled)
+        _ = NSApplication.shared
+        let lines = try corpusLines()
+        let split = lines.count * 2 / 3
+        let ctx = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: false, now: Date())
+        let personal = PersonalPredictionModel(store: nil)
+        personal.enabled = true
+        for l in lines[..<split] { personal.observe(CommittedPhrase(text: l), context: ctx) }
+        let engine = PredictionEngine(corpus: .shared, personal: personal, dictionary: VikeyDictionaryCompleter.shared,
+                                      phraseExtension: .replace, minExtensionContext: 2, lookAhead: true)
+        let checker = NSSpellChecker.shared
+        _ = checker.setLanguage("vi")
+        let tag = NSSpellChecker.uniqueSpellDocumentTag()
+        let limit = Int(ProcessInfo.processInfo.environment["LEANKEYS_BENCH_QT_N"] ?? "500") ?? 500
+        // [policy] = (states, shown, row1Exact, keysSaved); total Telex keys typed
+        let env = ProcessInfo.processInfo.environment
+        SuggestionGate.minKeysSaved = Int(env["LEANKEYS_GATE_MINSAVE"] ?? "2") ?? 2
+        SuggestionGate.minTypedLetters = Int(env["LEANKEYS_GATE_MINLEN"] ?? "2") ?? 2
+        defer { SuggestionGate.minKeysSaved = 2; SuggestionGate.minTypedLetters = 2 }
+        var m: [String: [Int]] = ["ungated": [0, 0, 0, 0], "gated": [0, 0, 0, 0]]
+        var totalKeys = 0
+        var words = 0
+        outer: for line in lines[split...] {
+            let ws = Self.words(line)
+            let lower = ws.map { $0.lowercased() }
+            for wi in 0..<ws.count {
+                words += 1
+                if words > limit { break outer }
+                totalKeys += SuggestionGate.telexKeys(ws[wi]) + 1
+                let chars = Array(ws[wi])
+                var done: Set<String> = []
+                for k in 0...chars.count {
+                    let cur = String(chars[..<k])
+                    let q = PredictionQuery(previousWords: Array(ws[..<wi]), currentWord: cur, followsNonSpaceBreak: false,
+                                            atWordStartAfterSpace: k == 0, isVietnamese: true)
+                    guard engine.accepts(q) else { continue }
+                    let phase = engine.phase(of: q)
+                    let ours = engine.predict(q)
+                    let (qt, _) = Self.quickType(PredictionEngine.quickTypeText(for: q, phase: phase), checker: checker, tag: tag)
+                    let ungated = PredictionEngine.merge(ours: ours, quickType: qt, phase: phase, query: q)
+                    let gatedQT = cur.isEmpty ? [] : qt
+                    let gated = SuggestionGate.apply(PredictionEngine.merge(ours: ours, quickType: gatedQT, phase: phase, query: q),
+                                                     phase: phase, query: q)
+                    for (name, rows) in [("ungated", ungated), ("gated", gated)] {
+                        m[name]![0] += 1
+                        guard let r = rows.first else { continue }
+                        m[name]![1] += 1
+                        let rw = r.display.lowercased().split(separator: " ").map(String.init)
+                        if wi + rw.count <= ws.count, Array(lower[wi..<(wi + rw.count)]) == rw {
+                            m[name]![2] += 1
+                            // First exact row 1 for this word: the typist would press Tab here once.
+                            if !done.contains(name) {
+                                done.insert(name)
+                                m[name]![3] += max(0, SuggestionGate.keysSaved(r, typed: cur))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for name in ["ungated", "gated"] {
+            let v = m[name]!
+            print(String(format: "[bench] policy %-8@ list shown on %.1f%% of states; row 1 exactly right when shown %.1f%%; wasted glances %.1f%% of states; keys saved %.1f%% (Telex, Tab on exact row 1)",
+                         name, 100.0 * Double(v[1]) / Double(v[0]), 100.0 * Double(v[2]) / Double(max(1, v[1])),
+                         100.0 * Double(v[1] - v[2]) / Double(v[0]), 100.0 * Double(v[3]) / Double(totalKeys)))
+        }
+    }
+
     // MARK: - 1d. Next-word precision by confidence: show only when likely right?
 
     func testNextWordPrecisionByScore() throws {

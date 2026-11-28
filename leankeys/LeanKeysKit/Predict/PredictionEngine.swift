@@ -205,7 +205,8 @@ public final class PredictionEngine {
             let insertion = text + (Self.endsWithSentencePunctuation(text) ? "" : " ")
             let words = text.split(whereSeparator: \.isWhitespace).count
             add(PredictionCandidate(id: row.id + "+", display: text, insertion: insertion, deleteCount: row.deleteCount,
-                                    kind: words >= 4 ? .sentence : .phrase, score: row.score, isPersonal: row.isPersonal))
+                                    kind: words >= 4 ? .sentence : .phrase, score: row.score,
+                                    isPersonal: row.isPersonal || personalExtensionOnly))
             if phraseExtension == .both { add(row) }
         }
         return out

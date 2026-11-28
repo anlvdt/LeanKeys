@@ -24,7 +24,9 @@ public enum SuggestionListAction: Equatable {
 /// list has stopped changing for `tabSettle`, so a Tab typed in flow stays a Tab. Pure value type: a few compares
 /// per key on the event-tap thread.
 public struct SuggestionListNavigator: Equatable {
-    public static let tabSettle: CFAbsoluteTime = 0.25
+    /// Shorter than a human can see the list and react (~150 ms+), so a Tab typed before it appeared stays a Tab,
+    /// while any deliberate Tab is a single-press accept (research report rule 5).
+    public static let tabSettle: CFAbsoluteTime = 0.12
 
     public private(set) var selectedIndex: Int?
     public private(set) var count = 0
@@ -56,7 +58,7 @@ public struct SuggestionListNavigator: Equatable {
             return .swallow
         case .tab:
             if let sel = selectedIndex { return .accept(sel) }
-            return now - changedAt >= Self.tabSettle ? .accept(0) : .passAndHide
+            return now - changedAt + 1e-9 >= Self.tabSettle ? .accept(0) : .passAndHide
         case .enter:
             if let sel = selectedIndex { return .accept(sel) }
             return .passAndHide
