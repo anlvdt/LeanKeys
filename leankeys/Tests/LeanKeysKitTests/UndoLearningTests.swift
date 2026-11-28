@@ -701,6 +701,21 @@ final class UndoLearningTests: XCTestCase {
         XCTAssertFalse(UndoLearningSection.removeAllConfirmMessage.isEmpty)
     }
 
+    func testRemoveAllEnabledByPinsAndCopyMentionsPins() {
+        let model = UndoLearning.preview()
+        XCTAssertFalse(UndoLearningSection.canRemoveAll(model))
+        model.pin(["beer"])
+        settle(model)
+        XCTAssertTrue(UndoLearningSection.canRemoveAll(model))
+        model.removeAll()
+        settle(model)
+        XCTAssertEqual(model.pinnedWords, [])
+        XCTAssertFalse(UndoLearningSection.canRemoveAll(model))
+        XCTAssertEqual(UndoLearningSection.removeAllConfirmMessage,
+                       "Mọi từ đã học, từ ghim và tên đã học sẽ bị xoá. Không hoàn tác được.")
+        XCTAssertTrue(UndoLearningSection.removeAllConfirmTitle.contains("từ ghim"))
+    }
+
     func testKindLabels() {
         XCTAssertEqual(UndoLearningSection.kindLabel(.keep), "giữ như gõ")
         XCTAssertEqual(UndoLearningSection.kindLabel(.convert), "đổi")

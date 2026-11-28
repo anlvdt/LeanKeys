@@ -29,8 +29,8 @@ public struct UndoLearningSection: View {
     /// A `cap:` rule records that the user undid a capital: LeanKeys keeps that phrase lowercase.
     static let capitalizationSuffix = " (giữ chữ thường)"
     static let removeAllLabel = "Xoá tất cả"
-    static let removeAllConfirmTitle = "Xoá mọi từ giữ nguyên và tên đã học?"
-    static let removeAllConfirmMessage = "Mọi từ giữ nguyên và tên đã học sẽ bị xoá. Không hoàn tác được."
+    static let removeAllConfirmTitle = "Xoá mọi từ đã học, từ ghim và tên đã học?"
+    static let removeAllConfirmMessage = "Mọi từ đã học, từ ghim và tên đã học sẽ bị xoá. Không hoàn tác được."
     static let removeAllConfirm = "Xoá"
     static let removeAllCancel = "Huỷ"
 
@@ -90,7 +90,7 @@ public struct UndoLearningSection: View {
             HStack {
                 Button(Self.removeAllLabel) { confirmRemoveAll = true }
                     .controlSize(.small)
-                    .disabled(model.rules.isEmpty && model.names.isEmpty)
+                    .disabled(!Self.canRemoveAll(model))
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -101,7 +101,7 @@ public struct UndoLearningSection: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 0.5))
         .sheet(isPresented: $showPinSheet) { pinSheet }
         .alert(Self.removeAllConfirmTitle, isPresented: $confirmRemoveAll) {
-            Button(Self.removeAllConfirm, role: .destructive) { model.removeAll() }
+            Button(Self.removeAllConfirm, role: .destructive) { model.removeAll(); pinResult = nil }
             Button(Self.removeAllCancel, role: .cancel) {}
         } message: {
             Text(Self.removeAllConfirmMessage)
@@ -143,6 +143,11 @@ public struct UndoLearningSection: View {
     static func displayText(_ rule: UndoRule) -> String {
         guard rule.text.hasPrefix(AutoCapitalizer.rulePrefix) else { return rule.text }
         return String(rule.text.dropFirst(AutoCapitalizer.rulePrefix.count)) + capitalizationSuffix
+    }
+
+    /// "Xoá tất cả" works whenever there is anything to clear: rules, names or pinned words.
+    static func canRemoveAll(_ model: UndoLearning) -> Bool {
+        !(model.rules.isEmpty && model.names.isEmpty && model.pinnedWords.isEmpty)
     }
 
     /// The kind word shown on each row.
@@ -189,7 +194,7 @@ public struct UndoLearningSection: View {
             Text(Self.kindLabel(.keep))
                 .font(.system(size: 11))
                 .foregroundColor(Color(NSColor.secondaryLabelColor))
-            Button { model.unpin(word) } label: {
+            Button { model.unpin(word); pinResult = nil } label: {
                 Image(systemName: "pin.slash")
             }
             .buttonStyle(.borderless)
@@ -257,6 +262,7 @@ public struct UndoLearningSection: View {
         let text = Self.displayText(rule)
         return HStack(spacing: 6) {
             Text(text).font(.system(size: 12)).lineLimit(1)
+                .help(Self.convertHelp(rule) ?? text)
             if !rule.previous.isEmpty {
                 Text("sau “\(rule.previous)”")
                     .font(.system(size: 11))
@@ -279,7 +285,6 @@ public struct UndoLearningSection: View {
             .accessibilityLabel(Text("Xoá \(text)"))
         }
         .padding(.leading, 8)
-        .help(Self.convertHelp(rule) ?? "")
     }
 
     private func nameRow(_ name: LearnedName) -> some View {
