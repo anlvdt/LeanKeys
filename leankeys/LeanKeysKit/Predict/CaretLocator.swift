@@ -32,10 +32,7 @@ public enum CaretLocator {
     }
 
     /// Queries the frontmost application's focused element for caret bounds. Returns nil when disallowed or unavailable.
-    public static func currentAnchor(
-        pid: pid_t? = NSWorkspace.shared.frontmostApplication?.processIdentifier,
-        primaryScreenHeight overrideScreenHeight: CGFloat? = nil
-    ) -> CaretAnchor? {
+    public static func currentAnchor(pid: pid_t? = NSWorkspace.shared.frontmostApplication?.processIdentifier) -> CaretAnchor? {
         guard let pid else { return nil }
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, axTimeout)
@@ -55,7 +52,7 @@ public enum CaretLocator {
             return nil
         }
 
-        let screenH = overrideScreenHeight ?? primaryScreenHeight
+        let screenH = primaryScreenHeight
         guard screenH > 0 else { return nil }
 
         // 1. Standard AXSelectedTextRange -> AXBoundsForRange

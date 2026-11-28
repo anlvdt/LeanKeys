@@ -1,19 +1,23 @@
 import AppKit
-import Foundation
+import Combine
+import SwiftUI
 
-/// Non-activating borderless floating `NSPanel` rendering calm ghost text directly below the caret
-/// using lightweight pure AppKit (zero SwiftUI layout or animation overhead during typing).
+/// Observable state backing the floating 4A+ candidate bar.
+final class CandidateBarState: ObservableObject {
+    @Published var candidates: [PredictionCandidate] = []
+    var onAccept: (Int) -> Void = { _ in }
+}
+
+/// Non-activating floating `NSPanel` displaying up to 3 word/phrase/sentence suggestions near the caret.
 public final class CandidatePanelController {
     private final class FloatingPanel: NSPanel {
         override var canBecomeKey: Bool { false }
         override var canBecomeMain: Bool { false }
     }
 
+    private let state = CandidateBarState()
     private var panel: FloatingPanel?
-    private var barView: GhostBarView?
-    private var lastOriginY: CGFloat?
-    private var lastFrame: CGRect = .zero
-    private var lastRenderedTexts: [String] = []
+    private var hostingController: NSHostingController<CandidateBarView>?
 
     public private(set) var isVisible = false
 
@@ -30,39 +34,18 @@ public final class CandidatePanelController {
             return
         }
         ensurePanel()
-        guard let panel, let barView else { return }
+        guard let panel, let hostingController else { return }
 
-        let wasVisible = isVisible && panel.isVisible
-        barView.onAccept = onAccept
-        let texts = candidates.map(\.display)
-        let textsChanged = texts != lastRenderedTexts
-        if textsChanged || !wasVisible {
-            barView.update(candidates: candidates)
-            lastRenderedTexts = texts
-        }
+        state.onAccept = onAccept
+        state.candidates = candidates
+        hostingController.rootView = CandidateBarView(state: state)
 
-        let fitting = barView.fittingSize
-        let panelSize = CGSize(width: max(60, min(520, ceil(fitting.width))),
-                               height: max(20, min(32, ceil(fitting.height))))
-        var origin = Self.panelOrigin(panelSize: panelSize, caretRect: anchor.rect)
-        if wasVisible, let prevY = lastOriginY, abs(origin.y - prevY) <= 4 {
-            origin.y = prevY
-        }
-        lastOriginY = origin.y
-
-        let nextFrame = CGRect(origin: origin, size: panelSize)
-        if wasVisible && !textsChanged && nextFrame == lastFrame {
-            return
-        }
-        if nextFrame != lastFrame {
-            panel.setFrame(nextFrame, display: false)
-            lastFrame = nextFrame
-        }
-        if textsChanged {
-            barView.needsDisplay = true
-        }
-        if !wasVisible {
-            panel.alphaValue = 1
+        let fitting = hostingController.sizeThatFits(in: CGSize(width: 520, height: 48))
+        let panelSize = CGSize(width: max(120, min(520, ceil(fitting.width))),
+                               height: max(30, min(48, ceil(fitting.height))))
+        let origin = Self.panelOrigin(panelSize: panelSize, caretRect: anchor.rect)
+        panel.setFrame(CGRect(origin: origin, size: panelSize), display: true)
+        if !panel.isVisible {
             panel.orderFrontRegardless()
         }
         isVisible = true
@@ -70,17 +53,14 @@ public final class CandidatePanelController {
 
     public func hide() {
         isVisible = false
-        lastOriginY = nil
-        lastFrame = .zero
-        lastRenderedTexts = []
-        guard let panel, panel.isVisible else { return }
-        panel.orderOut(nil)
+        state.candidates = []
+        panel?.orderOut(nil)
     }
 
-    /// Computes panel origin in Cocoa coordinates: tightly below caret (`gap = 3`), flipping above if near
-    /// screen bottom, and clamped horizontally inside the containing screen's `visibleFrame`.
+    /// Computes panel origin in Cocoa coordinates: below caret by default, flipping above if near screen bottom,
+    /// and clamped horizontally inside the containing screen's `visibleFrame`.
     public static func panelOrigin(panelSize: CGSize, caretRect: CGRect, screens: [CGRect] = NSScreen.screens.map(\.visibleFrame)) -> CGPoint {
-        let gap: CGFloat = 3
+        let gap: CGFloat = 6
         let screenFrame = screens.first(where: { $0.contains(CGPoint(x: caretRect.midX, y: caretRect.midY)) })
             ?? screens.first
             ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
@@ -109,7 +89,7 @@ public final class CandidatePanelController {
     private func ensurePanel() {
         if panel != nil { return }
         let p = FloatingPanel(
-            contentRect: CGRect(x: 0, y: 0, width: 220, height: 22),
+            contentRect: CGRect(x: 0, y: 0, width: 240, height: 34),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -117,132 +97,80 @@ public final class CandidatePanelController {
         p.level = .popUpMenu
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = false
+        p.hasShadow = true
         p.hidesOnDeactivate = false
         p.isFloatingPanel = true
         p.ignoresMouseEvents = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
 
-        let view = GhostBarView(frame: CGRect(x: 0, y: 0, width: 220, height: 22))
-        p.contentView = view
+        let host = NSHostingController(rootView: CandidateBarView(state: state))
+        host.view.wantsLayer = true
+        host.view.layer?.backgroundColor = .clear
+        p.contentViewController = host
         self.panel = p
-        self.barView = view
+        self.hostingController = host
     }
 }
 
-/// Single-view ghost-text renderer with zero Auto Layout or SwiftUI overhead.
-private final class GhostBarView: NSView {
-    private struct ChipLayout {
-        let text: NSAttributedString
-        let textRect: CGRect
-        let hint: NSAttributedString
-        let hintRect: CGRect
-        let hitRect: CGRect
-    }
+private struct CandidateBarView: View {
+    @ObservedObject var state: CandidateBarState
 
-    var onAccept: (Int) -> Void = { _ in }
-
-    private var chips: [ChipLayout] = []
-    private var separatorPositions: [(NSAttributedString, CGPoint)] = []
-    private var cachedFittingSize = CGSize(width: 60, height: 22)
-
-    private static let textFont = NSFont.systemFont(ofSize: 12.5, weight: .regular)
-    private static let hintFontPrimary = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
-    private static let hintFontSecondary = NSFont.monospacedSystemFont(ofSize: 9.5, weight: .medium)
-    private static let sepFont = NSFont.systemFont(ofSize: 11, weight: .regular)
-
-    override var fittingSize: NSSize { cachedFittingSize }
-    override var isOpaque: Bool { false }
-    override var isFlipped: Bool { true }
-
-    func update(candidates: [PredictionCandidate]) {
-        chips.removeAll(keepingCapacity: true)
-        separatorPositions.removeAll(keepingCapacity: true)
-
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byTruncatingTail
-        let shadow = NSShadow()
-        shadow.shadowColor = NSColor.windowBackgroundColor.withAlphaComponent(0.75)
-        shadow.shadowBlurRadius = 1.5
-        shadow.shadowOffset = .zero
-
-        let sepAttrs: [NSAttributedString.Key: Any] = [
-            .font: Self.sepFont,
-            .foregroundColor: NSColor.labelColor.withAlphaComponent(0.22),
-            .shadow: shadow,
-        ]
-        let sepAttr = NSAttributedString(string: "·", attributes: sepAttrs)
-        let sepSize = sepAttr.size()
-
-        var x: CGFloat = 4
-        let height: CGFloat = 22
-        let yPad: CGFloat = 3
-
-        for (idx, cand) in candidates.prefix(PredictionEngine.maxCandidates).enumerated() {
-            if idx > 0 {
-                x += 6
-                let sepY = round((height - sepSize.height) / 2)
-                separatorPositions.append((sepAttr, CGPoint(x: x, y: sepY)))
-                x += ceil(sepSize.width) + 6
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(state.candidates.enumerated()), id: \.element.id) { idx, cand in
+                Button {
+                    state.onAccept(idx)
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(idx == 0 ? "Tab" : "⌥\(idx + 1)")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundColor(idx == 0 ? Color.accentColor : Color(NSColor.secondaryLabelColor))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(idx == 0 ? Color.accentColor.opacity(0.14) : Color(NSColor.quaternaryLabelColor).opacity(0.45))
+                            )
+                        Text(cand.display)
+                            .font(.system(size: 12.5, weight: idx == 0 ? .medium : .regular))
+                            .foregroundColor(Color(NSColor.labelColor))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: idx == 0 ? 220 : 140, alignment: .leading)
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(idx == 0 ? Color.accentColor.opacity(0.08) : Color.clear)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-
-            let textAlpha: CGFloat = idx == 0 ? 0.48 : 0.30
-            let hintAlpha: CGFloat = idx == 0 ? 0.28 : 0.22
-            let textAttrs: [NSAttributedString.Key: Any] = [
-                .font: Self.textFont,
-                .foregroundColor: NSColor.labelColor.withAlphaComponent(textAlpha),
-                .paragraphStyle: paragraph,
-                .shadow: shadow,
-            ]
-            let hintAttrs: [NSAttributedString.Key: Any] = [
-                .font: idx == 0 ? Self.hintFontPrimary : Self.hintFontSecondary,
-                .foregroundColor: NSColor.labelColor.withAlphaComponent(hintAlpha),
-                .shadow: shadow,
-            ]
-
-            let attrText = NSAttributedString(string: cand.display, attributes: textAttrs)
-            let maxTextW: CGFloat = idx == 0 ? 220 : 140
-            let rawTextSize = attrText.size()
-            let textW = min(maxTextW, ceil(rawTextSize.width))
-            let textH = ceil(rawTextSize.height)
-
-            let hintString = idx == 0 ? "⇥" : "⌥\(idx + 1)"
-            let attrHint = NSAttributedString(string: hintString, attributes: hintAttrs)
-            let hintSize = attrHint.size()
-            let hintW = ceil(hintSize.width)
-            let hintH = ceil(hintSize.height)
-
-            let textRect = CGRect(x: x, y: max(yPad, round((height - textH) / 2)), width: textW, height: textH)
-            let hintX = x + textW + 3
-            let hintRect = CGRect(x: hintX, y: max(yPad, round((height - hintH) / 2)), width: hintW, height: hintH)
-            let hitRect = CGRect(x: x - 2, y: 0, width: textW + 3 + hintW + 4, height: height)
-
-            chips.append(ChipLayout(text: attrText, textRect: textRect, hint: attrHint, hintRect: hintRect, hitRect: hitRect))
-            x = hintX + hintW
         }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(
+            PopoverBlurBackground()
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9)
+                .stroke(Color(NSColor.separatorColor).opacity(0.55), lineWidth: 0.75)
+        )
+        .fixedSize()
+    }
+}
 
-        let totalW = max(60, min(520, ceil(x + 4)))
-        cachedFittingSize = CGSize(width: totalW, height: height)
-        needsDisplay = true
+private struct PopoverBlurBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .popover
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.clear.setFill()
-        dirtyRect.fill()
-
-        for (sep, pt) in separatorPositions {
-            sep.draw(at: pt)
-        }
-        for chip in chips {
-            chip.text.draw(with: chip.textRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
-            chip.hint.draw(at: chip.hintRect.origin)
-        }
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        let pt = convert(event.locationInWindow, from: nil)
-        if let idx = chips.firstIndex(where: { $0.hitRect.contains(pt) }) {
-            onAccept(idx)
-        }
-    }
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }

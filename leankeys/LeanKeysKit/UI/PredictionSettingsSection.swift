@@ -11,7 +11,7 @@ public enum PredictionSettingsPart {
 /// Settings UI for 4A+ Laban Key-style word/phrase/sentence suggestions (spec 2026-11-28-prediction-4a).
 public struct PredictionSettingsSection: View {
     public static let title = "Gợi ý từ & câu tiếp theo"
-    public static let subtitle = "Hiện chữ gợi ý mờ ngay dưới con trỏ khi tạm dừng gõ (Tab, ⌥1–⌥3)"
+    public static let subtitle = "Hiện thanh gợi ý kiểu Laban Key cạnh con trỏ (Tab, ⌥1–⌥3)"
     public static let learnTitle = "Học thói quen viết để gợi ý cụm từ & câu"
     public static let learnSubtitle = "Cá nhân hoá gợi ý theo cách bạn hay nhắn tin và viết bài"
     public static let consentTitle = "Cho LeanKeys học thói quen gợi ý câu?"

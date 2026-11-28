@@ -1890,9 +1890,10 @@ private func keyboardCallback(
 // LEANKEYS-HOOK-BEGIN: engine-dispatch
 private func schedulePredictionRefresh(keyCode: UInt16) {
     guard PredictionController.shared.enabled else { return }
+    let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     PredictionController.shared.scheduleRefresh(
         router: .shared,
-        bundleID: DetectionCache.bundleID,
+        bundleID: bundleID,
         isVietnamese: EngineRouter.shared.currentVietnamese,
         atWordStartAfterSpace: keyCode == KeyCode.space
     )

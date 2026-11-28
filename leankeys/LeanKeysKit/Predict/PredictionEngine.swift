@@ -109,8 +109,7 @@ public final class PredictionEngine {
         }
 
         let current = query.currentWord.precomposedStringWithCanonicalMapping
-        let minLen = query.previousWords.isEmpty ? Self.minPrefixLength : 1
-        guard current.count >= minLen,
+        guard current.count >= Self.minPrefixLength,
               current.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else {
             return []
         }
@@ -203,12 +202,7 @@ public final class PredictionEngine {
             }
         }
 
-        // 3. General vocabulary & dictionary completions require at least `minPrefixLength` (2) characters.
-        guard current.count >= Self.minPrefixLength else {
-            return Self.selectDiverseTop(pool, maxCount: maxCount)
-        }
-
-        // Personal vocabulary
+        // 3. Personal vocabulary
         if let personal {
             for item in personal.wordCompletions(matching: current, limit: 5) {
                 let cased = Self.applyCase(of: current, to: item.word)
@@ -238,21 +232,39 @@ public final class PredictionEngine {
             ))
         }
 
-        // 5. Vikey English dictionary completions (read-only static binary search; Vietnamese uses pre-indexed corpus)
-        if let dictionary, !query.isVietnamese, current.allSatisfy(\.isASCII), current.count < 28 {
-            for (text, rawScore) in dictionary.completions(vietnamese: false, asciiPrefix: lowerCurrent, maxOut: 5) {
-                guard text.lowercased() != lowerCurrent else { continue }
-                let cased = Self.applyCase(of: current, to: text)
-                let score = 48.0 + Double(rawScore) * 0.5
-                pool.append(PredictionCandidate(
-                    id: "en:\(cased.lowercased())",
-                    display: cased,
-                    insertion: cased + " ",
-                    deleteCount: deleteCount,
-                    kind: .word,
-                    score: score,
-                    isPersonal: false
-                ))
+        // 5. Vikey dictionary completions (English directly or pure-ASCII Telex Vietnamese)
+        if let dictionary, current.allSatisfy(\.isASCII), current.count < 28 {
+            // In English mode search English dictionary; in Vietnamese mode try English if word looks non-VN or search both.
+            if !query.isVietnamese {
+                for (text, rawScore) in dictionary.completions(vietnamese: false, asciiPrefix: lowerCurrent, maxOut: 5) {
+                    guard text.lowercased() != lowerCurrent else { continue }
+                    let cased = Self.applyCase(of: current, to: text)
+                    let score = 48.0 + Double(rawScore) * 0.5
+                    pool.append(PredictionCandidate(
+                        id: "en:\(cased.lowercased())",
+                        display: cased,
+                        insertion: cased + " ",
+                        deleteCount: deleteCount,
+                        kind: .word,
+                        score: score,
+                        isPersonal: false
+                    ))
+                }
+            } else {
+                for (text, rawScore) in dictionary.completions(vietnamese: true, asciiPrefix: lowerCurrent, maxOut: 4) {
+                    guard text.lowercased() != lowerCurrent else { continue }
+                    let cased = Self.applyCase(of: current, to: text)
+                    let score = 38.0 + Double(rawScore) * 0.4
+                    pool.append(PredictionCandidate(
+                        id: "vn:\(cased.lowercased())",
+                        display: cased,
+                        insertion: cased + " ",
+                        deleteCount: deleteCount,
+                        kind: .word,
+                        score: score,
+                        isPersonal: false
+                    ))
+                }
             }
         }
 

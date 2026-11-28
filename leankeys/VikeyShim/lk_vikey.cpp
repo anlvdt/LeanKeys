@@ -82,7 +82,6 @@ static bool isLetterKey(Uint16 key) {
 }
 
 static const LKTelexLetter* telexLetter(char16_t c) {
-    if (c < 0x00C0) return nullptr;
     for (const LKTelexLetter& m : kTelexMap) if (m.c == c) return &m;
     return nullptr;
 }
@@ -223,16 +222,16 @@ static VKEdit pressTracked(Uint16 key, bool shift, double now) {
     model.lastKeyReplaced = key != KEY_DELETE && e.deleteCount > 0;
     model.wordBeforeLastKey = wordBefore;
     if (!model.elongateActive) {
-        if (model.line.empty() || !isWordLetter(model.line.back())) {
+        const std::u16string nowWord = currentWord();
+        if (nowWord.empty()) {
             model.tonedStem.clear();
             model.tonedVowelKey = kNoKey;
             model.tonedVowelLower = 0;
         } else {
-            const LKTelexLetter* tail = telexLetter(model.line.back());
+            const LKTelexLetter* tail = telexLetter(nowWord.back());
             if (tail && tail->tone != 0) {
                 char16_t v = (char16_t)(tail->keys[0] | 32);
                 if (v == 'a' || v == 'e' || v == 'i' || v == 'o' || v == 'u' || v == 'y') {
-                    const std::u16string nowWord = currentWord();
                     // If the user just typed the same base vowel key after an existing tonedStem ("nhé" + e -> "nhế"),
                     // preserve "nhé" as tonedStem so a second press yields "nhéee" rather than "nhếee".
                     const bool transformedSameWord = !model.tonedStem.empty() && key == (Uint16)model.tonedVowelKey &&
@@ -1213,13 +1212,7 @@ static bool tryElongate(uint16_t macKeyCode, int shift, double now, VKEdit& e) {
 
     if (vLanguage != 1 || !vRestoreIfWrongSpelling || !vAutoSwitchByTyping) return false;
     const char16_t v = vowelKeyChar(macKeyCode);
-    if (!v || model.line.empty()) return false;
-    const bool maybeTriggerA = !model.tonedStem.empty() && macKeyCode == (uint16_t)model.tonedVowelKey &&
-                               model.lastKey == model.tonedVowelKey;
-    const bool maybeTriggerB = model.line.size() >= 3 &&
-                               toLower(model.line[model.line.size() - 1]) == v &&
-                               toLower(model.line[model.line.size() - 2]) == v;
-    if (!maybeTriggerA && !maybeTriggerB) return false;
+    if (!v) return false;
     const std::u16string cur = currentWord();
     if (cur.empty()) return false;
     const char16_t ch = shift ? (char16_t)(v - 'a' + 'A') : v;

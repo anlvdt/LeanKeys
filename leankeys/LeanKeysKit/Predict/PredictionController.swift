@@ -4,12 +4,7 @@ import Combine
 import Foundation
 
 /// Coordinates 4A+ Laban Key-style next-word, phrase, and sentence predictions, personal encrypted learning,
-/// and the non-activating ghost-text candidate bar.
-///
-/// Performance:
-/// - `scheduleRefresh` on `CGEventTap` performs O(1) locked state update + `DispatchSourceTimer` arming with zero
-///   AppKit/AX IPC, zero `TextMirror` string allocations, and zero `DispatchWorkItem` allocations per keystroke.
-/// - All JSON corpus loading, `PredictionEngine.predict`, and `CaretLocator.currentAnchor` run off `RunLoop.main`.
+/// and the non-activating floating candidate bar.
 ///
 /// Privacy (spec 2026-11-28-privacy-opt-in & 2026-11-28-prediction-4a):
 /// - Both `enabled` (showing suggestions) and `learnEnabled` (recording personal phrases/n-grams) are OFF by default.
@@ -39,20 +34,9 @@ public final class PredictionController: ObservableObject {
         Exclusions.defaultBundleIDs.union(defaults.stringArray(forKey: ShortcutSuggestionsModel.excludedAppsKey) ?? [])
     }
 
-    private struct PendingTrigger {
-        var token: UInt64
-        weak var router: EngineRouter?
-        var bundleID: String
-        var isVietnamese: Bool
-        var atWordStartAfterSpace: Bool
-    }
-
     private let defaults: UserDefaults
     private let personal: PersonalPredictionModel
-    private let corpusProvider: () -> BuiltInPredictionCorpus
-    private let dictionary: DictionaryCompleting?
-    private let engineLock = NSLock()
-    private var _engine: PredictionEngine?
+    private let engine: PredictionEngine
     private let panel: CandidatePanelController
     private let onLearnerQueue: (@escaping () -> Void) -> Void
     private let onMain: (@escaping () -> Void) -> Void
@@ -62,37 +46,19 @@ public final class PredictionController: ObservableObject {
     private var injectText: (_ deleteCount: Int, _ chars: [Character]) -> Void = { _, _ in }
     private var contextProbe: () -> LearnContextProbe = LearnContextReader.probe
     private var secureField: (LearnContextProbe) -> Bool = LearnContextReader.isSecureField
-    private var caretAnchor: (_ pid: pid_t?, _ screenHeight: CGFloat?) -> CaretLocator.CaretAnchor? = { pid, screenH in
-        CaretLocator.currentAnchor(pid: pid, primaryScreenHeight: screenH)
-    }
+    private var caretAnchor: () -> CaretLocator.CaretAnchor? = { CaretLocator.currentAnchor() }
 
     private var appSwitchObserver: NSObjectProtocol?
-    private var screenObserver: NSObjectProtocol?
-    private var defaultsObserver: NSObjectProtocol?
-
-    private let predictQueue = DispatchQueue(label: "io.github.anlvdt.leankeys.predict.compute", qos: .userInitiated)
-    private let stateLock = NSLock()
-    private var debounceTimer: DispatchSourceTimer?
-    private var pendingTrigger: PendingTrigger?
-    private var refreshToken: UInt64 = 0
-
-    // Main-thread caches (avoid AppKit / UserDefaults calls inside keyboardCallback)
-    private var activeBundleID: String?
-    private var activePID: pid_t?
-    private var activeBundleAllowed = true
-    private var cachedPrimaryScreenHeight: CGFloat = 0
-    private var cachedExcludedBundleIDs: Set<String> = Exclusions.defaultBundleIDs
-    private var cachedShortcuts: [(trigger: String, replacement: String)] = []
-    private var lastShortcutsRefresh: CFAbsoluteTime = 0
-
+    private let axQueue = DispatchQueue(label: "io.github.anlvdt.leankeys.predict.ax", qos: .userInteractive)
     private var lastAnchor: CaretLocator.CaretAnchor?
     private var lastAnchorTime: CFAbsoluteTime = 0
-    private var lastAnchorPID: pid_t?
+    private var pendingRefresh: DispatchWorkItem?
+    private var refreshToken: UInt64 = 0
 
     public init(
         defaults: UserDefaults = .standard,
         personal: PersonalPredictionModel,
-        corpus: BuiltInPredictionCorpus? = nil,
+        corpus: BuiltInPredictionCorpus = .shared,
         dictionary: DictionaryCompleting? = VikeyDictionaryCompleter.shared,
         panel: CandidatePanelController = CandidatePanelController(),
         onLearnerQueue: @escaping (@escaping () -> Void) -> Void,
@@ -100,17 +66,13 @@ public final class PredictionController: ObservableObject {
     ) {
         self.defaults = defaults
         self.personal = personal
-        self.corpusProvider = { corpus ?? .shared }
-        self.dictionary = dictionary
+        self.engine = PredictionEngine(corpus: corpus, personal: personal, dictionary: dictionary)
         self.panel = panel
         self.onLearnerQueue = onLearnerQueue
         self.onMain = onMain
 
         self.enabled = defaults.bool(forKey: Self.enabledKey)
         self.learnEnabled = defaults.bool(forKey: Self.learnKey) && defaults.bool(forKey: Self.learnConsentKey)
-        if let corpus {
-            self._engine = PredictionEngine(corpus: corpus, personal: personal, dictionary: dictionary)
-        }
         if learnEnabled {
             onLearnerQueue { [weak self] in
                 self?.personal.enabled = true
@@ -119,38 +81,13 @@ public final class PredictionController: ObservableObject {
         }
     }
 
-    deinit {
-        if let appSwitchObserver { NSWorkspace.shared.notificationCenter.removeObserver(appSwitchObserver) }
-        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
-        if let defaultsObserver { NotificationCenter.default.removeObserver(defaultsObserver) }
-        stateLock.lock()
-        debounceTimer?.cancel()
-        debounceTimer = nil
-        stateLock.unlock()
-    }
-
-    private func engineInstance() -> PredictionEngine {
-        engineLock.lock()
-        defer { engineLock.unlock() }
-        if let _engine { return _engine }
-        let created = PredictionEngine(corpus: corpusProvider(), personal: personal, dictionary: dictionary)
-        _engine = created
-        return created
-    }
-
     // MARK: - Settings & Privacy Opt-In
 
     public func setEnabled(_ on: Bool) {
         guard on != enabled else { return }
         enabled = on
         defaults.set(on, forKey: Self.enabledKey)
-        if on {
-            predictQueue.async { [weak self] in
-                _ = self?.engineInstance()
-            }
-        } else {
-            hide()
-        }
+        if !on { hide() }
     }
 
     @discardableResult
@@ -214,16 +151,6 @@ public final class PredictionController: ObservableObject {
         self.router = router
         self.shortcutsProvider = shortcuts
         self.injectText = inject
-        self.cachedShortcuts = shortcuts()
-        self.lastShortcutsRefresh = CFAbsoluteTimeGetCurrent()
-
-        let frontApp = NSWorkspace.shared.frontmostApplication
-        self.activeBundleID = frontApp?.bundleIdentifier
-        self.activePID = frontApp?.processIdentifier
-        self.activeBundleAllowed = Self.isBundleAllowed(activeBundleID, ownBundleID: ownBundleID)
-        self.cachedPrimaryScreenHeight = CaretLocator.primaryScreenHeight
-        self.cachedExcludedBundleIDs = excludedBundleIDs
-
         router.mirror.addPhraseObserver { [weak self] phrase in
             self?.phraseCommitted(phrase)
         }
@@ -232,39 +159,9 @@ public final class PredictionController: ObservableObject {
                 forName: NSWorkspace.didActivateApplicationNotification,
                 object: nil,
                 queue: .main
-            ) { [weak self] note in
-                guard let self else { return }
-                let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-                self.activeBundleID = app?.bundleIdentifier
-                self.activePID = app?.processIdentifier
-                self.activeBundleAllowed = Self.isBundleAllowed(self.activeBundleID, ownBundleID: self.ownBundleID)
-                self.lastAnchor = nil
-                self.lastAnchorPID = nil
-                self.hide()
-            }
-        }
-        if screenObserver == nil {
-            screenObserver = NotificationCenter.default.addObserver(
-                forName: NSApplication.didChangeScreenParametersNotification,
-                object: nil,
-                queue: .main
             ) { [weak self] _ in
-                self?.cachedPrimaryScreenHeight = CaretLocator.primaryScreenHeight
-            }
-        }
-        if defaultsObserver == nil {
-            defaultsObserver = NotificationCenter.default.addObserver(
-                forName: UserDefaults.didChangeNotification,
-                object: defaults,
-                queue: .main
-            ) { [weak self] _ in
-                guard let self else { return }
-                self.cachedExcludedBundleIDs = self.excludedBundleIDs
-            }
-        }
-        if enabled {
-            predictQueue.async { [weak self] in
-                _ = self?.engineInstance()
+                self?.lastAnchor = nil
+                self?.hide()
             }
         }
     }
@@ -274,7 +171,7 @@ public final class PredictionController: ObservableObject {
         let probe = contextProbe()
         guard !probe.secureInput, let bundleID = probe.bundleID,
               bundleID != ownBundleID,
-              !cachedExcludedBundleIDs.contains(bundleID),
+              !excludedBundleIDs.contains(bundleID),
               !Exclusions.isExcludedByDefault(bundleID) else { return }
         let secureField = self.secureField
         onLearnerQueue { [weak self] in
@@ -286,182 +183,89 @@ public final class PredictionController: ObservableObject {
 
     // MARK: - Keystroke Handling & Display
 
-    /// Schedules candidate bar update on `predictQueue` using a single coalesced `DispatchSourceTimer`.
-    /// - Hidden -> wait 220 ms after the last keystroke before computing and showing ghost text.
-    /// - Already visible -> wait 140 ms so fast typing bursts trigger zero mid-burst prediction/AX work.
+    /// Schedules candidate bar update asynchronously so the CGEventTap callback returns immediately.
     public func scheduleRefresh(router: EngineRouter, bundleID: String?, isVietnamese: Bool, atWordStartAfterSpace: Bool) {
         guard enabled else {
             if isVisible { hide() }
             return
         }
-        let resolvedBundleID: String?
-        if let bundleID {
-            if bundleID != activeBundleID {
-                activeBundleID = bundleID
-                activeBundleAllowed = Self.isBundleAllowed(bundleID, ownBundleID: ownBundleID)
-            }
-            resolvedBundleID = bundleID
-        } else {
-            resolvedBundleID = activeBundleID
+        pendingRefresh?.cancel()
+        refreshToken &+= 1
+        let item = DispatchWorkItem { [weak self] in
+            self?.refreshNow(router: router, bundleID: bundleID, isVietnamese: isVietnamese,
+                             atWordStartAfterSpace: atWordStartAfterSpace)
         }
-        guard activeBundleAllowed, let effectiveBundleID = resolvedBundleID else {
-            if isVisible { hide() }
-            return
-        }
-        let delay: TimeInterval = isVisible ? 0.14 : 0.22
-        armDebouncedRefresh(
-            delay: delay,
-            router: router,
-            bundleID: effectiveBundleID,
-            isVietnamese: isVietnamese,
-            atWordStartAfterSpace: atWordStartAfterSpace
-        )
+        pendingRefresh = item
+        DispatchQueue.main.async(execute: item)
     }
 
-    private func armDebouncedRefresh(
-        delay: TimeInterval,
-        router: EngineRouter,
-        bundleID: String,
-        isVietnamese: Bool,
-        atWordStartAfterSpace: Bool
-    ) {
-        stateLock.lock()
+    func refreshNow(router: EngineRouter, bundleID: String?, isVietnamese: Bool, atWordStartAfterSpace: Bool) {
+        guard enabled,
+              !IsSecureEventInputEnabled(),
+              let bundleID,
+              bundleID != ownBundleID,
+              !CodeApps.contains(bundleID),
+              !KeyPassthrough.remoteBundleIDs.contains(bundleID),
+              !KeyPassthrough.credentialAppBundleIDs.contains(bundleID),
+              !Exclusions.passwordManagers.contains(bundleID) else {
+            hide()
+            return
+        }
+
+        let currentWord = router.mirror.currentWord
+        let previousWords = router.mirror.recentWordsBeforeCurrent
+        let followsBreak = router.mirror.currentWordFollowsBreak
+
+        if currentWord.isEmpty && (!atWordStartAfterSpace || previousWords.isEmpty) {
+            hide()
+            return
+        }
+        if !currentWord.isEmpty && currentWord.count < PredictionEngine.minPrefixLength {
+            hide()
+            return
+        }
+
+        let query = PredictionQuery(
+            previousWords: previousWords,
+            currentWord: currentWord,
+            followsNonSpaceBreak: followsBreak,
+            atWordStartAfterSpace: atWordStartAfterSpace,
+            isVietnamese: isVietnamese,
+            shortcuts: shortcutsProvider()
+        )
+        let candidates = engine.predict(query)
+        guard !candidates.isEmpty else {
+            hide()
+            return
+        }
+
         refreshToken &+= 1
         let token = refreshToken
-        pendingTrigger = PendingTrigger(
-            token: token,
-            router: router,
-            bundleID: bundleID,
-            isVietnamese: isVietnamese,
-            atWordStartAfterSpace: atWordStartAfterSpace
-        )
-        let timer: DispatchSourceTimer
-        if let existing = debounceTimer {
-            timer = existing
-        } else {
-            let created = DispatchSource.makeTimerSource(queue: predictQueue)
-            created.setEventHandler { [weak self] in
-                self?.fireDebouncedPrediction()
-            }
-            created.resume()
-            debounceTimer = created
-            timer = created
-        }
-        timer.schedule(deadline: .now() + delay, leeway: .milliseconds(20))
-        stateLock.unlock()
-    }
-
-    private func currentToken() -> UInt64 {
-        stateLock.lock()
-        let t = refreshToken
-        stateLock.unlock()
-        return t
-    }
-
-    private func fireDebouncedPrediction() {
-        stateLock.lock()
-        guard let trigger = pendingTrigger, trigger.token == refreshToken else {
-            stateLock.unlock()
+        let now = CFAbsoluteTimeGetCurrent()
+        if let cached = lastAnchor, now - lastAnchorTime < 0.08 {
+            present(candidates: candidates, anchor: cached, token: token)
             return
         }
-        pendingTrigger = nil
-        stateLock.unlock()
 
-        onMain { [weak self] in
-            guard let self else { return }
-            guard self.currentToken() == trigger.token,
-                  self.enabled,
-                  !IsSecureEventInputEnabled(),
-                  let router = trigger.router else {
-                self.hideIfTokenMatches(trigger.token)
-                return
-            }
-
-            let currentWord = router.mirror.currentWord
-            let previousWords = router.mirror.recentWordsBeforeCurrent
-            let followsBreak = router.mirror.currentWordFollowsBreak
-
-            if currentWord.isEmpty && (!trigger.atWordStartAfterSpace || previousWords.isEmpty) {
-                self.hideIfTokenMatches(trigger.token)
-                return
-            }
-            let minPrefix = previousWords.isEmpty ? PredictionEngine.minPrefixLength : 1
-            if !currentWord.isEmpty && currentWord.count < minPrefix {
-                self.hideIfTokenMatches(trigger.token)
-                return
-            }
-
-            let now = CFAbsoluteTimeGetCurrent()
-            if now - self.lastShortcutsRefresh >= 2.0 {
-                self.cachedShortcuts = self.shortcutsProvider()
-                self.lastShortcutsRefresh = now
-            }
-            let query = PredictionQuery(
-                previousWords: previousWords,
-                currentWord: currentWord,
-                followsNonSpaceBreak: followsBreak,
-                atWordStartAfterSpace: trigger.atWordStartAfterSpace,
-                isVietnamese: trigger.isVietnamese,
-                shortcuts: self.cachedShortcuts
-            )
-            let pid = self.activePID
-            let screenH = self.cachedPrimaryScreenHeight
-            let reusableAnchor: CaretLocator.CaretAnchor? =
-                (self.lastAnchorPID == pid && now - self.lastAnchorTime < 0.50) ? self.lastAnchor : nil
-
-            self.predictQueue.async { [weak self] in
-                guard let self, self.currentToken() == trigger.token else { return }
-                let candidates = self.engineInstance().predict(query)
-                guard !candidates.isEmpty else {
-                    self.onMain { [weak self] in
-                        self?.hideIfTokenMatches(trigger.token)
-                    }
+        let locate = caretAnchor
+        axQueue.async { [weak self] in
+            let resolved = locate()
+            DispatchQueue.main.async {
+                guard let self, self.enabled, self.refreshToken == token else { return }
+                self.lastAnchor = resolved
+                self.lastAnchorTime = CFAbsoluteTimeGetCurrent()
+                guard let resolved else {
+                    self.panel.hide()
+                    self.currentCandidates = []
                     return
                 }
-                guard self.currentToken() == trigger.token else { return }
-
-                let anchor: CaretLocator.CaretAnchor?
-                let usedCached: Bool
-                if let reusableAnchor {
-                    anchor = reusableAnchor
-                    usedCached = true
-                } else {
-                    anchor = self.caretAnchor(pid, screenH > 0 ? screenH : nil)
-                    usedCached = false
-                }
-                guard let resolved = anchor else {
-                    self.onMain { [weak self] in
-                        self?.hideIfTokenMatches(trigger.token)
-                    }
-                    return
-                }
-
-                self.onMain { [weak self] in
-                    guard let self,
-                          self.enabled,
-                          self.currentToken() == trigger.token,
-                          !IsSecureEventInputEnabled() else { return }
-                    if !usedCached {
-                        self.lastAnchor = resolved
-                        self.lastAnchorTime = CFAbsoluteTimeGetCurrent()
-                        self.lastAnchorPID = pid
-                    }
-                    self.present(candidates: candidates, anchor: resolved, token: trigger.token)
-                }
+                self.present(candidates: candidates, anchor: resolved, token: token)
             }
-        }
-    }
-
-    private func hideIfTokenMatches(_ token: UInt64) {
-        guard currentToken() == token else { return }
-        if isVisible || panel.isVisible {
-            currentCandidates = []
-            panel.hide()
         }
     }
 
     private func present(candidates: [PredictionCandidate], anchor: CaretLocator.CaretAnchor, token: UInt64) {
-        guard enabled, currentToken() == token else { return }
+        guard enabled, token == refreshToken else { return }
         currentCandidates = candidates
         panel.show(candidates: candidates, anchor: anchor) { [weak self] idx in
             self?.acceptFromClick(at: idx)
@@ -474,26 +278,22 @@ public final class PredictionController: ObservableObject {
         let candidate = currentCandidates[index]
         let chars = Array(candidate.insertion)
         router.resetWordAfterPrediction(deleteCount: candidate.deleteCount, inserted: chars)
-        stateLock.lock()
-        pendingTrigger = nil
+        pendingRefresh?.cancel()
+        pendingRefresh = nil
         refreshToken &+= 1
-        stateLock.unlock()
         currentCandidates = []
         lastAnchor = nil
-        lastAnchorPID = nil
+        panel.hide()
 
-        // Chain the next suggestion smoothly when the insertion ends with whitespace;
-        // if no follow-up exists or another key arrives first, `hideIfTokenMatches` hides it.
-        if candidate.insertion.last == " ", activeBundleAllowed, let bundleID = activeBundleID {
-            armDebouncedRefresh(
-                delay: 0.08,
-                router: router,
-                bundleID: bundleID,
-                isVietnamese: isVietnamese,
-                atWordStartAfterSpace: true
-            )
-        } else {
-            panel.hide()
+        // Chain the next suggestion when the inserted text ends cleanly with whitespace.
+        let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        if candidate.insertion.last == " " {
+            let item = DispatchWorkItem { [weak self] in
+                self?.refreshNow(router: router, bundleID: bundleID, isVietnamese: isVietnamese,
+                                 atWordStartAfterSpace: true)
+            }
+            pendingRefresh = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03, execute: item)
         }
         return (candidate.deleteCount, chars)
     }
@@ -509,25 +309,11 @@ public final class PredictionController: ObservableObject {
     }
 
     public func hide() {
-        stateLock.lock()
-        pendingTrigger = nil
+        pendingRefresh?.cancel()
+        pendingRefresh = nil
         refreshToken &+= 1
-        stateLock.unlock()
-        if isVisible || panel.isVisible {
-            currentCandidates = []
-            panel.hide()
-        } else {
-            currentCandidates = []
-        }
-    }
-
-    private static func isBundleAllowed(_ bundleID: String?, ownBundleID: String?) -> Bool {
-        guard let bundleID else { return false }
-        return bundleID != ownBundleID
-            && !CodeApps.contains(bundleID)
-            && !KeyPassthrough.remoteBundleIDs.contains(bundleID)
-            && !KeyPassthrough.credentialAppBundleIDs.contains(bundleID)
-            && !Exclusions.passwordManagers.contains(bundleID)
+        currentCandidates = []
+        panel.hide()
     }
 }
 

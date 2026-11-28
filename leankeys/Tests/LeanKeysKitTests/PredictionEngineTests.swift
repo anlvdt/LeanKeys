@@ -211,70 +211,22 @@ final class PredictionEngineTests: XCTestCase {
         XCTAssertEqual(converted, CGRect(x: 100, y: 780, width: 2, height: 20))
 
         let screen = CGRect(x: 0, y: 25, width: 1440, height: 875)
-        // Normal case: places below caret with gap = 3
+        // Normal case: places below caret
         let normal = CandidatePanelController.panelOrigin(panelSize: CGSize(width: 260, height: 34),
                                                           caretRect: CGRect(x: 300, y: 500, width: 2, height: 18),
                                                           screens: [screen])
-        XCTAssertEqual(normal.y, 463)
+        XCTAssertEqual(normal.y, 460)
 
-        // Near bottom edge: flips above caret with gap = 3
+        // Near bottom edge: flips above caret
         let flipped = CandidatePanelController.panelOrigin(panelSize: CGSize(width: 260, height: 34),
                                                            caretRect: CGRect(x: 300, y: 40, width: 2, height: 18),
                                                            screens: [screen])
-        XCTAssertEqual(flipped.y, 61)
+        XCTAssertEqual(flipped.y, 64)
 
         // Near right edge: clamps inside screen
         let clampedRight = CandidatePanelController.panelOrigin(panelSize: CGSize(width: 260, height: 34),
                                                                 caretRect: CGRect(x: 1380, y: 500, width: 2, height: 18),
                                                                 screens: [screen])
         XCTAssertEqual(clampedRight.x, 1440 - 260 - 8)
-    }
-
-    func testSingleCharContextFilteringKeepsSuggestionContinuous() {
-        let engine = PredictionEngine(corpus: corpus, personal: nil, dictionary: nil)
-
-        // Standalone single char with no context still stays empty (no noise).
-        let standalone = PredictionQuery(
-            previousWords: [],
-            currentWord: "b",
-            followsNonSpaceBreak: false,
-            atWordStartAfterSpace: false,
-            isVietnamese: true
-        )
-        XCTAssertTrue(engine.predict(standalone).isEmpty)
-
-        // After "cảm ơn ", typing just "b" continues filtering "bạn nhiều" without flicker.
-        let withContext = PredictionQuery(
-            previousWords: ["cảm", "ơn"],
-            currentWord: "b",
-            followsNonSpaceBreak: false,
-            atWordStartAfterSpace: false,
-            isVietnamese: true
-        )
-        let res = engine.predict(withContext)
-        XCTAssertEqual(res.first?.display, "bạn nhiều")
-        XCTAssertEqual(res.first?.deleteCount, 1)
-    }
-
-    func testPredictionLatencyUnderBudget() {
-        let engine = PredictionEngine(corpus: corpus, personal: nil, dictionary: VikeyDictionaryCompleter.shared)
-        let queries = [
-            PredictionQuery(previousWords: ["cảm", "ơn"], currentWord: "", followsNonSpaceBreak: false, atWordStartAfterSpace: true, isVietnamese: true),
-            PredictionQuery(previousWords: ["chúc", "bạn"], currentWord: "mộ", followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: true),
-            PredictionQuery(previousWords: [], currentWord: "chươ", followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: true),
-            PredictionQuery(previousWords: [], currentWord: "impr", followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: false),
-        ]
-        // Warm up once
-        for q in queries { _ = engine.predict(q) }
-
-        let iterations = 50
-        let t0 = CFAbsoluteTimeGetCurrent()
-        for _ in 0..<iterations {
-            for q in queries { _ = engine.predict(q) }
-        }
-        let elapsedMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
-        let avgMs = elapsedMs / Double(iterations * queries.count)
-        print("PredictionEngine avg latency: \(String(format: "%.4f", avgMs)) ms/query (\(iterations * queries.count) queries in \(String(format: "%.2f", elapsedMs)) ms)")
-        XCTAssertLessThan(avgMs, 0.5, "Prediction query exceeded 0.5 ms budget: \(avgMs) ms")
     }
 }

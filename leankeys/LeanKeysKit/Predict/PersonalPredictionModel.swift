@@ -62,18 +62,11 @@ public final class PersonalPredictionModel {
         var vocab: [String: VocabEntry] = [:]
     }
 
-    private struct IndexedVocab {
-        let display: String
-        let lower: String
-        let folded: String
-        let count: Int
-    }
-
     private struct ReadIndex {
         var bigrams: [String: [Entry]] = [:]
         var trigrams: [String: [Entry]] = [:]
         var phrases: [PhraseEntry] = []
-        var vocabByFirstChar: [Character: [IndexedVocab]] = [:]
+        var vocab: [VocabEntry] = []
     }
 
     private let store: LearnStore?
@@ -259,18 +252,18 @@ public final class PersonalPredictionModel {
     public func wordCompletions(matching prefix: String, limit: Int = 6) -> [(word: String, score: Double)] {
         let normPrefix = prefix.precomposedStringWithCanonicalMapping.lowercased()
         let foldedPrefix = BuiltInPredictionCorpus.foldDiacritics(prefix)
-        guard let firstChar = foldedPrefix.first else { return [] }
+        guard !foldedPrefix.isEmpty else { return [] }
         let hasDiacritics = normPrefix != foldedPrefix
 
         lock.lock()
-        let entries = index.vocabByFirstChar[firstChar] ?? []
+        let entries = index.vocab
         lock.unlock()
-        guard !entries.isEmpty else { return [] }
 
         var out: [(String, Double)] = []
         for e in entries {
-            guard e.lower != normPrefix else { continue }
-            if e.lower.hasPrefix(normPrefix) {
+            let lower = e.display.lowercased()
+            guard lower != normPrefix else { continue }
+            if lower.hasPrefix(normPrefix) {
                 out.append((e.display, 65.0 + Double(min(e.count, 25)) * 1.5))
             } else if !hasDiacritics, e.folded.hasPrefix(foldedPrefix), e.folded != foldedPrefix {
                 out.append((e.display, 45.0 + Double(min(e.count, 25)) * 1.5))
@@ -331,22 +324,9 @@ public final class PersonalPredictionModel {
         index.phrases = data.phrases.values
             .filter { $0.count >= Self.phraseThreshold }
             .sorted { $0.count > $1.count }
-        var grouped: [Character: [IndexedVocab]] = [:]
-        for v in data.vocab.values where v.count >= Self.vocabThreshold {
-            let item = IndexedVocab(
-                display: v.display,
-                lower: v.display.lowercased(),
-                folded: v.folded,
-                count: v.count
-            )
-            if let first = v.folded.first {
-                grouped[first, default: []].append(item)
-            }
-        }
-        for key in grouped.keys {
-            grouped[key]?.sort { $0.count > $1.count }
-        }
-        index.vocabByFirstChar = grouped
+        index.vocab = data.vocab.values
+            .filter { $0.count >= Self.vocabThreshold }
+            .sorted { $0.count > $1.count }
     }
 
     private func loadIfNeeded() -> Bool {

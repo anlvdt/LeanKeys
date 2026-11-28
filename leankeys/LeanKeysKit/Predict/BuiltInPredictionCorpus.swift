@@ -29,40 +29,22 @@ public struct PredictionCorpusData: Decodable {
 public final class BuiltInPredictionCorpus {
     public struct WordEntry {
         public let text: String
-        public let lower: String
         public let folded: String
-        public let isCompound: Bool
         public let rank: Int
     }
 
     public static let shared = BuiltInPredictionCorpus(data: .bundled)
 
     private let words: [WordEntry]
-    private let wordsByFirstChar: [Character: [WordEntry]]
     private let bigrams: [String: [String]]
     private let phrases: [String: [String]]
     private let maxPhraseTriggerWords: Int
 
     public init(data: PredictionCorpusData) {
-        var allWords: [WordEntry] = []
-        allWords.reserveCapacity(data.words.count)
-        var byFirst: [Character: [WordEntry]] = [:]
-        for (idx, raw) in data.words.enumerated() {
+        self.words = data.words.enumerated().map { idx, raw in
             let norm = raw.precomposedStringWithCanonicalMapping
-            let entry = WordEntry(
-                text: norm,
-                lower: norm.lowercased(),
-                folded: Self.foldDiacritics(norm),
-                isCompound: norm.contains(" "),
-                rank: idx
-            )
-            allWords.append(entry)
-            if let first = entry.folded.first {
-                byFirst[first, default: []].append(entry)
-            }
+            return WordEntry(text: norm, folded: Self.foldDiacritics(norm), rank: idx)
         }
-        self.words = allWords
-        self.wordsByFirstChar = byFirst
         var bg: [String: [String]] = [:]
         bg.reserveCapacity(data.bigrams.count)
         for (k, v) in data.bigrams {
@@ -133,18 +115,19 @@ public final class BuiltInPredictionCorpus {
     public func wordCompletions(matching prefix: String, limit: Int = 6) -> [(word: String, score: Double)] {
         let normPrefix = prefix.precomposedStringWithCanonicalMapping.lowercased()
         let foldedPrefix = Self.foldDiacritics(prefix)
-        guard let firstChar = foldedPrefix.first,
-              let bucket = wordsByFirstChar[firstChar] else { return [] }
+        guard !foldedPrefix.isEmpty else { return [] }
         let hasDiacritics = normPrefix != foldedPrefix
         var matches: [(String, Double)] = []
-        matches.reserveCapacity(min(limit * 4, bucket.count))
-        for entry in bucket {
-            guard entry.lower != normPrefix else { continue }
-            if entry.lower.hasPrefix(normPrefix) {
-                let base = (entry.isCompound ? 42.0 : 50.0) - Double(entry.rank) * 0.02
+        for entry in words {
+            let entryLower = entry.text.lowercased()
+            guard entryLower != normPrefix else { continue }
+            if entryLower.hasPrefix(normPrefix) {
+                let isCompound = entry.text.contains(" ")
+                let base = (isCompound ? 42.0 : 50.0) - Double(entry.rank) * 0.02
                 matches.append((entry.text, base))
             } else if !hasDiacritics, entry.folded.hasPrefix(foldedPrefix), entry.folded != foldedPrefix {
-                let base = (entry.isCompound ? 26.0 : 32.0) - Double(entry.rank) * 0.02
+                let isCompound = entry.text.contains(" ")
+                let base = (isCompound ? 26.0 : 32.0) - Double(entry.rank) * 0.02
                 matches.append((entry.text, base))
             }
         }
