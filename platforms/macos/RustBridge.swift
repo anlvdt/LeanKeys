@@ -1635,6 +1635,7 @@ private func keyboardCallback(
         return Unmanaged.passUnretained(event)
     }
 
+    let perfStart = Log.isEnabled ? CFAbsoluteTimeGetCurrent() : 0 // LEANKEYS-HOOK: debug-log
     let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
     defer { if keyCode == UInt16(KeyCode.tab) || keyCode == 0x24 || keyCode == 0x4C { DetectionCache.expire() } } // LEANKEYS-HOOK: engine-dispatch (Tab/Return may move focus to a sign-in field)
 
@@ -1666,6 +1667,7 @@ private func keyboardCallback(
 
         let (method, delays) = detectMethod()
         if method == .passthrough { EngineRouter.shared.discardPending(); RustBridge.clearBuffer(); return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch
+        defer { if perfStart > 0 { let ms = String(format: "%.3f", (CFAbsoluteTimeGetCurrent() - perfStart) * 1000); Log.info("perf: key ms=\(ms)") } } // LEANKEYS-HOOK: debug-log
         Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log
 
         if let (bs, chars, keyConsumed) = RustBridge.processKey(keyCode: keyCode, caps: caps, ctrl: bypassIME, shift: shift) {
@@ -1721,6 +1723,7 @@ private func keyboardCallback(
         RustBridge.clearBuffer() // LEANKEYS-HOOK: engine-dispatch
         return Unmanaged.passUnretained(event)
     }
+    defer { if perfStart > 0 { let ms = String(format: "%.3f", (CFAbsoluteTimeGetCurrent() - perfStart) * 1000); Log.info("perf: key ms=\(ms)") } } // LEANKEYS-HOOK: debug-log
     Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log (after pass-through: nothing logged in a sign-in field)
     // LEANKEYS-HOOK-BEGIN: engine-dispatch
     // 4A+: Accept (Tab, Option+1..3), dismiss (Esc), or hide on plain cursor movement.
@@ -2284,8 +2287,10 @@ private func sendReplacement(backspace bs: Int, chars: [Character], method: Inje
     let str = String(chars)
     Log.info("inject: bs=\(bs) text=\(DebugLog.redact(chars)) method=\(method) delays=\(delays)") // LEANKEYS-HOOK: debug-log
 
+    let perfStart = Log.isEnabled ? CFAbsoluteTimeGetCurrent() : 0 // LEANKEYS-HOOK: debug-log
     // Use TextInjector for synchronized text injection
     TextInjector.shared.injectSync(bs: bs, text: str, method: method, delays: delays, proxy: proxy)
+    if perfStart > 0 { let ms = String(format: "%.3f", (CFAbsoluteTimeGetCurrent() - perfStart) * 1000); Log.info("perf: send bs=\(bs) len=\(chars.count) ms=\(ms)") } // LEANKEYS-HOOK: debug-log
 }
 
 // MARK: - Focus Change Observer (AXObserver-based)

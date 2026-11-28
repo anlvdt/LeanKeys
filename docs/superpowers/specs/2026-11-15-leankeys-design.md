@@ -690,7 +690,7 @@ LeanKeys:
 
 **(2026-11-17, audit bảo mật LOW-2)** Phím đi thẳng (ô đăng nhập, terminal, trình quản lý mật khẩu, điều khiển từ xa) không được ghi vào nhật ký, kể cả số lần bấm. Dòng chọn cách gửi phím không ghi loại ô (`role`). Nhật ký tự tắt: tệp tạo cách đây hơn 24 giờ bị xoá khi app mở hay khi đọc lại công tắc (`DebugLog.isOnAfterExpiry`), vì tiến trình nào của cùng người dùng cũng tạo được tệp đó.
 
-Điều còn lại, chấp nhận: nhật ký vẫn cho thấy nhịp gõ và độ dài từ, vì không có chúng nhật ký không còn dùng được để tìm lỗi.
+Điều còn lại, chấp nhận: nhật ký vẫn cho thấy nhịp gõ và độ dài từ, vì không có chúng nhật ký không còn dùng được để tìm lỗi. Nhật ký có thể ghi thời gian xử lý từng phím (ms) và độ dài lần chèn, không bao giờ ghi văn bản.
 
 `tests/privacy/test_debug_log.sh` (bước 5 của `.githooks/pre-push`) chặn mọi lần đồng bộ bản gốc đưa lại đường dẫn `/tmp` hay dòng nhật ký ghi chữ gõ. Thử tay: mục K4 trong `sync/manual-checklist.md`.
 

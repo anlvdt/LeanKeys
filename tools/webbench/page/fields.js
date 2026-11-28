@@ -1,0 +1,256 @@
+// One factory per field kind. Each mounts a minimal, plain-text editor into `stage`,
+// calls onChange() on every user edit, and returns { getText, focus }.
+// Libraries load inside their own factory, so one CDN failure only breaks its field.
+
+const SUGGESTIONS = ['https://www.facebook.com/messages', 'https://tiki.vn', 'https://vnexpress.net'];
+
+function setCommon(el) {
+  el.classList.add('field');
+  el.setAttribute('autocomplete', 'off');
+  el.setAttribute('autocorrect', 'off');
+  el.setAttribute('autocapitalize', 'off');
+  el.setAttribute('spellcheck', 'false');
+  // A neutral, per-page name: browsers key autofill suggestions on the field name, and a
+  // suggestion popup would take the focused window away from the bench page.
+  el.name = 'wb-' + Math.random().toString(36).slice(2, 10);
+}
+
+function caretToEnd(el) {
+  el.focus();
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function mountInput(stage, onChange) {
+  const el = document.createElement('input');
+  el.type = 'text';
+  setCommon(el);
+  el.addEventListener('input', () => onChange());
+  stage.append(el);
+  return {
+    getText: () => el.value,
+    focus: () => {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    },
+  };
+}
+
+function mountTextarea(stage, onChange) {
+  const el = document.createElement('textarea');
+  setCommon(el);
+  el.addEventListener('input', () => onChange());
+  stage.append(el);
+  return {
+    getText: () => el.value,
+    focus: () => {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    },
+  };
+}
+
+function mountContenteditable(stage, onChange) {
+  const el = document.createElement('div');
+  el.contentEditable = 'true';
+  el.setAttribute('role', 'textbox');
+  setCommon(el);
+  el.addEventListener('input', () => onChange());
+  stage.append(el);
+  return {
+    getText: () => el.innerText.replace(/ /g, ' '),
+    focus: () => caretToEnd(el),
+  };
+}
+
+// Address-bar style completion: after an insertion, append the rest of the first
+// matching suggestion and select it, so the next keystroke replaces the selection.
+function mountAutocomplete(stage, onChange) {
+  const el = document.createElement('input');
+  el.type = 'text';
+  setCommon(el);
+  // What the keystrokes produced, without the auto-filled remainder.
+  let typed = '';
+  // A completion is pending while the value holds more than what was typed. Drop it
+  // before the caret moves, so collapsing the selection cannot keep the remainder.
+  const dropCompletion = () => {
+    if (el.value === typed) return false;
+    el.value = typed;
+    el.setSelectionRange(typed.length, typed.length);
+    return true;
+  };
+  const CARET_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Tab']);
+  // Keys whose default would move the caret off the collapse point (typed end) while a
+  // completion is pending. Their default is suppressed so the caret stays at typed end.
+  // Home is not in this set: moving to the start is what it does.
+  const COLLAPSE_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'ArrowDown']);
+  el.addEventListener('keydown', (event) => {
+    if (!CARET_KEYS.has(event.key)) return;
+    const dropped = dropCompletion();
+    if (dropped && COLLAPSE_KEYS.has(event.key)) event.preventDefault();
+  });
+  el.addEventListener('mousedown', () => dropCompletion());
+  el.addEventListener('input', (event) => {
+    // At this point the value is exactly what the user typed (any previous
+    // completion was replaced by the keystroke), so record it before completing.
+    typed = el.value;
+    onChange();
+    if (event.isComposing || !event.inputType || !event.inputType.startsWith('insert')) return;
+    if (!typed) return;
+    const lower = typed.toLowerCase();
+    const match = SUGGESTIONS.find((s) => s.toLowerCase().startsWith(lower) && s.length > typed.length);
+    if (!match) return;
+    el.value = typed + match.slice(typed.length);
+    el.setSelectionRange(typed.length, match.length);
+  });
+  stage.append(el);
+  return {
+    getText: () => typed,
+    focus: () => {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    },
+  };
+}
+
+async function mountLexical(stage, onChange, onFail) {
+  const [{ createEditor, $getRoot, $createParagraphNode }, { registerPlainText }] = await Promise.all([
+    import('lexical'),
+    import('@lexical/plain-text'),
+  ]);
+  const root = document.createElement('div');
+  root.contentEditable = 'true';
+  setCommon(root);
+  stage.append(root);
+
+  const editor = createEditor({
+    namespace: 'webbench',
+    onError: (error) => {
+      console.error(error);
+      onFail();
+    },
+  });
+  editor.setRootElement(root);
+  registerPlainText(editor);
+
+  let armed = false;
+  editor.registerUpdateListener(({ dirtyLeaves, dirtyElements }) => {
+    if (armed && (dirtyLeaves.size > 0 || dirtyElements.size > 0)) onChange();
+  });
+  editor.update(() => {
+    $getRoot().append($createParagraphNode());
+  }, { discrete: true });
+  editor.update(() => {
+    $getRoot().selectEnd();
+  }, { discrete: true });
+  armed = true;
+
+  return {
+    getText: () => editor.getEditorState().read(() => $getRoot().getTextContent()),
+    focus: () => {
+      root.focus();
+      editor.update(() => {
+        $getRoot().selectEnd();
+      }, { discrete: true });
+    },
+  };
+}
+
+async function mountSlate(stage, onChange) {
+  const React = (await import('react')).default;
+  const { flushSync } = await import('react-dom');
+  const { createRoot } = await import('react-dom/client');
+  const { createEditor, Editor, Node, Transforms } = await import('slate');
+  const { Slate, Editable, withReact, ReactEditor } = await import('slate-react');
+
+  const editor = withReact(createEditor());
+  const initialValue = [{ type: 'paragraph', children: [{ text: '' }] }];
+  let armed = false;
+
+  const SlateField = () => React.createElement(
+    Slate,
+    {
+      editor,
+      initialValue,
+      onChange: () => {
+        if (armed && editor.operations.some((op) => op.type !== 'set_selection')) onChange();
+      },
+    },
+    React.createElement(Editable, { className: 'field', spellCheck: false }),
+  );
+
+  const host = document.createElement('div');
+  stage.append(host);
+  flushSync(() => {
+    createRoot(host).render(React.createElement(SlateField));
+  });
+  armed = true;
+
+  return {
+    getText: () => Node.string(editor),
+    focus: () => {
+      ReactEditor.focus(editor);
+      Transforms.select(editor, Editor.end(editor, []));
+    },
+  };
+}
+
+async function mountProseMirror(stage, onChange) {
+  const { EditorState, TextSelection } = await import('prosemirror-state');
+  const { EditorView } = await import('prosemirror-view');
+  const { schema } = await import('prosemirror-schema-basic');
+
+  let armed = false;
+  const view = new EditorView(stage, {
+    state: EditorState.create({ doc: schema.topNodeType.createAndFill() }),
+    dispatchTransaction(tr) {
+      view.updateState(view.state.apply(tr));
+      if (armed && tr.docChanged) onChange();
+    },
+  });
+  view.dom.classList.add('field');
+  view.dom.setAttribute('spellcheck', 'false');
+  armed = true;
+
+  return {
+    getText: () => view.state.doc.textContent,
+    focus: () => {
+      view.focus();
+      view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
+    },
+  };
+}
+
+async function mountQuill(stage, onChange) {
+  const { default: Quill } = await import('quill');
+  const host = document.createElement('div');
+  stage.append(host);
+  const quill = new Quill(host, { theme: 'snow', modules: { toolbar: false } });
+  setCommon(quill.root);
+  quill.on('text-change', (_delta, _old, source) => {
+    if (source === 'user') onChange();
+  });
+  return {
+    // Quill always keeps a trailing newline; drop it so the text matches the other editors.
+    getText: () => quill.getText().replace(/\n$/, ''),
+    focus: () => {
+      quill.focus();
+      quill.setSelection(Math.max(0, quill.getLength() - 1), 0, 'silent');
+    },
+  };
+}
+
+export const FIELDS = {
+  input: mountInput,
+  textarea: mountTextarea,
+  contenteditable: mountContenteditable,
+  autocomplete: mountAutocomplete,
+  lexical: mountLexical,
+  slate: mountSlate,
+  prosemirror: mountProseMirror,
+  quill: mountQuill,
+};
