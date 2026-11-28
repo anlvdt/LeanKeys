@@ -83,11 +83,10 @@ public enum DebugLog {
         guard let data = line.data(using: .utf8),
               let handle = FileHandle(forWritingAtPath: path) else { return }
         defer { try? handle.close() }
-        if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
-           let size = attrs[.size] as? UInt64, size >= maxBytes {
-            try? handle.truncate(atOffset: 0)
+        guard let size = try? handle.seekToEnd() else { return }
+        if size >= maxBytes {
+            guard (try? handle.truncate(atOffset: 0)) != nil else { return }
         }
-        _ = try? handle.seekToEnd()
         try? handle.write(contentsOf: data)
     }
 

@@ -95,12 +95,14 @@ public final class CandidatePanelController {
         self.onAccept = onAccept
 
         let shown = Array(candidates.prefix(rows.count))
-        let texts = shown.map { "\($0.deleteCount)|\($0.display)" }
+        let texts = shown.map { "\($0.kind)|\($0.deleteCount)|\($0.display)" }
         let textsChanged = texts != lastTexts
         if textsChanged {
             for (i, row) in rows.enumerated() {
                 if i < shown.count {
-                    row.label.attributedStringValue = Self.attributedRow(shown[i])
+                    if i >= lastTexts.count || texts[i] != lastTexts[i] {
+                        row.label.attributedStringValue = Self.attributedRow(shown[i])
+                    }
                     row.isHidden = false
                 } else {
                     row.isHidden = true
@@ -138,8 +140,6 @@ public final class CandidatePanelController {
     public func hide() {
         isVisible = false
         guard let panel, panel.isVisible || !lastTexts.isEmpty else { return }
-        lastTexts = []
-        lastFrame = .zero
         setSelectedIndex(nil)
         panel.orderOut(nil)
     }

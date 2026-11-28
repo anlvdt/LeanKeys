@@ -9,6 +9,47 @@ final class PersonalPredictionModelTests: XCTestCase {
         now: Date(timeIntervalSince1970: 1_800_000_000)
     )
 
+    private final class CountingStore: LearnStore {
+        var bytes: Data?
+        var saves = 0
+        var didSave: () -> Void = {}
+        func load() throws -> Data? { bytes }
+        func save(_ data: Data) throws { bytes = data; saves += 1; didSave() }
+        func erase() throws { bytes = nil }
+    }
+
+    func testCoalescedSaveRunsAtDeadline() {
+        let saved = expectation(description: "scheduled save")
+        let store = CountingStore()
+        store.didSave = { saved.fulfill() }
+        let model = PersonalPredictionModel(store: store, saveDelay: 0.02)
+        model.enabled = true
+        model.observe(CommittedPhrase(text: "em gửi báo cáo"), context: textEditCtx)
+        wait(for: [saved], timeout: 2)
+        withExtendedLifetime(model) {}
+    }
+
+    func testCoalescedSaveFlushesLatestSnapshotAndEraseCancelsIt() {
+        let store = CountingStore()
+        let model = PersonalPredictionModel(store: store, saveDelay: 60)
+        model.enabled = true
+        for _ in 0..<3 {
+            model.observe(CommittedPhrase(text: "em gửi báo cáo"), context: textEditCtx)
+        }
+        XCTAssertEqual(store.saves, 0)
+        model.flush()
+        XCTAssertEqual(store.saves, 1)
+        let restored = PersonalPredictionModel(store: store)
+        restored.enabled = true
+        XCTAssertEqual(restored.stats, model.stats)
+        XCTAssertFalse(restored.phraseContinuations(after: ["em"]).isEmpty)
+        model.observe(CommittedPhrase(text: "em gửi báo cáo"), context: textEditCtx)
+        model.eraseAll()
+        model.flush()
+        XCTAssertNil(store.bytes)
+        XCTAssertEqual(store.saves, 1)
+    }
+
     func testLearnsBigramsTrigramsAndPhrasesAfterThreshold() {
         let model = PersonalPredictionModel(store: nil)
         model.enabled = true

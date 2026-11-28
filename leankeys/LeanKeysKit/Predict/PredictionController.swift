@@ -458,7 +458,7 @@ extension PredictionController {
             url: PersonalPredictionModel.defaultURL,
             keychainService: "io.github.anlvdt.leankeys.predict"
         )
-        let personal = PersonalPredictionModel(store: store)
+        let personal = PersonalPredictionModel(store: store, saveDelay: 2)
         return PredictionController(
             personal: personal,
             onLearnerQueue: { queue.async(execute: $0) },

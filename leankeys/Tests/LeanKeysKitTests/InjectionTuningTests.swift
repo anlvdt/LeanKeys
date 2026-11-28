@@ -152,6 +152,8 @@ final class InjectionTuningTests: XCTestCase {
         let delays: (UInt32, UInt32, UInt32)
         let settleClass: InjectionTuning.SettleClass
         var emptyCharPrefix = false
+        var method = "default"
+        var bundleID: String? = nil
     }
 
     /// The delay tuples detectMethod() really returns for the common apps.
@@ -159,8 +161,8 @@ final class InjectionTuningTests: XCTestCase {
         Profile(name: "fast, no bundle id (200,800,500)", delays: (200, 800, 500), settleClass: .fast),
         Profile(name: "fast, default app (1000,3000,1500)", delays: (1000, 3000, 1500), settleClass: .fast),
         Profile(name: "slow, Office (3000,8000,3000)", delays: (3000, 8000, 3000), settleClass: .slow),
-        Profile(name: "slow, Terminal/VS Code (8000,25000,8000)", delays: (8000, 25000, 8000), settleClass: .slow),
-        Profile(name: "emptyChar, browsers (3000,8000,3000)", delays: (3000, 8000, 3000), settleClass: .other, emptyCharPrefix: true),
+        Profile(name: "slow, Terminal/VS Code (8000,25000,8000)", delays: (8000, 25000, 8000), settleClass: .slow, method: "slow:code", bundleID: "com.microsoft.VSCode"),
+        Profile(name: "emptyChar, Chrome (3000,8000,3000)", delays: (3000, 8000, 3000), settleClass: .other, emptyCharPrefix: true, method: "emptyChar:browser", bundleID: "com.google.Chrome"),
     ]
     private let edits = [(bs: 1, chars: 3), (bs: 3, chars: 5)]
 
@@ -189,16 +191,17 @@ final class InjectionTuningTests: XCTestCase {
         for p in profiles {
             for e in edits {
                 let before = InjectionTuning.upstreamSettleMicros(p.settleClass)
-                let after = InjectionTuning.defaultSettleMicros(p.settleClass)
+                let after = InjectionTuning.settleMicros(p.settleClass, name: p.method, bundleID: p.bundleID, defaults: defaults)
+                let delays = InjectionTuning.delays(for: p.method, bundleID: p.bundleID, p.delays, defaults: defaults)
                 let mBefore = InjectionTuning.blockingMicros(bs: e.bs, textUTF16: e.chars, delays: p.delays, settle: before,
                                                              emptyCharPrefix: p.emptyCharPrefix)
-                let mAfter = InjectionTuning.blockingMicros(bs: e.bs, textUTF16: e.chars, delays: p.delays, settle: after,
+                let mAfter = InjectionTuning.blockingMicros(bs: e.bs, textUTF16: e.chars, delays: delays, settle: after,
                                                             emptyCharPrefix: p.emptyCharPrefix)
                 var tBefore = [Double](), tAfter = [Double]()
                 for _ in 0 ..< iterations {
                     tBefore.append(replay(bs: e.bs, chars: e.chars, delays: p.delays, settle: before,
                                           emptyCharPrefix: p.emptyCharPrefix) { posts += 1 })
-                    tAfter.append(replay(bs: e.bs, chars: e.chars, delays: p.delays, settle: after,
+                    tAfter.append(replay(bs: e.bs, chars: e.chars, delays: delays, settle: after,
                                          emptyCharPrefix: p.emptyCharPrefix) { posts += 1 })
                 }
                 let medBefore = tBefore.sorted()[iterations / 2], medAfter = tAfter.sorted()[iterations / 2]

@@ -97,6 +97,7 @@ class UpdateManager: NSObject, ObservableObject {
         backgroundTimer = Timer.scheduledTimer(withTimeInterval: checkInterval, repeats: true) { [weak self] _ in
             self?.checkAndDownloadSilently()
         }
+        backgroundTimer?.tolerance = 60 // LEANKEYS-HOOK: branding (coalesce update-check wakeups)
         installWhenIdle() // LEANKEYS-HOOK: branding
     }
 

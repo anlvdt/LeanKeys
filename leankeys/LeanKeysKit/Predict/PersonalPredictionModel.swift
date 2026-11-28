@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Personal n-gram, vocabulary, and phrase/sentence memory for 4A+ predictions.
@@ -77,7 +78,13 @@ public final class PersonalPredictionModel {
     }
 
     private let store: LearnStore?
-    private let lock = NSLock()
+    // Serializes mutations and store access. Readers only take readLock to copy a published index.
+    private let lock = NSRecursiveLock()
+    private let readLock = NSLock()
+    private let saveDelay: TimeInterval
+    private let saveQueue = DispatchQueue(label: "LeanKeys.prediction.save", qos: .utility)
+    private var pendingSave: DispatchWorkItem?
+    private var terminationObserver: NSObjectProtocol?
     private var loaded = false
     private var data = DiskSnapshot()
     private var index = ReadIndex()
@@ -86,17 +93,38 @@ public final class PersonalPredictionModel {
 
     private var _enabled = false
     public var enabled: Bool {
-        get { lock.lock(); defer { lock.unlock() }; return _enabled }
+        get { readLock.lock(); defer { readLock.unlock() }; return _enabled }
         set {
-            lock.lock()
+            readLock.lock()
             _enabled = newValue
-            lock.unlock()
+            readLock.unlock()
             if newValue { _ = loadIfNeeded() }
         }
     }
 
-    public init(store: LearnStore?) {
+    public init(store: LearnStore?, saveDelay: TimeInterval = 0) {
         self.store = store
+        self.saveDelay = max(0, saveDelay)
+        if saveDelay > 0 {
+            terminationObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.willTerminateNotification, object: nil, queue: nil
+            ) { [weak self] _ in self?.flush() }
+        }
+    }
+
+    deinit {
+        if let terminationObserver { NotificationCenter.default.removeObserver(terminationObserver) }
+        flush()
+    }
+
+    /// Persists the most recent snapshot, including a pending coalesced save.
+    public func flush() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let pendingSave else { return }
+        pendingSave.cancel()
+        self.pendingSave = nil
+        saveSnapshot(data)
     }
 
     public var stats: Stats {
@@ -130,12 +158,13 @@ public final class PersonalPredictionModel {
 
         let words = TextMirror.words(in: display)
         guard words.count >= 2 else { return }
-        guard loadIfNeeded() else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard enabled, loadIfNeeded() else { return }
 
         let ts = context.now.timeIntervalSince1970
         let lowerWords = words.map { $0.precomposedStringWithCanonicalMapping.lowercased() }
 
-        lock.lock()
         // Bigrams
         for i in 0..<(words.count - 1) {
             let key = lowerWords[i]
@@ -181,10 +210,14 @@ public final class PersonalPredictionModel {
         pruneDict(&data.vocab, cap: Self.maxVocab, valueLastSeen: \.lastSeen)
 
         rebuildReadIndexLocked()
-        let snapshot = data
-        lock.unlock()
-
-        saveSnapshot(snapshot)
+        guard store != nil else { return }
+        if saveDelay == 0 {
+            saveSnapshot(data)
+        } else if pendingSave == nil {
+            let work = DispatchWorkItem { [weak self] in self?.flush() }
+            pendingSave = work
+            saveQueue.asyncAfter(deadline: .now() + saveDelay, execute: work)
+        }
     }
 
     /// Queries learned phrases/sentences whose prefix matches the tail of `previousWords` (1–3 words).
@@ -193,10 +226,10 @@ public final class PersonalPredictionModel {
     {
         guard !previousWords.isEmpty else { return [] }
         let lowerPrev = previousWords.suffix(3).map { $0.precomposedStringWithCanonicalMapping.lowercased() }
-        lock.lock()
+        readLock.lock()
         // Learned data surfaces only while learning is on (spec 2026-11-28-privacy-opt-in), like `GatedLearnedNames`.
         let currentPhrases = _enabled ? index.phrases : []
-        lock.unlock()
+        readLock.unlock()
 
         var results: [(Int, String, Double)] = []
         for phrase in currentPhrases {
@@ -228,11 +261,11 @@ public final class PersonalPredictionModel {
             ? previousWords[previousWords.count - 2].precomposedStringWithCanonicalMapping.lowercased() + " " + last
             : nil
 
-        lock.lock()
+        readLock.lock()
         let on = _enabled
         let triEntries = on ? triKey.flatMap { index.trigrams[$0] } ?? [] : []
         let biEntries = on ? index.bigrams[last] ?? [] : []
-        lock.unlock()
+        readLock.unlock()
 
         var merged: [String: (display: String, score: Double)] = [:]
         for e in triEntries {
@@ -264,9 +297,9 @@ public final class PersonalPredictionModel {
         guard let firstChar = foldedPrefix.first else { return [] }
         let hasDiacritics = normPrefix != foldedPrefix
 
-        lock.lock()
+        readLock.lock()
         let entries = _enabled ? index.vocabByFirstChar[firstChar] ?? [] : []
-        lock.unlock()
+        readLock.unlock()
         guard !entries.isEmpty else { return [] }
 
         var out: [(String, Double)] = []
@@ -284,11 +317,15 @@ public final class PersonalPredictionModel {
 
     public func eraseAll() {
         lock.lock()
+        pendingSave?.cancel()
+        pendingSave = nil
         data = DiskSnapshot()
+        readLock.lock()
         index = ReadIndex()
+        readLock.unlock()
         loaded = true
-        lock.unlock()
         try? store?.erase()
+        lock.unlock()
     }
 
     // MARK: - Private helpers
@@ -328,9 +365,10 @@ public final class PersonalPredictionModel {
     }
 
     private func rebuildReadIndexLocked() {
-        index.bigrams = data.bigrams
-        index.trigrams = data.trigrams
-        index.phrases = data.phrases.values
+        var next = ReadIndex()
+        next.bigrams = data.bigrams
+        next.trigrams = data.trigrams
+        next.phrases = data.phrases.values
             .filter { $0.count >= Self.phraseThreshold }
             .sorted { $0.count > $1.count }
         var grouped: [Character: [IndexedVocab]] = [:]
@@ -348,34 +386,33 @@ public final class PersonalPredictionModel {
         for key in grouped.keys {
             grouped[key]?.sort { $0.count > $1.count }
         }
-        index.vocabByFirstChar = grouped
+        next.vocabByFirstChar = grouped
+        readLock.lock()
+        index = next
+        readLock.unlock()
     }
 
     private func loadIfNeeded() -> Bool {
         lock.lock()
+        defer { lock.unlock() }
         let already = loaded
-        lock.unlock()
         if already { return true }
         guard let store else {
-            lock.lock(); loaded = true; lock.unlock()
+            loaded = true
             return true
         }
         do {
             if let raw = try store.load(),
                let decoded = try? JSONDecoder().decode(DiskSnapshot.self, from: raw) {
-                lock.lock()
                 data = decoded
                 rebuildReadIndexLocked()
                 loaded = true
-                lock.unlock()
                 return true
             }
         } catch {
             return false
         }
-        lock.lock()
         loaded = true
-        lock.unlock()
         return true
     }
 
