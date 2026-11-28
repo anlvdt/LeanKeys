@@ -411,7 +411,7 @@ final class EngineRouterTests: XCTestCase {
         typeKeys(router, [8, 31])
         XCTAssertFalse(router.mirror.currentWord.isEmpty)
         XCTAssertNil(router.convertLastWord(), "mid-word: nothing to convert yet; the key goes to the app")
-        XCTAssertTrue(router.mirror.currentWord.isEmpty, "router and shim both forgot the word")
+        XCTAssertTrue(router.mirror.currentWord.isEmpty, "the router dropped its mirror word (the shim reset itself in convertLastWord)")
     }
 
     func testConvertLastWordIsNilForGoNhanh() {

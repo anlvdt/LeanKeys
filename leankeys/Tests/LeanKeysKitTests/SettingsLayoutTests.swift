@@ -27,4 +27,14 @@ final class SettingsLayoutTests: XCTestCase {
         XCTAssertEqual(SettingsLayout.restoreRowSubtitle(active: .gonhanh),
                        "Ví dụ: việt → vieejt · Bấm để đổi phím tắt")
     }
+
+    func testControlPressResetRule() {
+        let ctrl: UInt64 = 262144, shift: UInt64 = 131072
+        XCTAssertFalse(SettingsLayout.resetsOnControlPress(active: .vikey, restoreEnabled: true, restoreModifiers: ctrl))
+        XCTAssertFalse(SettingsLayout.resetsOnControlPress(active: .vikey, restoreEnabled: true,
+                                                           restoreModifiers: ctrl | shift))
+        XCTAssertTrue(SettingsLayout.resetsOnControlPress(active: .vikey, restoreEnabled: false, restoreModifiers: ctrl))
+        XCTAssertTrue(SettingsLayout.resetsOnControlPress(active: .vikey, restoreEnabled: true, restoreModifiers: shift))
+        XCTAssertTrue(SettingsLayout.resetsOnControlPress(active: .gonhanh, restoreEnabled: true, restoreModifiers: ctrl))
+    }
 }

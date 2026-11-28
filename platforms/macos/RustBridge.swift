@@ -1550,7 +1550,9 @@ private func keyboardCallback(
     if type == .flagsChanged {
         // Issue #150: Control key press clears buffer (rhythm break like EVKey)
         let isControlNowPressed = flags.contains(.maskControl)
-        if isControlNowPressed, !wasControlPressed {
+        if isControlNowPressed, !wasControlPressed, // LEANKEYS-HOOK: engine-dispatch
+           SettingsLayout.resetsOnControlPress(active: EngineRouter.shared.active, restoreEnabled: AppState.shared.restoreShortcutEnabled, restoreModifiers: currentRestoreShortcut.modifiers) // LEANKEYS-HOOK: engine-dispatch (Vikey keeps its word for the ⌃⌫ convert key)
+        { // LEANKEYS-HOOK: engine-dispatch
             // Control just pressed - clear buffer to break rhythm
             EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
             RustBridge.clearBuffer()
@@ -1733,7 +1735,7 @@ private func keyboardCallback(
 
     // Block ESC from reaching Rust if restoreShortcutEnabled is enabled but shortcut is NOT ESC
     // This prevents Rust from auto-restoring when user configured a different shortcut
-    if keyCode == KeyCode.esc, AppState.shared.restoreShortcutEnabled {
+    if keyCode == KeyCode.esc, AppState.shared.restoreShortcutEnabled, EngineRouter.shared.active == .gonhanh { // LEANKEYS-HOOK: engine-dispatch (under Vikey Esc reaches the router as a word break)
         let isEscShortcut = currentRestoreShortcut.keyCode == KeyCode.esc && currentRestoreShortcut.modifiers == 0
         if !isEscShortcut {
             // ESC pressed but shortcut is not ESC - just pass through without restore
