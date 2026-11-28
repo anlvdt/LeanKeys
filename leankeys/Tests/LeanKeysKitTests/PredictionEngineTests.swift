@@ -255,4 +255,26 @@ final class PredictionEngineTests: XCTestCase {
         XCTAssertEqual(res.first?.display, "bạn nhiều")
         XCTAssertEqual(res.first?.deleteCount, 1)
     }
+
+    func testPredictionLatencyUnderBudget() {
+        let engine = PredictionEngine(corpus: corpus, personal: nil, dictionary: VikeyDictionaryCompleter.shared)
+        let queries = [
+            PredictionQuery(previousWords: ["cảm", "ơn"], currentWord: "", followsNonSpaceBreak: false, atWordStartAfterSpace: true, isVietnamese: true),
+            PredictionQuery(previousWords: ["chúc", "bạn"], currentWord: "mộ", followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: true),
+            PredictionQuery(previousWords: [], currentWord: "chươ", followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: true),
+            PredictionQuery(previousWords: [], currentWord: "impr", followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: false),
+        ]
+        // Warm up once
+        for q in queries { _ = engine.predict(q) }
+
+        let iterations = 50
+        let t0 = CFAbsoluteTimeGetCurrent()
+        for _ in 0..<iterations {
+            for q in queries { _ = engine.predict(q) }
+        }
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0
+        let avgMs = elapsedMs / Double(iterations * queries.count)
+        print("PredictionEngine avg latency: \(String(format: "%.4f", avgMs)) ms/query (\(iterations * queries.count) queries in \(String(format: "%.2f", elapsedMs)) ms)")
+        XCTAssertLessThan(avgMs, 0.5, "Prediction query exceeded 0.5 ms budget: \(avgMs) ms")
+    }
 }
