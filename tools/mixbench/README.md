@@ -215,7 +215,7 @@ mine.txt: 0 lần bấm (Space, return-fix) hoặc 5 lần (`--end return`), h�
   - 7 từ không bấm vì phép đo không thấy chúng sai ở một phím ngắt: từ nối bằng `-` hoặc `/` (`air-con`), hoặc Vikey đổi từ **sau** phím ngắt, khi từ kế tiếp được gõ (`Bên marketing` ra `Been marketing` trên mine.txt, 1 từ).
 - **Bộ học giảm số lần bấm, nhưng ít: 52 xuống 41 (-21%) trên Space, 177 xuống 167 (-6%) trên `--end return`.** Số từ sai cuối cùng không đổi (13 / 14 / 16).
   - Nhỏ vì chat_messages hầu như không lặp lại một cặp (từ đứng trước, chữ): luật có ngữ cảnh ít khi gặp lại, luật không ngữ cảnh cần 2 sự kiện cùng chữ. Mỗi khối 500 tin vẫn bấm 8–14 lần (Space), 35–48 lần (Return), chỉ dốc xuống nhẹ. Người gõ thật lặp lại cùng từ nhiều hơn, nhưng bộ đo này không cho thấy điều đó.
-  - Luật phải mang chiều. Khi luật khoá chỉ theo phím thô (bản thử đầu), số lần bấm *tăng* 10–18% (Space 52 lên 57, Return 177 lên 208): luật học từ một chiều chạy cả khi Vikey để chữ ở chiều ngược lại (`last` lát/last, `cos`, `nos`, `this`), đổi nhầm, và người gõ phải huỷ (8 lần trên 45 sự kiện ở Space, 33 trên 171 ở Return). Khoá thêm chiều chỉ còn 1 lần huỷ.
+  - Luật mang chiều (Ruling 5), nên luật học từ một chiều không chạy khi Vikey để chữ ở chiều ngược lại (`last` lát/last, `cos`, `nos`, `this`): chỉ còn 1 lần huỷ một luật trên cả chat.
 - **Giới hạn:**
   - Người gõ lý tưởng: nhìn đúng chỗ, bấm đúng một lần, không bấm nhầm, không dùng ⌫⌫. Cả chat chỉ có 1 sự kiện `keep`.
   - Không có thời gian giữa các phím.

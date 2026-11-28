@@ -29,7 +29,6 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
-#include <set>
 #include <cwctype>
 #include <fstream>
 #include <iostream>
@@ -56,7 +55,6 @@ static size_t wordLength(const std::u16string& t) {
 }
 static std::u16string lower(std::u16string s) { for (auto& c : s) c = (char16_t)std::towlower((wint_t)c); return s; }
 
-
 // Same as score.py's `same`: equal apart from case and where the tone mark sits (hoà/hòa).
 static std::pair<std::u16string, std::u16string> toneSplit(const std::u16string& w) {
     static const char16_t* T[] = {u"aàáãảạ", u"ăằắẵẳặ", u"âầấẫẩậ", u"eèéẽẻẹ", u"êềếễểệ", u"iìíĩỉị", u"oòóõỏọ", u"ôồốỗổộ",
@@ -80,6 +78,16 @@ static std::u16string lastWord(const std::u16string& t) {
     return t.substr(j, i - j);
 }
 
+// A convert rule carries its direction (Ruling 5): toRaw when it was learned on a Telex form (the conversion gives the raw
+// keys), toTelex when learned on a word shown as its raw keys. It applies only to a word shown in its from-form.
+static const std::u16string kRaw = u"|raw", kTelex = u"|telex";
+static std::u16string convertKey(const std::u16string& keys, bool toRaw) { return keys + (toRaw ? kRaw : kTelex); }
+// ONE rule for both sides: a word shown as its raw keys (case-insensitive) is in the toTelex from-form, anything else in
+// the toRaw from-form. The filter asks about the word shown; an event's direction is where the conversion went.
+static bool shownAsKeys(const std::u16string& shown, const std::u16string& keys) { return lower(shown) == lower(keys); }
+static bool ruleToRawForShown(const std::u16string& shown, const std::u16string& keys) { return !shownAsKeys(shown, keys); }
+static bool eventToRaw(const std::u16string& after, const std::u16string& keys) { return shownAsKeys(after, keys); }
+
 // The rule book of spec 12.2 (UndoRuleBook.swift) with the convert kind of the ⌃⌫ design (spec 5.3): one table per kind,
 // keyed (previous, text); text is the word before Vikey's fix (keep) or the raw keys (convert). A context rule
 // (previous not empty) applies after 1 event; the contextless count of a text after 2; a reverse drops the text's rules
@@ -99,7 +107,16 @@ struct Book {
             return;
         }
         events[kind]++;
-        for (const Key& k : {Key(prev, text), Key(u"", text)}) table[1 - kind].erase(k);
+        // One kind per (previous, text): a keep erases the convert rules there (both directions), a convert the keep.
+        std::u16string base = text;
+        if (kind == 1) {
+            for (const std::u16string* suf : {&kRaw, &kTelex})
+                if (text.size() > suf->size() && text.compare(text.size() - suf->size(), suf->size(), *suf) == 0) base = text.substr(0, text.size() - suf->size());
+        }
+        for (const Key& k : {Key(prev, base), Key(u"", base)}) {
+            if (kind == 0) { table[1].erase(Key(k.first, convertKey(k.second, true))); table[1].erase(Key(k.first, convertKey(k.second, false))); }
+            else table[0].erase(k);
+        }
         if (!prev.empty()) table[kind][Key(prev, text)]++;
         table[kind][Key(u"", text)]++;
         auto b = blocked[kind].find(text);
@@ -118,11 +135,6 @@ struct Book {
 static bool learn = false;
 static Book book;
 static bool vetoed = false;
-// A convert rule carries its direction (Ruling 5): toRaw when it was learned on a Telex form (the conversion gives the raw
-// keys), toTelex when learned on a word shown as its raw keys. It applies only to a word shown in its from-form.
-static std::u16string convertKey(const std::u16string& keys, bool toRaw) {
-    return keys + (toRaw ? u"|raw" : u"|telex");
-}
 static std::u16string u16(const uint16_t* p, int n) { return std::u16string((const char16_t*)p, n); }
 
 // The last fix Vikey reported through the filter (which never vetoes, so the shim behaves as with no filter).
@@ -138,8 +150,8 @@ static int recordFix(const lk_fix* f) {
 }
 static int keepFilter(const lk_fix* f) { return recordFix(f); }
 static int convertFilter(const lk_fix* f) {
-    // afterLength > 0: converting gives the raw keys (the word shows its Telex form), so the direction is toRaw.
-    return book.applies(1, convertKey(u16(f->keys, f->keysLength), f->afterLength > 0), u16(f->previous, f->previousLength)) ? 1 : 0;
+    std::u16string keys = u16(f->keys, f->keysLength);
+    return book.applies(1, convertKey(keys, ruleToRawForShown(u16(f->before, f->beforeLength), keys)), u16(f->previous, f->previousLength)) ? 1 : 0;
 }
 // Feed the learner what the shim reports (spec 5.3): kinds 0 and 1 are held by the shim until the next key.
 static void pump() {
@@ -150,9 +162,8 @@ static void pump() {
         if (u.kind == LK_UNDO_BACKSPACE) book.record(0, u16(u.fix.before, u.fix.beforeLength), prev, u.reverse);
         else {
             std::u16string k = u16(u.fix.keys, u.fix.keysLength);
-            // after = what the conversion made (kinds 1 and 2): the raw keys when it went to raw.
-            bool toRaw = lower(u16(u.fix.after, u.fix.afterLength)) == k;
-            book.record(1, convertKey(k, toRaw), prev, u.kind == LK_UNDO_RULE_REVERSE || u.reverse);
+            // after = what the conversion made (kinds 1 and 2).
+            book.record(1, convertKey(k, eventToRaw(u16(u.fix.after, u.fix.afterLength), k)), prev, u.kind == LK_UNDO_RULE_REVERSE || u.reverse);
         }
     }
 }
@@ -181,7 +192,7 @@ int main(int argc, char** argv) {
     std::ofstream langs; if (!langsPath.empty()) langs.open(langsPath);
     std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> cv;
     long fixes = 0, wrongFixes = 0, undone = 0, undoRestored = 0;
-    long cwPresses = 0, cwFixed = 0, cwStill = 0, messages = 0, blockPresses = 0;
+    long cwPresses = 0, cwFixed = 0, cwStill = 0, messages = 0, blockPresses = 0, printedUpTo = 0;
     std::string line;
     bool first = true;
     while (std::getline(std::cin, line)) {
@@ -193,7 +204,7 @@ int main(int argc, char** argv) {
         if (end == "space") keys += " ";
         if (learn && convertWrong && messages > 0 && messages % 500 == 0) {
             std::cerr << "learn: messages " << messages - 499 << "-" << messages << "  presses " << blockPresses << "\n";
-            blockPresses = 0;
+            blockPresses = 0; printedUpTo = messages;
         }
         messages++;
         if (!chain || first) { lk_vikey_set_language(startEn ? 0 : 1); pump(); }
@@ -270,8 +281,8 @@ int main(int argc, char** argv) {
         for (char16_t c : t) if (c != u'\r' && c != u'\n') out += c;
         std::cout << cv.to_bytes(out) << "\n";
     }
-    if (learn && convertWrong && messages % 500 != 0)
-        std::cerr << "learn: messages " << messages - messages % 500 + 1 << "-" << messages << "  presses " << blockPresses << "\n";
+    if (learn && convertWrong && messages > printedUpTo)
+        std::cerr << "learn: messages " << printedUpTo + 1 << "-" << messages << "  presses " << blockPresses << "\n";
     if (convertWrong)
         std::cerr << "convert-wrong: presses " << cwPresses << "  fixed " << cwFixed << "  still wrong " << cwStill << "\n";
     if (learn)
