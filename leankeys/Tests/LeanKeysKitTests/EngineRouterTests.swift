@@ -356,4 +356,66 @@ final class EngineRouterTests: XCTestCase {
         router.setEnabled(false)
         XCTAssertTrue(router.autoSwitchOn, "an automatic off must not pause auto switch")
     }
+
+    // MARK: ⌃⌫ convert (design 5.1), real engine
+
+    private func convertRouter(bundle: String = "com.apple.Notes") -> (EngineRouter, VikeyEngine, UndoLearning) {
+        let engine = VikeyEngine()!
+        engine.resetContext()
+        let learning = UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults,
+                                    context: { LearnContext(bundleID: bundle, secureInput: false, secureField: false,
+                                                            now: Date()) })
+        let router = EngineRouter(defaults: defaults, makeVikey: { engine }, undoLearning: { learning },
+                                  frontmostBundleID: { bundle })
+        return (router, engine, learning)
+    }
+
+    private func typeKeys(_ router: EngineRouter, _ keys: [UInt16]) {
+        for k in keys { _ = router.intercept(keyCode: k, caps: false, ctrl: false, shift: false) }
+    }
+
+    // c o s space
+    private let cosKeys: [UInt16] = [8, 31, 1, 49]
+
+    func testConvertLastWord() {
+        let (router, _, learning) = convertRouter()
+        defer { learning.uninstall() }
+        typeKeys(router, cosKeys)
+        let result = router.convertLastWord()
+        XCTAssertEqual(result?.0, 3)
+        XCTAssertEqual(result.map { String($0.1) }, "cos ")
+        XCTAssertEqual(result?.2, true)
+        XCTAssertEqual(router.mirror.phraseText, "cos ")
+    }
+
+    func testConvertLastWordIsNilInCodeApps() {
+        let (router, _, learning) = convertRouter(bundle: "com.apple.Terminal")
+        defer { learning.uninstall() }
+        typeKeys(router, cosKeys)
+        XCTAssertNil(router.convertLastWord())
+    }
+
+    func testConvertLastWordIsNilWithAutoFixOff() {
+        let (router, _, learning) = convertRouter()
+        defer { learning.uninstall() }
+        router.autoFix = false
+        typeKeys(router, cosKeys)
+        XCTAssertNil(router.convertLastWord())
+    }
+
+    func testConvertLastWordIsNilOnAFreshLineAndDropsTheMirror() {
+        let (router, _, learning) = convertRouter()
+        defer { learning.uninstall() }
+        router.clear()
+        XCTAssertNil(router.convertLastWord())
+        typeKeys(router, [8, 31])
+        XCTAssertFalse(router.mirror.currentWord.isEmpty)
+        XCTAssertNil(router.convertLastWord(), "mid-word: nothing to convert yet; the key goes to the app")
+        XCTAssertTrue(router.mirror.currentWord.isEmpty, "router and shim both forgot the word")
+    }
+
+    func testConvertLastWordIsNilForGoNhanh() {
+        let router = makeRouter(stored: .gonhanh)
+        XCTAssertNil(router.convertLastWord())
+    }
 }

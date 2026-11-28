@@ -221,18 +221,41 @@ public final class EngineRouter {
             observe(keyCode: keyCode, shift: shift, caps: caps, result: nil)
             return nil
         }
-        if edit.languageChanged {
-            let on = vikey.isVietnamese
-            languageLog = on ? " lang→VN" : " lang→EN"
-            if languageBeforeAutoSwitch == nil { languageBeforeAutoSwitch = vietnamese }
-            vietnamese = on
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .leanKeysLanguageChanged, object: nil, userInfo: ["vietnamese": on])
-            }
-        }
+        if edit.languageChanged { announceLanguage(vikey.isVietnamese) }
         let result = (edit.deleteCount, edit.text, !edit.keyPassesThrough)
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
         return result
+    }
+
+    /// Vikey switched language by itself: log it, remember the user's own language the first time, and tell the app.
+    private func announceLanguage(_ on: Bool) {
+        languageLog = on ? " lang→VN" : " lang→EN"
+        if languageBeforeAutoSwitch == nil { languageBeforeAutoSwitch = vietnamese }
+        vietnamese = on
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .leanKeysLanguageChanged, object: nil, userInfo: ["vietnamese": on])
+        }
+    }
+
+    /// The ⌃⌫ key (design 5.1): the last word between its Telex form and its raw keys. Returns the edit to send
+    /// (backspaces, text, true), or nil when the key goes through to the app: not Vikey, auto fixes off, a code app,
+    /// or nothing to convert (then the shim has reset its context, so the router drops its own word state too).
+    public func convertLastWord() -> (Int, [Character], Bool)? {
+        guard active == .vikey, autoFixCached, let vikeyEngine, !CodeApps.contains(frontmostBundleID()) else {
+            return nil
+        }
+        capitalizer?.last = nil
+        guard let edit = vikeyEngine.convertLastWord() else {
+            mirror.discard()
+            forgetWord()
+            return nil
+        }
+        undoLearning?.afterPress(engine: vikeyEngine)
+        if edit.languageChanged { announceLanguage(vikeyEngine.isVietnamese) }
+        mirror.apply(deleteCount: edit.deleteCount, insert: edit.text)
+        wordStartsWithUserCapital = false
+        restoredByUndo = nil
+        return (edit.deleteCount, edit.text, true)
     }
 
     // MARK: Stray key at Enter (spec 17.2)

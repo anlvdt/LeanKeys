@@ -1443,6 +1443,11 @@ private func matchesModifierOnlyShortcut(flags: CGEventFlags) -> Bool {
     // Don't bypass IME for restore shortcut - modifiers are part of the shortcut itself
     // Always pass ctrl=false so engine performs the restore action
     let (method, delays) = detectMethod()
+    if EngineRouter.shared.active == .vikey, method != .passthrough { // LEANKEYS-HOOK: engine-dispatch (⌃⌫ converts the last word; before discardPending so the mirror keeps the edit)
+        guard let (bs, chars, _) = EngineRouter.shared.convertLastWord() else { return false } // LEANKEYS-HOOK: engine-dispatch
+        sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy) // LEANKEYS-HOOK: engine-dispatch
+        return true // LEANKEYS-HOOK: engine-dispatch
+    } // LEANKEYS-HOOK: engine-dispatch
     EngineRouter.shared.discardPending() // LEANKEYS-HOOK: engine-dispatch
     if method == .passthrough { RustBridge.clearBuffer(); return false } // LEANKEYS-HOOK: engine-dispatch (no restore inside a sign-in field or terminal)
     if let (bs, chars, _) = RustBridge.processKey(keyCode: UInt16(KeyCode.esc), caps: caps, ctrl: false, shift: shift) {
@@ -1557,7 +1562,7 @@ private func keyboardCallback(
         if let peak = modifierChord.modifiersChanged(to: flags.intersection(kModifierMask)) {
             // Chord completed cleanly - evaluate against the peak modifiers held.
             if AppState.shared.restoreShortcutEnabled,
-               SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active), // LEANKEYS-HOOK: copy (row hidden under Vikey, so the shortcut is off too)
+               SettingsLayout.showsRestoreShortcut(active: EngineRouter.shared.active), // LEANKEYS-HOOK: engine-dispatch
                currentRestoreShortcut.isModifierOnly,
                currentRestoreShortcut.matchesModifierOnly(flags: peak)
             {
@@ -1630,7 +1635,7 @@ private func keyboardCallback(
     // Issue #149: Restore shortcut - restore raw ASCII if enabled
     // Issue #157: Pass key through after restore so it still functions normally (Tab inserts tab, ESC closes dialog)
     // Issue #303: Only pass through special keys (ESC, Tab, etc.), not letter/number keys with modifiers (Shift-Z, Option-Z)
-    if AppState.shared.restoreShortcutEnabled && SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active) && matchesRestoreShortcut(keyCode: keyCode, flags: flags) { // LEANKEYS-HOOK: copy
+    if AppState.shared.restoreShortcutEnabled && SettingsLayout.showsRestoreShortcut(active: EngineRouter.shared.active) && matchesRestoreShortcut(keyCode: keyCode, flags: flags) { // LEANKEYS-HOOK: engine-dispatch
         guard triggerRestoreShortcut(flags: flags, proxy: proxy) else { return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch (pass-through: the key is not swallowed)
         // Only pass through special keys that should still function after restore
         // (ESC closes dialogs, Tab moves focus, Enter submits, etc.)

@@ -63,5 +63,10 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | D4 | 4D · Hoàn tác viết hoa | Vikey, Notes: gõ `owr haf nooij ` (LeanKeys viết thành "ở Hà Nội"), bấm ⌫ ngay: trả lại chữ thường "ở hà nội". Rồi Cài đặt → Nâng cao → "Từ giữ nguyên" có dòng "hà nội (giữ chữ thường)" sau "ở"; bấm xoá dòng đó (để D1 vẫn đạt ở lần thử sau). | — | [ ] |
 | D5 | 4D · Bỏ phím lỡ bấm cùng Enter | Vikey, Notes: gõ "xong." rồi bấm `\` và Enter gần như cùng lúc: dòng kết thúc ở "xong.", không có `\`. | — | [ ] |
 | D6 | 4D · Bỏ phím lỡ bấm cùng Enter | Vikey, Terminal: gõ `\` rồi Enter: `\` vẫn được giữ. | — | [ ] |
+| V1 | ⌃⌫ đổi từ vừa gõ · TextEdit | Vikey, tiếng Việt: gõ `cos ` ra "có ", bấm ⌃⌫ → "cos "; bấm ⌃⌫ lần nữa → "có ". Gõ `beer ` (Vikey ra "bể "), bấm ⌃⌫ → "beer ". Gõ `toi thich cos ` rồi ⌃⌫ → "có"; câu sau gõ `toi thich cos ` tự ra "có ". | — | [ ] |
+| V2 | ⌃⌫ đổi từ vừa gõ · Chrome | Một ô nhập trên trang web: như V1, không mất hay lặp chữ. Thanh địa chỉ: gõ `cos ` rồi ⌃⌫ → "cos "; chữ gợi ý của thanh địa chỉ không bị mất. | — | [ ] |
+| V3 | ⌃⌫ đổi từ vừa gõ · Slack | Ô soạn tin (chưa gửi): như V1; ⌃⌫ khi chưa có từ nào để đổi thì xoá một từ như thường. | — | [ ] |
+| V4 | ⌃⌫ đổi từ vừa gõ · Messenger web | Ô soạn tin trên trình duyệt: như V1, không mất hay lặp chữ. | — | [ ] |
+| V5 | ⌃⌫ đổi từ vừa gõ · Terminal | ⌃⌫ đi thẳng (không đổi từ), hành vi cũ của Terminal giữ nguyên. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 68 ô đều đạt.
+Chỉ gõ `yes` khi cả 73 ô đều đạt.

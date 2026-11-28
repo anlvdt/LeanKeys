@@ -17,4 +17,14 @@ final class SettingsLayoutTests: XCTestCase {
         XCTAssertTrue(SettingsLayout.advancedSettingsApply(advancedMode: false))
         XCTAssertTrue(SettingsLayout.advancedSettingsApply(advancedMode: true))
     }
+
+    func testRestoreRowCopyPerEngine() {
+        XCTAssertTrue(SettingsLayout.showsRestoreShortcut(active: .vikey))
+        XCTAssertTrue(SettingsLayout.showsRestoreShortcut(active: .gonhanh))
+        XCTAssertEqual(SettingsLayout.restoreRowTitle(active: .vikey), "Đổi từ vừa gõ Việt ⇄ Anh")
+        XCTAssertEqual(SettingsLayout.restoreRowSubtitle(active: .vikey), "Bấm ngay sau một từ: cos → có, bể → beer")
+        XCTAssertEqual(SettingsLayout.restoreRowTitle(active: .gonhanh), "Trả từ đang gõ về phím gốc")
+        XCTAssertEqual(SettingsLayout.restoreRowSubtitle(active: .gonhanh),
+                       "Ví dụ: việt → vieejt · Bấm để đổi phím tắt")
+    }
 }
