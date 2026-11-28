@@ -1420,6 +1420,7 @@ struct AboutPageView: View {
                 Text(AppMetadata.name).font(.system(size: 20, weight: .bold))
                 Text(AppMetadata.tagline).font(.system(size: 13)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
                 Text("Phiên bản \(AppMetadata.version)").font(.system(size: 12)).foregroundColor(Color(NSColor.secondaryLabelColor)) // LEANKEYS-HOOK: copy
+                if let repo = URL(string: AppMetadata.repository) { Link(LeanBranding.repositoryLabel, destination: repo).font(.system(size: 12)).help(AppMetadata.repository) } // LEANKEYS-HOOK: about (the repository's address, shown and clickable)
             }
             HStack(spacing: 12) {
                 // LEANKEYS-HOOK: about (Gõ Nhanh's sponsor link removed; Gõ Nhanh is credited in AcknowledgementsSection)
