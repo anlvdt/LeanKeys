@@ -24,6 +24,8 @@ private final class Line {
     var edits: [Edit] = []
     /// What the last ⌃ returned: 1 (an edit was made) or 0 (the key goes through to the app).
     var lastConvertResult: Int32 = -1
+    /// Caps Lock on for every letter, as VikeyEngine reports it: capitals arrive without Shift.
+    var capsLock = false
 
     var string: String { String(decoding: text, as: UTF16.self) }
 
@@ -46,7 +48,9 @@ private final class Line {
             }
             guard let code = macKey[Character(ch.lowercased())] else { XCTFail("no mac key for \(ch)"); continue }
             var raw = lk_edit()
+            if capsLock && ch.isLetter { lk_vikey_set_caps_lock(1) }
             lk_vikey_press(code, ch.isUppercase ? 1 : 0, 0, &raw)
+            lk_vikey_set_caps_lock(0)
             apply(&raw)
         }
         return string
@@ -200,5 +204,30 @@ final class ConvertShimTests: XCTestCase {
         XCTAssertEqual(raw.deleteCount, 0)
         XCTAssertEqual(raw.length, 0)
         XCTAssertEqual(l.string, "don't ")
+    }
+
+    // ⌃⌫ with nothing to change leaves every bit of state alone: the keys after it give the same edits as without it.
+    func testNoOpLeavesStateAlone() {
+        func run(_ noOp: Bool) -> [Edit] {
+            let l = line(1)
+            l.type("ok ")
+            if noOp { assertNothingToConvert(l); l.type("sdt "); assertNothingToConvert(l) } else { l.type("sdt ") }
+            let start = l.edits.count
+            l.type("toi cos thich lats  ⌫⌫⌫")
+            return Array(l.edits[start...])
+        }
+        XCTAssertEqual(run(true), run(false))
+    }
+
+    func testCapsLockWordKeepsCase() {
+        var l = line(1)
+        l.capsLock = true
+        XCTAssertEqual(l.type("COS "), "CÓ ")
+        XCTAssertEqual(l.type("⌃"), "COS ")
+        l = line(0)
+        l.capsLock = true
+        XCTAssertEqual(l.type("PUS"), "PUS")
+        XCTAssertEqual(l.type("⌃"), "PÚ")
+        XCTAssertEqual(lk_vikey_language(), 1)
     }
 }

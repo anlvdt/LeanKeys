@@ -776,8 +776,9 @@ static bool isBreakChar(char16_t c) {
 
 // What typing `keys` (Telex, lower case = no Shift) shows in Vietnamese with auto switch off, as lk_vikey_types_as_is
 // replays it: "pus" -> "pú", "Cos" -> "Có", "sdt" -> "sdt". false when the engine's output cannot be followed. The
-// engine keeps its per-word state out of reach (vendor/ is untouched), so afterwards it starts over, as after a click:
-// the caller puts the word it wants back (rebuildEngineWord).
+// driver (⌫⌫ undo, English look-back) is copied and put back, and the engine's globals are kept; the engine's own
+// per-word state is out of reach (vendor/ is untouched), so it starts a fresh word, which is what it holds after a
+// break. A caller with no break (the word being typed) puts its word back with rebuildEngineWord.
 static bool renderTelex(const std::u16string& keys, std::u16string& shown) {
     shown.clear();
     if (keys.empty() || keys.size() >= (size_t)MAX_BUFF - 2) return false;
@@ -786,6 +787,7 @@ static bool renderTelex(const std::u16string& keys, std::u16string& shown) {
         if (!isAsciiLetter(c)) return false;
         presses.push_back({kLetterKeys[(c | 32) - 'a'], c >= 'A' && c <= 'Z'});
     }
+    const VikeyDriver savedDriver = *driver;
     const vKeyHookState hook = HookState;
     const int language = vLanguage, byTyping = vAutoSwitchByTyping, request = vAutoSwitchRequest,
               lastSide = vAutoSwitchLastSide, undoCount = vAutoSwitchUndoCount, restoredCount = vAutoSwitchRestoredCount;
@@ -813,7 +815,8 @@ static bool renderTelex(const std::u16string& keys, std::u16string& shown) {
     HookState = hook;
     vLanguage = language; vAutoSwitchByTyping = byTyping; vAutoSwitchRequest = request;
     vAutoSwitchLastSide = lastSide; vAutoSwitchUndoCount = undoCount; vAutoSwitchRestoredCount = restoredCount;
-    driver->resetContext();
+    *driver = savedDriver;
+    startNewSession();
     return ok;
 }
 
@@ -865,7 +868,7 @@ static bool convertWord(const std::u16string& target, const std::u16string& keys
         newLanguage = 1;
         const bool rendered = renderTelex(keys, newWord);
         if (!rendered || newWord == target) {
-            // renderTelex started the engine over; the word still on screen is the one it holds.
+            // renderTelex left the engine at a fresh word; with no break the word still on screen is the one it holds.
             if (breaks.empty()) rebuildEngineWord(target, vLanguage, now);
             return false;
         }
@@ -911,6 +914,11 @@ static bool convertLastWord(double now, VKEdit& e) {
     std::u16string keys;
     if (model.wordKeysKnown && !model.wordKeys.empty()) {
         keys = model.wordKeys;
+        // Case: Caps Lock gives lower-case keys for capitals on screen ("COS" is c, o, s with Caps Lock), so every key
+        // of a word typed with it is a capital; otherwise a key takes the case of the letter shown at its position.
+        for (size_t i = 0; i < keys.size(); i++) {
+            if (model.wordCapsLock || (i < target.size() && isUpper(target[i]))) keys[i] = (char16_t)(keys[i] & ~32);
+        }
     } else if (isAscii(target)) {
         keys = target;
     } else {
