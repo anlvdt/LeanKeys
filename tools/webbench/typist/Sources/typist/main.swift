@@ -47,9 +47,12 @@ func frontWindowTitle() -> String? { windowTitle(kAXFocusedWindowAttribute as St
 /// A listen-only tap for real keyboard and mouse input. Nil when the terminal lacks
 /// Accessibility or Input Monitoring.
 func makeListenTap(refcon: UnsafeMutableRawPointer?, callback: @escaping CGEventTapCallBack) -> CFMachPort? {
+    // WEBBENCH_IGNORE_MOUSE_MOVES=1: a remote-desktop client or the system can move the pointer on its own; key
+    // presses and clicks still stop the run.
+    let watchMoves = ProcessInfo.processInfo.environment["WEBBENCH_IGNORE_MOUSE_MOVES"] != "1"
     let mask: CGEventMask =
         (1 << CGEventType.keyDown.rawValue)
-        | (1 << CGEventType.mouseMoved.rawValue)
+        | (watchMoves ? (1 << CGEventType.mouseMoved.rawValue) : 0)
         | (1 << CGEventType.leftMouseDown.rawValue)
     return CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
                              options: .listenOnly, eventsOfInterest: mask,
