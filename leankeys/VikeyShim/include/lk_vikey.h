@@ -79,6 +79,16 @@ int  lk_vikey_word_score(int vietnamese, const char* letters);
 // (lk_vikey_reset_context): the word being typed, Backspace history and look-back are forgotten.
 int  lk_vikey_types_as_is(const char* letters);
 
+// The ⌃⌫ key: converts the last word between its Telex form and its raw keys ("có " <-> "cos ", "pú" <-> "pus"), in
+// one edit (delete the word and the break characters after it, type the new word and the same breaks; `languageChanged`
+// when the language changes: the raw keys are English, the Telex form Vietnamese). The word is the letter run before the
+// break characters (Space , . ; ? ! ) ] " ' ”) at the end of the line the shim has followed. 1 and `out` filled when
+// there is a word to convert; 0 and an empty `out` when there is none (no word, a line the shim lost track of, a word
+// longer than 64 letters, or keys Telex does not change: "sdt", "ok"), and the key then goes through to the app. Pressed
+// again with no other key between, it gives the word and language from before the first press back. Main
+// (key-handling) thread only: it replays keys through the engine, as lk_vikey_press does.
+int  lk_vikey_convert_last_word(double now, lk_edit* out);
+
 #ifdef __cplusplus
 }
 #endif

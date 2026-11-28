@@ -318,6 +318,16 @@ struct HeldUndo {
     int backspaces = 0;                // further Backspaces after the undo
 };
 static HeldUndo heldUndo;
+// The ⌃⌫ key's last conversion ("cos " -> "cos ", `shownBefore` "có", `shownAfter` "cos", `breaks` " "), kept so that ⌃⌫
+// again with no other key between gives the word back as it was (`languageBefore` too). Cleared by every key the user
+// presses (pressUser), by a reset and by a language change (forgetFixes). `keys` and `previous` (the word before it,
+// lower case) are for the learner that hears of a conversion.
+struct LastConvert {
+    bool active = false;
+    std::u16string shownBefore, shownAfter, breaks, keys, previous;
+    int languageBefore = 1;
+};
+static LastConvert lastConvert;
 
 static void copyWord(const std::u16string& w, uint16_t* out, int* length) {
     for (size_t i = 0; i < w.size(); i++) out[i] = (uint16_t)w[i];
@@ -349,6 +359,7 @@ static void forgetFixes() {
     hasLastFix = false;
     veto = Veto();
     releaseHeldUndo();
+    lastConvert = LastConvert();
 }
 
 // The fix Vikey made on this key, if Backspace can undo it: rememberFix (Driver.cpp) armed the undo on this very key
@@ -749,10 +760,175 @@ static bool editAfterUndo(double now, VKEdit& e) {
     return true;
 }
 
+// MARK: - ⌃⌫: convert the last word
+//
+// ⌃⌫ turns the last word into its raw keys when it shows a Telex form ("có" -> "cos", "bể" -> "beer", "mĩ" -> "mix") and
+// into the Telex form of its keys when it shows them as typed ("pus" -> "pú"). The word after a break or being typed
+// alike: the break characters after it are typed again.
+
+static bool isBreakChar(char16_t c) {
+    switch (c) {
+        case u' ': case u',': case u'.': case u';': case u'?': case u'!': case u')': case u']': case u'"': case u'\'':
+        case u'”': return true;
+        default: return false;
+    }
+}
+
+// What typing `keys` (Telex, lower case = no Shift) shows in Vietnamese with auto switch off, as lk_vikey_types_as_is
+// replays it: "pus" -> "pú", "Cos" -> "Có", "sdt" -> "sdt". false when the engine's output cannot be followed. The
+// engine keeps its per-word state out of reach (vendor/ is untouched), so afterwards it starts over, as after a click:
+// the caller puts the word it wants back (rebuildEngineWord).
+static bool renderTelex(const std::u16string& keys, std::u16string& shown) {
+    shown.clear();
+    if (keys.empty() || keys.size() >= (size_t)MAX_BUFF - 2) return false;
+    std::vector<std::pair<Uint16, bool>> presses;
+    for (char16_t c : keys) {
+        if (!isAsciiLetter(c)) return false;
+        presses.push_back({kLetterKeys[(c | 32) - 'a'], c >= 'A' && c <= 'Z'});
+    }
+    const vKeyHookState hook = HookState;
+    const int language = vLanguage, byTyping = vAutoSwitchByTyping, request = vAutoSwitchRequest,
+              lastSide = vAutoSwitchLastSide, undoCount = vAutoSwitchUndoCount, restoredCount = vAutoSwitchRestoredCount;
+    vLanguage = 1;
+    vAutoSwitchByTyping = 0;
+    startNewSession();
+    char16_t screen[MAX_BUFF * 2];
+    int len = 0;
+    bool ok = true;
+    for (const auto& p : presses) {
+        vAutoSwitchRequest = -1;
+        vKeyHandleEvent(vKeyEvent::Keyboard, vKeyEventState::KeyDown, p.first, p.second ? 1 : 0, false);
+        const Uint32 caps = p.second ? CAPS_MASK : 0;
+        if (HookState.code == vDoNothing) { screen[len++] = (char16_t)keyCodeToCharacter(p.first | caps); continue; }
+        len -= HookState.backspaceCount;
+        if (len < 0 || len + HookState.newCharCount + 1 > (int)(sizeof(screen) / sizeof(screen[0]))) { ok = false; break; }
+        for (int c = HookState.newCharCount - 1; c >= 0; c--) {
+            const Uint32 d = HookState.charData[c];
+            screen[len++] = (d & CHAR_CODE_MASK) ? (char16_t)(d & 0xFFFF) : (char16_t)keyCodeToCharacter(d);
+        }
+        if (HookState.code == vRestore || HookState.code == vRestoreAndStartNewSession)
+            screen[len++] = (char16_t)keyCodeToCharacter(p.first | caps);
+    }
+    if (ok) shown.assign(screen, screen + len);
+    HookState = hook;
+    vLanguage = language; vAutoSwitchByTyping = byTyping; vAutoSwitchRequest = request;
+    vAutoSwitchLastSide = lastSide; vAutoSwitchUndoCount = undoCount; vAutoSwitchRestoredCount = restoredCount;
+    driver->resetContext();
+    return ok;
+}
+
+// `e` replaces `target` and the `breaks` after it by `newWord` and the same breaks, in `newLanguage`, and the engine
+// and the model follow. Without breaks the word is still being typed, so the engine holds it in the new language
+// (rebuildEngineWord); after breaks it is finished, and the language switch is Vikey's own (comeBackAfterDoubledKey:
+// the next word starts fresh, nothing dropped). A fix Vikey armed for ⌫⌫ is dropped: it belongs to the old word.
+static void moveWord(const std::u16string& target, const std::u16string& newWord, const std::u16string& breaks,
+                     int newLanguage, double now, VKEdit& e) {
+    const int languageBefore = vLanguage;
+    e = VKEdit();
+    e.deleteCount = (int)(target.size() + breaks.size());
+    e.text = newWord + breaks;
+    applyToModel(e);
+    if (breaks.empty()) {
+        rebuildEngineWord(newWord, newLanguage, now);
+    } else {
+        driver->*member(UndoActiveTag()) = false;
+        vLanguage = newLanguage;
+        startNewSession();
+        vAutoSwitchForget();
+    }
+    e.languageChanged = vLanguage != languageBefore;
+    hasLastFix = false;
+    veto = Veto();
+    heldUndo = HeldUndo();
+    doubledKeyFlip = false;
+    model.wordStartLanguage = newLanguage;
+    model.lastKey = model.keyBefore = kNoKey;
+    model.lastKeyReplaced = false;
+    model.languageAfterLastKey = vLanguage;
+    model.wordBeforeLastKey.clear();
+    model.wordCapsLock = false;
+}
+
+static std::u16string lowerCase(std::u16string s) {
+    for (char16_t& c : s) c = toLower(c);
+    return s;
+}
+
+// Convert `target` (the word on screen, `breaks` after it) given the raw `keys` that typed it. The word turns into
+// the keys when it shows something else, into the Telex form of the keys when it shows them as typed. false, nothing
+// changed, when that makes no other word.
+static bool convertWord(const std::u16string& target, const std::u16string& keys, const std::u16string& breaks,
+                        double now, VKEdit& e) {
+    std::u16string newWord;
+    int newLanguage = 0;
+    if (lowerCase(target) == lowerCase(keys)) {
+        newLanguage = 1;
+        const bool rendered = renderTelex(keys, newWord);
+        if (!rendered || newWord == target) {
+            // renderTelex started the engine over; the word still on screen is the one it holds.
+            if (breaks.empty()) rebuildEngineWord(target, vLanguage, now);
+            return false;
+        }
+    } else {
+        newWord = keys;
+    }
+    if (newWord == target) return false;
+    const int languageBefore = vLanguage;
+    LastConvert done;
+    done.active = true;
+    done.shownBefore = target;
+    done.shownAfter = newWord;
+    done.breaks = breaks;
+    done.keys = keys;
+    done.previous = previousWordBefore(model.line.size() - breaks.size() - target.size());
+    done.languageBefore = languageBefore;
+    moveWord(target, newWord, breaks, newLanguage, now, e);
+    lastConvert = done;
+    return true;
+}
+
+// ⌃⌫: the word before the break characters at the end of the line, converted as above. false when there is none.
+static bool convertLastWord(double now, VKEdit& e) {
+    if (lastConvert.active) {
+        // Again, no key between: back to the word and language from before.
+        const LastConvert c = lastConvert;
+        const std::u16string tail = c.shownAfter + c.breaks;
+        if (model.line.size() >= tail.size() && model.line.compare(model.line.size() - tail.size(), tail.size(), tail) == 0) {
+            moveWord(c.shownAfter, c.shownBefore, c.breaks, c.languageBefore, now, e);
+            lastConvert = LastConvert();
+            return true;
+        }
+        lastConvert = LastConvert();
+    }
+    size_t end = model.line.size();
+    while (end > 0 && isBreakChar(model.line[end - 1])) end--;
+    const std::u16string breaks = model.line.substr(end);
+    const std::u16string target = wordEndingAt(model.line, end);
+    if (target.empty() || target.size() > kFixWordMax || breaks.size() > kFixWordMax) return false;
+
+    // The keys that typed it: the record of the last word typed, else the word itself when it is plain letters, else
+    // its Telex keys, each with the case of the letter it types.
+    std::u16string keys;
+    if (model.wordKeysKnown && !model.wordKeys.empty()) {
+        keys = model.wordKeys;
+    } else if (isAscii(target)) {
+        keys = target;
+    } else {
+        std::vector<std::pair<Uint16, bool>> presses;
+        if (!keyPresses(target, 1, presses)) return false;
+        for (const auto& p : presses) {
+            for (size_t k = 0; k < 26; k++) if (kLetterKeys[k] == p.first) keys += (char16_t)((p.second ? 'A' : 'a') + k);
+        }
+    }
+    if (keys.empty()) return false;
+    return convertWord(target, keys, breaks, now, e);
+}
+
 static VKEdit pressUserKey(uint16_t macKeyCode, int shift, double now);
 
 // One key the user pressed: Vikey's edit with the shim's repairs, vetoes and undo bookkeeping.
 static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
+    lastConvert = LastConvert();
     if (heldUndo.active) {
         VKEdit edit;
         if (macKeyCode == KEY_DELETE) heldUndo.backspaces++;
@@ -872,6 +1048,27 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
     for (int i = 0; i < n; i++) out->text[i] = (uint16_t)e.text[i];
     out->length = n;
     out->languageChanged = e.languageChanged ? 1 : 0;
+}
+
+int lk_vikey_convert_last_word(double now, lk_edit* out) {
+    if (!out) return 0;
+    out->deleteCount = 0; out->length = 0; out->languageChanged = 0;
+    if (!driver) return 0;
+    VKEdit e;
+    if (!convertLastWord(now, e)) return 0;
+    const int cap = (int)(sizeof(out->text) / sizeof(out->text[0]));
+    if (e.text.size() > (size_t)cap) {
+        // Too long for one edit: the screen and the shim's copy would part, so start over, as lk_vikey_press does.
+        lk_vikey_reset_context();
+        out->languageChanged = e.languageChanged ? 1 : 0;
+        return 0;
+    }
+    out->deleteCount = e.deleteCount;
+    const int n = (int)e.text.size();
+    for (int i = 0; i < n; i++) out->text[i] = (uint16_t)e.text[i];
+    out->length = n;
+    out->languageChanged = e.languageChanged ? 1 : 0;
+    return 1;
 }
 
 void lk_vikey_set_caps_lock(int on) {
