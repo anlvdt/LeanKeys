@@ -37,6 +37,127 @@ final class UndoRuleBookTests: XCTestCase {
         UndoRuleBook(store: store, now: { [clock] in clock!.now() })
     }
 
+    // MARK: Convert rules and pinned words
+
+    func testConvertThresholds() {
+        let b = book()
+        b.recordConvert(keys: "beer", previous: "uong", toRaw: true, reverse: false)
+        XCTAssertTrue(b.shouldConvert(keys: "beer", previous: "uong", toRaw: true))
+        XCTAssertFalse(b.shouldConvert(keys: "beer", previous: "uong", toRaw: false), "a rule keeps its direction")
+        XCTAssertFalse(b.shouldConvert(keys: "beer", previous: "", toRaw: true))
+        b.recordConvert(keys: "beer", previous: "", toRaw: true, reverse: false)
+        XCTAssertTrue(b.shouldConvert(keys: "beer", previous: "", toRaw: true))
+        XCTAssertTrue(b.rules.allSatisfy { $0.kind == .convert && $0.toRaw == true })
+    }
+
+    func testConvertReverseBlocks() {
+        let b = book()
+        b.recordConvert(keys: "cos", previous: "thich", toRaw: false, reverse: false)
+        b.recordConvert(keys: "cos", previous: "", toRaw: false, reverse: true)
+        XCTAssertFalse(b.shouldConvert(keys: "cos", previous: "thich", toRaw: false))
+        XCTAssertTrue(b.rules.isEmpty)
+        b.recordConvert(keys: "cos", previous: "thich", toRaw: false, reverse: false)
+        XCTAssertFalse(b.shouldConvert(keys: "cos", previous: "thich", toRaw: false), "one more record is not enough")
+        b.recordConvert(keys: "cos", previous: "thich", toRaw: false, reverse: false)
+        XCTAssertTrue(b.shouldConvert(keys: "cos", previous: "thich", toRaw: false))
+    }
+
+    func testReverseLeavesOtherDirection() {
+        let b = book()
+        b.recordConvert(keys: "cos", previous: "thich", toRaw: false, reverse: false)
+        b.recordConvert(keys: "cos", previous: "thich", toRaw: true, reverse: false)
+        b.recordConvert(keys: "cos", previous: "", toRaw: false, reverse: true)
+        XCTAssertFalse(b.shouldConvert(keys: "cos", previous: "thich", toRaw: false))
+        XCTAssertTrue(b.shouldConvert(keys: "cos", previous: "thich", toRaw: true))
+        XCTAssertEqual(b.rules.filter { $0.toRaw == true }.count, 2 - 1, "only the context rule is shown (count 1)")
+    }
+
+    func testKindsReplaceEachOther() {
+        let b = book()
+        b.record(before: "cos", previous: "thich", reverse: false)
+        b.recordConvert(keys: "cos", previous: "thich", toRaw: false, reverse: false)
+        XCTAssertFalse(b.shouldKeep(before: "cos", previous: "thich"))
+        XCTAssertTrue(b.shouldConvert(keys: "cos", previous: "thich", toRaw: false))
+        b.record(before: "cos", previous: "thich", reverse: false)
+        XCTAssertTrue(b.shouldKeep(before: "cos", previous: "thich"))
+        XCTAssertFalse(b.shouldConvert(keys: "cos", previous: "thich", toRaw: false))
+        b.recordConvert(keys: "cos", previous: "thich", toRaw: true, reverse: false)
+        b.record(before: "cos", previous: "thich", reverse: false)
+        XCTAssertFalse(b.shouldConvert(keys: "cos", previous: "thich", toRaw: true), "both directions are replaced")
+    }
+
+    func testOldFileReadsAsKeep() {
+        let json = #"{"v":1,"rules":[{"text":"cos","previous":"thich","count":1,"lastUsed":0}],"blocked":{}}"#
+        let b = book(InMemoryStore(Data(json.utf8)))
+        XCTAssertTrue(b.shouldKeep(before: "cos", previous: "thich"))
+        XCTAssertEqual(b.rules.map(\.kind), [.keep])
+        XCTAssertNil(b.rules.first?.toRaw)
+        XCTAssertTrue(b.pinnedWords.isEmpty)
+    }
+
+    func testOldDecoderIgnoresConvert() throws {
+        struct V1: Codable { var v: Int; var rules: [UndoRule]; var blocked: [String: Int] }
+        let store = InMemoryStore()
+        let b = book(store)
+        b.recordConvert(keys: "beer", previous: "uong", toRaw: true, reverse: false)
+        b.flush()
+        let old = try JSONDecoder().decode(V1.self, from: XCTUnwrap(store.saved))
+        XCTAssertTrue(old.rules.isEmpty)
+        XCTAssertEqual(old.v, 2)
+        let again = book(store)
+        XCTAssertTrue(again.shouldConvert(keys: "beer", previous: "uong", toRaw: true))
+        XCTAssertFalse(again.shouldConvert(keys: "beer", previous: "uong", toRaw: false))
+    }
+
+    func testConvertStateSurvivesReload() {
+        let store = InMemoryStore()
+        let b = book(store)
+        b.recordConvert(keys: "cos", previous: "", toRaw: false, reverse: true)
+        _ = b.pin(["Orca"])
+        b.flush()
+        let again = book(store)
+        XCTAssertTrue(again.isPinned("orca"))
+        XCTAssertEqual(again.pinnedWords, ["Orca"])
+        again.recordConvert(keys: "cos", previous: "thich", toRaw: false, reverse: false)
+        XCTAssertFalse(again.shouldConvert(keys: "cos", previous: "thich", toRaw: false), "the block was saved")
+    }
+
+    func testConvertSecretShapedNeverRecorded() {
+        let b = book()
+        b.recordConvert(keys: "Xk9#mP2$vL", previous: "", toRaw: true, reverse: false)
+        XCTAssertTrue(b.rules.isEmpty)
+        b.recordConvert(keys: "cos", previous: "Xk9#mP2$vL", toRaw: false, reverse: false)
+        XCTAssertEqual(b.rules.count, 0, "the secret context is dropped; the contextless count 1 is hidden")
+        XCTAssertFalse(b.shouldConvert(keys: "cos", previous: "Xk9#mP2$vL", toRaw: false))
+        XCTAssertEqual(b.pin(["Xk9#mP2$vL"]).added, 0)
+    }
+
+    func testPinRules() {
+        let b = book()
+        b.record(before: "orca", previous: "x", reverse: false)
+        b.recordConvert(keys: "orca", previous: "x", toRaw: true, reverse: false)
+        XCTAssertEqual(b.pin(["Orca", "a", "Đắk", "mix", "mix"]).added, 2)
+        XCTAssertTrue(b.rules.isEmpty, "a pin replaces learned entries of its text")
+        XCTAssertTrue(b.isPinned("orca"))
+        XCTAssertTrue(b.isPinned("MIX"))
+        XCTAssertFalse(b.isPinned("a"))
+        XCTAssertEqual(b.pinnedWords, ["mix", "Orca"])
+        let words = (0..<600).map { "w" + String(repeating: "a", count: 3) + String(UnicodeScalar(97 + $0 / 26 / 26 % 26)!) + String(UnicodeScalar(97 + $0 / 26 % 26)!) + String(UnicodeScalar(97 + $0 % 26)!) }
+        let result = b.pin(words)
+        XCTAssertEqual(result.added, 498)
+        XCTAssertEqual(result.skipped, 102)
+        XCTAssertEqual(b.pinnedWords.count, 500)
+        for i in 0...UndoRuleBook.capacity {
+            b.record(before: "t\(i)", previous: "", reverse: false)
+            b.record(before: "t\(i)", previous: "", reverse: false)
+        }
+        XCTAssertEqual(b.pinnedWords.count, 500, "pins are not evicted")
+        b.unpin("ORCA")
+        XCTAssertFalse(b.isPinned("orca"))
+        b.removeAll()
+        XCTAssertTrue(b.pinnedWords.isEmpty)
+    }
+
     func testContextRuleAfterOneUndo() {
         let b = book()
         XCTAssertFalse(b.shouldKeep(before: "its", previous: "about"))
