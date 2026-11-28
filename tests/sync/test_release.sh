@@ -14,6 +14,8 @@ src="${0:A:h:h:h}"
 
 # Keep the user's git config (signing, hooks, templates) out of the test repos.
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+# The fake origin is a bare repo: read it with --git-dir, not -C. Some terminals (the Claude app's) set
+# safe.bareRepository=explicit through GIT_CONFIG_PARAMETERS, which refuses `git -C <bare>` but allows --git-dir.
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 unset LEANKEYS_RELEASE_ASSUME_YES LEANKEYS_TTY
@@ -130,7 +132,7 @@ log_has() { grep -qF -- "$1" "$FAKE_LOG"; }
 gh_not_called() { ! grep -q '^gh ' "$FAKE_LOG"; }
 nothing_called() { [[ ! -s "$FAKE_LOG" ]]; }
 local_tag() { git -C "$repo" rev-parse -q --verify "refs/tags/$1" >/dev/null; }
-remote_tag() { [[ -n "$(git -C "$bare" tag -l "$1")" ]]; }
+remote_tag() { [[ -n "$(git --git-dir="$bare" tag -l "$1")" ]]; }
 has_origin() { git -C "$repo" remote get-url origin >/dev/null 2>&1; }
 # out_before <a> <b>: both appear in $out, the first <a> before the first <b>.
 out_before() {
@@ -217,12 +219,12 @@ test_existing_remote_tag_refused() {
   setup remotetag
   ready 1.1
   git -C "$repo" tag v1.1 && git -C "$repo" push -q origin v1.1 && git -C "$repo" tag -d v1.1 >/dev/null
-  local before; before="$(git -C "$bare" rev-parse v1.1)"
+  local before; before="$(git --git-dir="$bare" rev-parse v1.1)"
   LEANKEYS_RELEASE_ASSUME_YES=1 run_release
   check $0 "exit 1" is_rc 1 &&
   check $0 "says the tag exists on origin" out_has "origin" &&
   check $0 "no release create" not log_has "gh release create" &&
-  check $0 "remote tag untouched" [ "$(git -C "$bare" rev-parse v1.1)" = "$before" ] &&
+  check $0 "remote tag untouched" [ "$(git --git-dir="$bare" rev-parse v1.1)" = "$before" ] &&
   check $0 "no local tag" not local_tag v1.1
 }
 
@@ -256,9 +258,9 @@ test_first_release_creates_repo() {
   check $0 "notes start with how to install" log_has "Tải LeanKeys-1.1.dmg, mở ra và kéo LeanKeys vào Applications" &&
   check $0 "notes say Lõi gõ, not Engine" log_has "Lõi gõ: Gõ Nhanh" &&
   check $0 "notes have the changelog" log_has "Sync Gõ Nhanh v1.0.166" &&
-  check $0 "main pushed" [ "$(git -C "$bare" rev-parse main)" = "$(git -C "$repo" rev-parse main)" ] &&
-  check $0 "tag pushed at main" [ "$(git -C "$bare" rev-parse 'v1.1^{commit}')" = "$(git -C "$repo" rev-parse main)" ] &&
-  check $0 "only main and v1.1 pushed" [ "$(git -C "$bare" for-each-ref --format='%(refname)' | sort | tr '\n' ' ')" = "refs/heads/main refs/tags/v1.1 " ] &&
+  check $0 "main pushed" [ "$(git --git-dir="$bare" rev-parse main)" = "$(git -C "$repo" rev-parse main)" ] &&
+  check $0 "tag pushed at main" [ "$(git --git-dir="$bare" rev-parse 'v1.1^{commit}')" = "$(git -C "$repo" rev-parse main)" ] &&
+  check $0 "only main and v1.1 pushed" [ "$(git --git-dir="$bare" for-each-ref --format='%(refname)' | sort | tr '\n' ' ')" = "refs/heads/main refs/tags/v1.1 " ] &&
   check $0 "READY removed" [ ! -e "$repo/dist/READY" ]
 }
 
@@ -353,7 +355,7 @@ test_prepush_ignores_git_hook_args() {
   out="$(cd "$repo" && PATH="$hookpath" git push origin main 2>&1)" || rc=$?
   local steps; steps="$(cat "$FAKE_LOG")"
   check $0 "push exit 0" is_rc 0 &&
-  check $0 "pushed" [ "$(git -C "$bare" rev-parse main 2>/dev/null)" = "$(git -C "$repo" rev-parse main)" ] &&
+  check $0 "pushed" [ "$(git --git-dir="$bare" rev-parse main 2>/dev/null)" = "$(git -C "$repo" rev-parse main)" ] &&
   check $0 "cargo test in core/" log_has "core cargo test" &&
   check $0 "swift test at the root" log_has "repo swift test" &&
   check $0 "check.sh ran" log_has "vendor/vikey/Tools/autoswitch/check.sh" &&
