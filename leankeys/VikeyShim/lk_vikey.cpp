@@ -1084,17 +1084,22 @@ static void convertAtBreak(int languageBefore, double now, VKEdit& e) {
     const std::u16string keys = casedWordKeys(target);
     if (keys.size() > kFixWordMax) return;
     const std::u16string breaks = e.text;
-    std::u16string newWord;
-    int newLanguage = 0;
-    if (!decideConvert(target, keys, breaks, now, newWord, newLanguage) || newWord.size() > kFixWordMax) return;
+    // The engine is never replayed to ask the filter (renderTelex cannot give back the engine's own state, which ⌫ over
+    // the break still needs): `after` is the keys when the word shows something else, and left empty when the
+    // conversion is the Telex form of the keys, which only renders once the filter said 1.
+    const bool toTelex = lowerCase(target) == lowerCase(keys);
     Fix fix;
     fix.before = target;
-    fix.after = newWord;
+    if (!toTelex) fix.after = keys;
     fix.previous = previousWordBefore(end - target.size());
     fix.keys = lowerCase(keys);
     if (fix.previous.size() > kFixWordMax) fix.previous.clear();
     const lk_fix c = toC(fix);
     if (convertFilter(&c) != 1) return;
+    std::u16string newWord;
+    int newLanguage = 0;
+    if (!decideConvert(target, keys, breaks, now, newWord, newLanguage) || newWord.size() > kFixWordMax) return;
+    fix.after = newWord;
     const int languageNow = vLanguage;
     const bool capsLock = model.wordCapsLock;
     moveWord(target, newWord, breaks, newLanguage, now, e);
@@ -1247,7 +1252,12 @@ int lk_vikey_convert_last_word(double now, lk_edit* out) {
     out->deleteCount = 0; out->length = 0; out->languageChanged = 0;
     if (!driver) return 0;
     VKEdit e;
-    if (!convertLastWord(now, e)) return 0;
+    if (!convertLastWord(now, e)) {
+        // The key goes to the app, which edits the text itself; rendering to decide may have disturbed the engine, so
+        // the typing context starts over.
+        lk_vikey_reset_context();
+        return 0;
+    }
     const int cap = (int)(sizeof(out->text) / sizeof(out->text[0]));
     if (e.text.size() > (size_t)cap) {
         // Too long for one edit: the screen and the shim's copy would part, so start over, as lk_vikey_press does.

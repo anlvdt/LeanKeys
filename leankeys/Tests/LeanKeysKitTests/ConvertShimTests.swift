@@ -225,17 +225,55 @@ final class ConvertShimTests: XCTestCase {
         XCTAssertEqual(l.string, "don't ")
     }
 
-    // ⌃⌫ with nothing to change leaves every bit of state alone: the keys after it give the same edits as without it.
-    func testNoOpLeavesStateAlone() {
+    // ⌃⌫ with nothing to change goes through to the app, and the typing context starts over, as after a reset: the keys
+    // after it give the same edits as after lk_vikey_reset_context.
+    func testNoOpResetsTheContext() {
         func run(_ noOp: Bool) -> [Edit] {
             let l = line(1)
             l.type("ok ")
-            if noOp { assertNothingToConvert(l); l.type("sdt "); assertNothingToConvert(l) } else { l.type("sdt ") }
+            if noOp { assertNothingToConvert(l) } else { lk_vikey_reset_context() }
+            l.type("sdt ")
+            if noOp { assertNothingToConvert(l) } else { lk_vikey_reset_context() }
             let start = l.edits.count
             l.type("toi cos thich lats  ⌫⌫⌫")
             return Array(l.edits[start...])
         }
         XCTAssertEqual(run(true), run(false))
+    }
+
+    // A filter that converts nothing changes nothing: Backspace over a break, a tone key after it, all as with no filter.
+    func testZeroFilterEqualsNilFilter() {
+        for typed in ["toi ⌫s", "can ⌫s", "toi ⌫⌫s", "toi ⌫as ", "toi thich cos ⌫⌫ nhe, beer ⌫r va test ⌫⌫t ",
+                      "toi uong beer ⌫⌫ mix lats ⌫⌫⌫s "] {
+            func run(_ filter: Bool) -> [Edit] {
+                lk_vikey_set_convert_filter(filter ? convertFilter : nil)
+                converting = []
+                return line(1).edits + { let l = line(1); l.type(typed); return l.edits }()
+            }
+            XCTAssertEqual(run(true), run(false), typed)
+            lk_vikey_set_convert_filter(nil)
+        }
+    }
+
+    func testFilterAfterIsEmptyForTelexConversion() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = []
+        let l = line(0)
+        l.type("pus ")
+        let seen = convertShown.last
+        XCTAssertEqual(seen?.before, "pus")
+        XCTAssertEqual(seen?.after, "")
+        XCTAssertEqual(seen?.keys, "pus")
+    }
+
+    func testTelexConversionAtBreakWhenFilterSaysOne() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["pus"]
+        let l = line(0)
+        XCTAssertEqual(l.type("pus "), "pú ")
+        XCTAssertEqual(lk_vikey_language(), 1)
+        XCTAssertEqual(l.type("⌃"), "pus ")
+        XCTAssertEqual(takeEvent()?.kind, 2)
     }
 
     func testCapsLockWordKeepsCase() {
@@ -351,7 +389,7 @@ final class ConvertShimTests: XCTestCase {
         converting = ["cos"]
         let l = line(0)
         XCTAssertEqual(l.type("toi thich cos "), "toi thich có ")
-        XCTAssertTrue(convertShown.isEmpty)
+        XCTAssertFalse(convertShown.contains { $0.keys == "cos" }, "the word Vikey fixed never reaches the filter")
     }
 
     func testFilterNotCalledWithoutKeysOrWord() {
