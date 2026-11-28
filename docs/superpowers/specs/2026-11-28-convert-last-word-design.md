@@ -102,7 +102,7 @@ Viết hoa: giữ nguyên chữ hoa/thường theo từng vị trí như bản g
   - `platforms/macos/RustBridge.swift`: điều kiện ô phím restore (`showsGoNhanhOnlySettings`, khoảng dòng 1559 và 1633) cho phép cả khi engine là Vikey; `triggerRestoreShortcut` gọi `EngineRouter.shared.convertLastWord()` khi engine là Vikey và gửi bằng `sendReplacement`; trả false (cho phím đi thẳng) khi không có từ đích.
   - Ô phím trong `MainSettingsView.swift` (khoảng dòng 1102): nhãn khi dùng Vikey là "Đổi từ vừa gõ Việt ⇄ Anh", dòng phụ "Bấm ngay sau một từ: cos → có, bể → beer. LeanKeys nhớ cho lần sau."; khi dùng Gõ Nhanh giữ nhãn gốc.
   - Mặc định: lần chạy đầu của bản này, nếu người dùng **chưa từng** lưu phím restore và chưa bật nó, đặt phím ⌃⌫ và bật. Người đã tự đặt phím giữ nguyên.
-  - Tên hook mới đăng ký trong `sync/hooks.txt` (đề xuất `convert-key`).
+  - Dùng lại các tên hook có sẵn trong `sync/hooks.txt` (`engine-dispatch` cho `RustBridge.swift`, `settings-engine` cho `MainSettingsView.swift`), không thêm tên mới: `check-divergence` giới hạn tên hook tối đa 12 ký tự.
 
 ### 5.3 Học
 
@@ -147,7 +147,7 @@ Viết hoa: giữ nguyên chữ hoa/thường theo từng vị trí như bản g
 
 Một người đọc độc lập đã soát bản này. Các câu sau được chốt mà không cần hỏi lại:
 
-1. **Khoá luật `convert` theo phím thô**, không theo chữ hiện (5.3), để `last`/`lats` không lẫn nhau.
+1. **Khoá luật `convert` theo phím thô và chiều**, không theo chữ hiện (5.3), để `last`/`lats` không lẫn nhau. Luật mang chiều (dạng Telex → phím thô, hoặc phím thô → dạng Telex) và chỉ chạy khi từ ở phím ngắt đang hiện đúng dạng "từ" của luật; nếu không, luật chỉ khoá theo phím chạy sai chiều trên `cos/có`, `nos/nó`, `last/lát` (đo bằng mixbench). Shim không dựng lại engine để quyết định ở phím ngắt: hỏi bộ lọc trước, chỉ dựng dạng Telex khi đổi.
 2. **"Từ của tôi" ra đúng chữ đã dán khi gõ xong từ**: vừa chặn Vikey sửa, vừa đổi dạng Telex Vikey để nguyên ("mĩ" → "mix") về chữ thô (5.3).
 3. **Ô phím dùng chung hai engine.** Lần chạy đầu bản này, nếu người dùng chưa từng lưu phím restore và chưa bật nó, đặt ⌃⌫ và bật, cho cả hai engine. Khi dùng Gõ Nhanh, ⌃⌫ làm đúng việc gốc của Gõ Nhanh (trả về phím gốc), nên hành vi Gõ Nhanh không đổi, chỉ đổi phím mặc định. Đổi engine không đổi phím đã lưu. Nếu phím đã lưu là Esc mà engine là Vikey: Esc đổi từ khi có từ đích, không có thì đi thẳng tới app.
 4. **Thứ tự với 12.2a.**

@@ -391,6 +391,16 @@ Viết ngày 2026-11-28, sau khi `tools/mixbench` đo chế độ `enbsbs`.
   - Gõ "cos" hai lần ở hai câu khác nhau, mỗi lần ⌫⌫, lần thứ ba giữ "cos".
   - Trong ô mật khẩu không học.
 
+### 12.5 Phím ⌃⌫ đổi từ vừa gõ
+
+Thiết kế riêng nằm ở `2026-11-28-convert-last-word-design.md` (quyết định khi soát: §8). Trong lúc làm, các điểm sau được chốt và đã đổi thiết kế:
+
+- Luật `convert` mang chiều (dạng Telex → phím thô, hoặc phím thô → dạng Telex) và chỉ chạy khi từ ở phím ngắt đang hiện đúng dạng "từ" của luật. Đo bằng mixbench: luật chỉ khoá theo phím chạy sai chiều trên `cos/có`, `nos/nó`, `last/lát` (mục "⌃⌫" trong README của mixbench).
+- Shim không dựng lại engine để quyết định ở phím ngắt: hỏi bộ lọc trước, chỉ dựng dạng Telex khi thực sự đổi. Dựng lại làm hỏng ⌫ qua Space ("toi ⌫s").
+- ⌃⌫ khi không có gì để đổi thì đi thẳng tới app, và shim đặt lại ngữ cảnh gõ.
+- Dưới Vikey, bấm Control không đặt lại ngữ cảnh khi phím restore dùng Control; Esc tới router như một phím ngắt từ.
+- Dùng lại tên hook có sẵn (`engine-dispatch`, `settings-engine`), vì `check-divergence` giới hạn tên hook tối đa 12 ký tự.
+
 ## 13. Mặc định "cài xong là gõ"
 
 Thêm ngày 2026-11-15. **Mục tiêu:** người dùng chỉ cần mở máy và gõ. Mọi thứ khác tự chạy.
