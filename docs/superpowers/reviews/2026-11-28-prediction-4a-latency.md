@@ -7,6 +7,11 @@ Cách đo: dùng `leankeys/Tests/LeanKeysKitTests/PredictionLatencyBenchTests.sw
 - Đo AX trên TextEdit đang nhận phím. Phím được gửi bằng `postToPid`, đi thẳng vào TextEdit nên LeanKeys không thấy: `debug.log` ghi 0 phím trong lúc đo, dữ liệu học không bị bẩn.
 - Không gõ phím tổng hợp qua LeanKeys và không thay app đang chạy.
 
+**Số đo này mới gần đúng:**
+- Bench gõ lại **từng ký tự của từ đã hoàn chỉnh** (`m → mộ → một`), chưa gõ theo phím Telex thật (`m → mo → mô → môt → một`). Vì vậy "lần bấm phím", "1,1 phím" và quy đổi WPM đều tính theo ký tự. Gõ Telex thật cần thêm 1–2 phím cho mỗi âm tiết có dấu. Phím bỏ dấu cũng làm `currentWord` thay đổi, nên khi gõ thật thanh gợi ý nhiều khả năng còn đổi nhiều hơn số đo ở đây. Một số trạng thái như `cas → cá` chỉ sinh ra do cách gõ lại này.
+- AX chỉ đo lúc app đang nhận phím trên **TextEdit**. Chrome, Electron và Slack, nhiều khả năng là nơi người dùng gặp lỗi, **chưa đo** lúc đang gõ.
+- Bảng dưới **chưa tính thời gian tiêm phím** trên main thread. `TextInjector` gọi `usleep` ngay trên luồng của event tap, và `refreshNow` phải đợi xong đoạn đó. Mặc định cho phép tới 1 ms (fast), 5 ms (other) hoặc 8 ms (slow). Ngoài ra còn cộng thêm độ trễ xoá lùi và độ trễ gõ chữ của từng app, mỗi phần tối đa 30 ms (`InjectionTuning`). Phím bỏ dấu tiếng Việt thường kéo theo xoá lùi rồi gõ lại.
+
 ## 1. Độ trễ từng chặng (ms)
 
 | Chặng | Chạy ở đâu | mean | p95 | max |
@@ -62,7 +67,7 @@ Nguyên nhân, xếp theo mức ảnh hưởng:
    - giữ các ô còn khớp ở nguyên chỗ;
    - lọc danh sách sau dấu cách theo chữ đang gõ.
 
-   Cả hai vẫn chỉ đứng yên 1,1–1,3 phím (`personal+sticky`, `personal+filter-*` trong bench). Xếp lại danh sách không chữa được nguyên nhân 1.
+   Cả hai cách có giúp ô Tab bớt đổi. Với cách lọc, ô đầu đổi 21 % số phím thay vì 37 %, số lần ẩn/hiện mỗi từ giảm từ 1,9 xuống 1,2. Đổi lại, số chữ tiết kiệm giảm từ 29 % xuống 10–24 %. Thanh vẫn không đứng yên đủ lâu để kịp đọc (`personal+sticky`, `personal+filter-*` trong bench). Chỉ số "đứng yên trung bình" không dùng để so các cách được, vì nó không bao giờ dưới 1.
 3. **Ẩn rồi hiện lại ở mỗi từ.** Sau dấu cách thanh hiện. Gõ chữ đầu thì thanh ẩn (`minPrefixLength = 2`), chữ thứ hai thì hiện lại với danh sách khác. Trung bình 1,9 lần mỗi từ, nên thanh nhấp nháy liên tục.
 4. **Đoán từ kế tiếp còn yếu.** Ô đầu chỉ đúng 9 %, nên phần lớn những gì hiện ra là nhiễu. Ví dụ từ bench: `edge|ed` → "eddie · edward", `một|mộ` → "một · mộng", `một số|` → "tài · điện · 40". Ba ô nhiễu tốn thời gian đọc hơn một ô đúng.
 5. **Phím chọn.**
