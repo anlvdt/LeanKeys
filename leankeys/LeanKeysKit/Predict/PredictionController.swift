@@ -71,8 +71,12 @@ public final class PredictionController: ObservableObject {
         var anchor: CaretLocator.CaretAnchor?
         var shown: [String]?
         var askedQuickType = false
+        /// `SuggestionPause`: the list waits until then unless its rows skip the wait; nil shows at once.
+        var pauseDue: CFAbsoluteTime?
+        var pauseScheduled = false
     }
     private var pending: Pending?
+    private var pause = SuggestionPause()
     private var now: () -> CFAbsoluteTime = CFAbsoluteTimeGetCurrent
 
     public init(
@@ -275,6 +279,8 @@ public final class PredictionController: ObservableObject {
         let phase = engine.phase(of: query)
         pending = Pending(token: token, query: query, phase: phase, ours: candidates)
         pending?.askedQuickType = askQuickType
+        pause.fixedDelay = SuggestionPause.fixedDelay(from: defaults)
+        pending?.pauseDue = pause.due
 
         if askQuickType, let quickType {
             let text = PredictionEngine.quickTypeText(for: query, phase: phase)
@@ -327,19 +333,35 @@ public final class PredictionController: ObservableObject {
     }
 
     /// Shows the pending refresh once its anchor is known and QuickType answered or `quickTypeWait` ran out, through
-    /// `SuggestionGate`. Shown once: a QuickType answer that comes later is dropped, never redrawn (stable rows).
+    /// `SuggestionGate`, then `SuggestionPause`: rows wait for the typist to stop, and a QuickType answer that lands
+    /// during that wait still merges in. Shown once: an answer after the show is dropped, never redrawn (stable rows).
     private func presentPending() {
         guard var p = pending, p.token == refreshToken, let anchor = p.anchor, p.shown == nil else { return }
         let ready = !p.askedQuickType || p.quickType != nil || p.waitedOut
         guard ready else { return }
         let merged = p.quickType.map { PredictionEngine.merge(ours: p.ours, quickType: $0, phase: p.phase, query: p.query) } ?? p.ours
         let rows = SuggestionGate.apply(merged, phase: p.phase, query: p.query)
+        if !rows.isEmpty, !SuggestionPause.showsAtOnce(rows), let due = p.pauseDue, now() < due {
+            // The previous key's rows are stale: hide them while this key waits for its pause.
+            if panel.isVisible || !currentCandidates.isEmpty { hideKeepingPending() }
+            guard !p.pauseScheduled else { return }
+            p.pauseScheduled = true
+            pending = p
+            let token = p.token
+            DispatchQueue.main.asyncAfter(deadline: .now() + (due - now())) { [weak self] in
+                guard let self, self.pending?.token == token else { return }
+                self.pending?.pauseDue = nil
+                self.presentPending()
+            }
+            return
+        }
         p.shown = rows.map(\.display)
         pending = p
         guard !rows.isEmpty else {
             hideKeepingPending()
             return
         }
+        trace.paused(waitedMs: p.pauseScheduled ? pause.delay * 1000 : nil)
         present(candidates: rows, anchor: anchor, token: p.token)
     }
 
@@ -362,8 +384,10 @@ public final class PredictionController: ObservableObject {
         trace.shown(showMs: (CFAbsoluteTimeGetCurrent() - showStart) * 1000, rows: candidates.count)
     }
 
-    /// Event-tap hook: a key reached the tap now (debug-log timing only).
+    /// Event-tap hook: a key reached the tap now. Feeds `SuggestionPause` (the typist's rhythm, timestamps only) and
+    /// the debug-log timing.
     public func noteKeyEvent() {
+        pause.keyPressed(at: now())
         trace.keyEvent()
     }
 

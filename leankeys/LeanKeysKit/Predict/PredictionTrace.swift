@@ -3,9 +3,10 @@ import Foundation
 /// Debug-log timing of the 4A+ path, one line per shown list. It records milliseconds only, never text, and only
 /// while the debug log is on, which is off by default: privacy spec 2026-11-28, `DebugLog.maxAge`.
 ///
-/// A line reads `[4A] tap→refresh=… predict=… ax=… show=… total=… dropped=…`, where:
+/// A line reads `[4A] tap→refresh=… predict=… ax=… qt=… pause=… show=… total=… dropped=…`, where:
 /// - `tap→refresh` is the event tap to the start of `refreshNow` (injection and queue wait on main);
 /// - `ax` is the caret lookup, or `cache`;
+/// - `pause` is the `SuggestionPause` wait in ms, or `now` when the list did not wait (rows that skip it, a slow key);
 /// - `total` is the event tap to the list on screen;
 /// - `dropped` is how many AX results were thrown away since the last shown list, because a newer key came first.
 struct PredictionTrace {
@@ -23,6 +24,7 @@ struct PredictionTrace {
     private var ax = "?"
     private var dropped = 0
     private var qt = "-"
+    private var pause = "now"
 
     mutating func keyEvent() {
         guard Self.isOn else { return }
@@ -37,14 +39,17 @@ struct PredictionTrace {
     mutating func axDropped() { dropped += 1 }
     mutating func quickTypeArrived() { if Self.isOn { qt = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - refreshAt) * 1000) } }
 
+    mutating func paused(waitedMs: Double?) { pause = waitedMs.map { String(format: "%.0f", $0) } ?? "now" }
+
     mutating func shown(showMs: Double, rows: Int) {
         guard Self.isOn else { return }
         let now = CFAbsoluteTimeGetCurrent()
         let start = tapAt > 0 ? tapAt : scheduledAt
-        DebugLog.appendLine(String(format: "[4A] tap→refresh=%.1f predict=%.2f ax=%@ qt=%@ show=%.1f total=%.1f dropped=%d rows=%d\n",
-                                   (refreshAt - start) * 1000, predictMs, ax, qt, showMs, (now - start) * 1000, dropped, rows))
+        DebugLog.appendLine(String(format: "[4A] tap→refresh=%.1f predict=%.2f ax=%@ qt=%@ pause=%@ show=%.1f total=%.1f dropped=%d rows=%d\n",
+                                   (refreshAt - start) * 1000, predictMs, ax, qt, pause, showMs, (now - start) * 1000, dropped, rows))
         dropped = 0
         ax = "?"
         qt = "-"
+        pause = "now"
     }
 }
