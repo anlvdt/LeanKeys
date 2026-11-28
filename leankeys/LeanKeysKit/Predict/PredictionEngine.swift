@@ -109,7 +109,8 @@ public final class PredictionEngine {
         }
 
         let current = query.currentWord.precomposedStringWithCanonicalMapping
-        guard current.count >= Self.minPrefixLength,
+        let minLen = query.previousWords.isEmpty ? Self.minPrefixLength : 1
+        guard current.count >= minLen,
               current.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else {
             return []
         }
@@ -202,7 +203,12 @@ public final class PredictionEngine {
             }
         }
 
-        // 3. Personal vocabulary
+        // 3. General vocabulary & dictionary completions require at least `minPrefixLength` (2) characters.
+        guard current.count >= Self.minPrefixLength else {
+            return Self.selectDiverseTop(pool, maxCount: maxCount)
+        }
+
+        // Personal vocabulary
         if let personal {
             for item in personal.wordCompletions(matching: current, limit: 5) {
                 let cased = Self.applyCase(of: current, to: item.word)

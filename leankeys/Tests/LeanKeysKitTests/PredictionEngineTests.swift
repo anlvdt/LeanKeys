@@ -211,22 +211,48 @@ final class PredictionEngineTests: XCTestCase {
         XCTAssertEqual(converted, CGRect(x: 100, y: 780, width: 2, height: 20))
 
         let screen = CGRect(x: 0, y: 25, width: 1440, height: 875)
-        // Normal case: places below caret
+        // Normal case: places below caret with gap = 3
         let normal = CandidatePanelController.panelOrigin(panelSize: CGSize(width: 260, height: 34),
                                                           caretRect: CGRect(x: 300, y: 500, width: 2, height: 18),
                                                           screens: [screen])
-        XCTAssertEqual(normal.y, 460)
+        XCTAssertEqual(normal.y, 463)
 
-        // Near bottom edge: flips above caret
+        // Near bottom edge: flips above caret with gap = 3
         let flipped = CandidatePanelController.panelOrigin(panelSize: CGSize(width: 260, height: 34),
                                                            caretRect: CGRect(x: 300, y: 40, width: 2, height: 18),
                                                            screens: [screen])
-        XCTAssertEqual(flipped.y, 64)
+        XCTAssertEqual(flipped.y, 61)
 
         // Near right edge: clamps inside screen
         let clampedRight = CandidatePanelController.panelOrigin(panelSize: CGSize(width: 260, height: 34),
                                                                 caretRect: CGRect(x: 1380, y: 500, width: 2, height: 18),
                                                                 screens: [screen])
         XCTAssertEqual(clampedRight.x, 1440 - 260 - 8)
+    }
+
+    func testSingleCharContextFilteringKeepsSuggestionContinuous() {
+        let engine = PredictionEngine(corpus: corpus, personal: nil, dictionary: nil)
+
+        // Standalone single char with no context still stays empty (no noise).
+        let standalone = PredictionQuery(
+            previousWords: [],
+            currentWord: "b",
+            followsNonSpaceBreak: false,
+            atWordStartAfterSpace: false,
+            isVietnamese: true
+        )
+        XCTAssertTrue(engine.predict(standalone).isEmpty)
+
+        // After "cảm ơn ", typing just "b" continues filtering "bạn nhiều" without flicker.
+        let withContext = PredictionQuery(
+            previousWords: ["cảm", "ơn"],
+            currentWord: "b",
+            followsNonSpaceBreak: false,
+            atWordStartAfterSpace: false,
+            isVietnamese: true
+        )
+        let res = engine.predict(withContext)
+        XCTAssertEqual(res.first?.display, "bạn nhiều")
+        XCTAssertEqual(res.first?.deleteCount, 1)
     }
 }

@@ -183,7 +183,9 @@ public final class PredictionController: ObservableObject {
 
     // MARK: - Keystroke Handling & Display
 
-    /// Schedules candidate bar update asynchronously so the CGEventTap callback returns immediately.
+    /// Schedules candidate bar update asynchronously with a calm typing debounce so fast typing never flashes.
+    /// - Hidden -> wait 150 ms after the last keystroke before fading in ghost text.
+    /// - Already visible -> update in-place after 30 ms.
     public func scheduleRefresh(router: EngineRouter, bundleID: String?, isVietnamese: Bool, atWordStartAfterSpace: Bool) {
         guard enabled else {
             if isVisible { hide() }
@@ -191,12 +193,13 @@ public final class PredictionController: ObservableObject {
         }
         pendingRefresh?.cancel()
         refreshToken &+= 1
+        let delay: TimeInterval = isVisible ? 0.03 : 0.15
         let item = DispatchWorkItem { [weak self] in
             self?.refreshNow(router: router, bundleID: bundleID, isVietnamese: isVietnamese,
                              atWordStartAfterSpace: atWordStartAfterSpace)
         }
         pendingRefresh = item
-        DispatchQueue.main.async(execute: item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
     }
 
     func refreshNow(router: EngineRouter, bundleID: String?, isVietnamese: Bool, atWordStartAfterSpace: Bool) {
@@ -220,7 +223,8 @@ public final class PredictionController: ObservableObject {
             hide()
             return
         }
-        if !currentWord.isEmpty && currentWord.count < PredictionEngine.minPrefixLength {
+        let minPrefix = previousWords.isEmpty ? PredictionEngine.minPrefixLength : 1
+        if !currentWord.isEmpty && currentWord.count < minPrefix {
             hide()
             return
         }
@@ -283,9 +287,9 @@ public final class PredictionController: ObservableObject {
         refreshToken &+= 1
         currentCandidates = []
         lastAnchor = nil
-        panel.hide()
 
-        // Chain the next suggestion when the inserted text ends cleanly with whitespace.
+        // Chain the next suggestion smoothly without hiding/flashing when the insertion ends with whitespace;
+        // if no follow-up exists or another key arrives first, `refreshNow` / `hide` handles it.
         let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         if candidate.insertion.last == " " {
             let item = DispatchWorkItem { [weak self] in
@@ -293,7 +297,9 @@ public final class PredictionController: ObservableObject {
                                  atWordStartAfterSpace: true)
             }
             pendingRefresh = item
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03, execute: item)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: item)
+        } else {
+            panel.hide()
         }
         return (candidate.deleteCount, chars)
     }
