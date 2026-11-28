@@ -146,7 +146,7 @@ public final class UndoLearning: ObservableObject {
 
     /// What the C convert filter answers: convert the raw keys `keys`, shown as `shown` (typed after `previous`), at
     /// the break key. A word shown as its raw keys can only go to Telex, so only a rule of the direction fits; a
-    /// pinned word converts to Telex only. Learning off: nothing applies, pins included.
+    /// pinned word converts to its raw keys (it stays as typed), so only a word shown otherwise. Learning off: nothing applies, pins included.
     func convertDecision(keys: String, shown: String, previous: String) -> Bool {
         guard learning else { return false }
         let toRaw = shown.lowercased() != keys

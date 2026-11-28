@@ -217,6 +217,22 @@ final class UndoLearningTests: XCTestCase {
         XCTAssertEqual(Field(engine, learning).type("mix "), "mĩ ")
     }
 
+    func testPinFiredConvertUndoneKeepsPin() {
+        let book = UndoRuleBook(store: nil)
+        _ = book.pin(["mix"])
+        let learning = makeLearning(book)
+        learning.install()
+        let field = Field(engine, learning)
+        XCTAssertEqual(field.type("mix "), "mix ", "the pin converts")
+        XCTAssertEqual(field.type("⌃"), "mĩ ", "⌃⌫ gives Vikey's word back (kind 2)")
+        field.type("n")
+        settle(learning)
+        XCTAssertTrue(book.isPinned("mix"))
+        engine.setVietnamese(true)
+        engine.resetContext()
+        XCTAssertEqual(Field(engine, learning).type("mix "), "mix ", "the pin still applies next time")
+    }
+
     func testPinnedWordKeptAsTyped() {
         let book = UndoRuleBook(store: nil)
         _ = book.pin(["cos"])
@@ -255,10 +271,12 @@ final class UndoLearningTests: XCTestCase {
         learning.install()
         for context in contexts {
             self.context = context
+            engine.setVietnamese(true)  // a ⌃⌫ to the raw keys leaves the line in English
             engine.resetContext()
             let field = Field(engine, learning)
-            field.type("toi uong beer ")
-            field.type("⌃n")
+            XCTAssertEqual(field.type("toi uong beer "), "toi uong bể ")
+            XCTAssertEqual(field.type("⌃"), "toi uong beer ", "the convert happened, so an event was made")
+            field.type("n")
             XCTAssertNil(engine.takeUndo(), "the event is drained even when it is not learned")
         }
         settle(learning)
