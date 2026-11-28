@@ -217,4 +217,29 @@ final class PrivacyDefaultsTests: XCTestCase {
         XCTAssertTrue(controller.learnEnabled)
         XCTAssertTrue(defaults.bool(forKey: PredictionController.learnConsentKey))
     }
+
+    func testPredictionLearnedDataStopsSurfacingWhenLearningTurnsOff() {
+        let personal = PersonalPredictionModel(store: nil)
+        let controller = PredictionController(
+            defaults: defaults,
+            personal: personal,
+            corpus: BuiltInPredictionCorpus(data: .bundled),
+            dictionary: nil,
+            onLearnerQueue: { $0() },
+            onMain: { $0() }
+        )
+        _ = controller.setLearnEnabled(true)
+        controller.confirmLearnConsent()
+        let ctx = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: false, now: Date())
+        for _ in 0..<2 { personal.observe(CommittedPhrase(text: "Em gửi báo cáo xyzabc nhé"), context: ctx) }
+        XCTAssertFalse(personal.phraseContinuations(after: ["Em", "gửi"]).isEmpty)
+        XCTAssertFalse(personal.nextWordContinuations(after: ["báo", "cáo"]).isEmpty)
+        XCTAssertFalse(personal.wordCompletions(matching: "xyz").isEmpty)
+
+        _ = controller.setLearnEnabled(false)
+        XCTAssertTrue(personal.phraseContinuations(after: ["Em", "gửi"]).isEmpty,
+                      "learned phrases must not surface while learning is off")
+        XCTAssertTrue(personal.nextWordContinuations(after: ["báo", "cáo"]).isEmpty)
+        XCTAssertTrue(personal.wordCompletions(matching: "xyz").isEmpty)
+    }
 }

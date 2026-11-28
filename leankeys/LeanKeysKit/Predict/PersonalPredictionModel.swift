@@ -194,7 +194,8 @@ public final class PersonalPredictionModel {
         guard !previousWords.isEmpty else { return [] }
         let lowerPrev = previousWords.suffix(3).map { $0.precomposedStringWithCanonicalMapping.lowercased() }
         lock.lock()
-        let currentPhrases = index.phrases
+        // Learned data surfaces only while learning is on (spec 2026-11-28-privacy-opt-in), like `GatedLearnedNames`.
+        let currentPhrases = _enabled ? index.phrases : []
         lock.unlock()
 
         var results: [(Int, String, Double)] = []
@@ -228,8 +229,9 @@ public final class PersonalPredictionModel {
             : nil
 
         lock.lock()
-        let triEntries = triKey.flatMap { index.trigrams[$0] } ?? []
-        let biEntries = index.bigrams[last] ?? []
+        let on = _enabled
+        let triEntries = on ? triKey.flatMap { index.trigrams[$0] } ?? [] : []
+        let biEntries = on ? index.bigrams[last] ?? [] : []
         lock.unlock()
 
         var merged: [String: (display: String, score: Double)] = [:]
@@ -263,7 +265,7 @@ public final class PersonalPredictionModel {
         let hasDiacritics = normPrefix != foldedPrefix
 
         lock.lock()
-        let entries = index.vocabByFirstChar[firstChar] ?? []
+        let entries = _enabled ? index.vocabByFirstChar[firstChar] ?? [] : []
         lock.unlock()
         guard !entries.isEmpty else { return [] }
 
