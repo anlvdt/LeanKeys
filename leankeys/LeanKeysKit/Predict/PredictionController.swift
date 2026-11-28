@@ -68,7 +68,9 @@ public final class PredictionController: ObservableObject {
     ) {
         self.defaults = defaults
         self.personal = personal
-        self.engine = PredictionEngine(corpus: corpus, personal: personal, dictionary: dictionary)
+        // Google-style rows: a word grows into the phrase the user typed before (learned phrases only).
+        self.engine = PredictionEngine(corpus: corpus, personal: personal, dictionary: dictionary,
+                                       phraseExtension: .replace, minExtensionContext: 2)
         self.panel = panel
         self.onLearnerQueue = onLearnerQueue
         self.onMain = onMain
@@ -193,10 +195,7 @@ public final class PredictionController: ObservableObject {
         }
         pendingRefresh?.cancel()
         refreshToken &+= 1
-        if navigator.selectedIndex != nil {
-            navigator.typing()
-            panel.setSelectedIndex(nil)
-        }
+        clearSelection()
         let item = DispatchWorkItem { [weak self] in
             self?.refreshNow(router: router, bundleID: bundleID, isVietnamese: isVietnamese,
                              atWordStartAfterSpace: atWordStartAfterSpace)
@@ -302,6 +301,16 @@ public final class PredictionController: ObservableObject {
             break
         }
         return action
+    }
+
+    /// ↓ ↑ Tab Return Enter(keypad) Esc: every other key clears the selection before the event tap handles it.
+    public static let listKeyCodes: Set<UInt16> = [0x7D, 0x7E, 0x30, 0x24, 0x4C, 0x35]
+
+    /// Any key but a list key reached the tap: whatever path it takes next, a row picked before it is void.
+    public func clearSelection() {
+        guard navigator.selectedIndex != nil else { return }
+        navigator.typing()
+        panel.setSelectedIndex(nil)
     }
 
     /// Row the user moved to with ↓/↑, if any.

@@ -61,6 +61,7 @@ final class PredictionLatencyBenchTests: XCTestCase {
             var runs: [Int] = []          // keystrokes a shown list stays identical
             var curRun = 0
             var examples: [String] = []
+            var rowsShown = 0, phraseRows = 0
             for line in lines[split...] {
                 let ws = Self.words(line)
                 var prevList: [String] = []
@@ -108,6 +109,8 @@ final class PredictionLatencyBenchTests: XCTestCase {
                             }
                         }
                         let isShown = !texts.isEmpty
+                        rowsShown += texts.count
+                        phraseRows += texts.filter { $0.contains(" ") }.count
                         if isShown { shown += 1 }
                         if isShown != prevShown { hideShowFlips += 1 }
                         if isShown && prevShown && texts != prevList { listChanged += 1 }
@@ -150,8 +153,78 @@ final class PredictionLatencyBenchTests: XCTestCase {
             let meanRun = Double(runs.reduce(0, +)) / Double(max(1, runs.count))
             let ge3 = 100.0 * Double(runs.filter { $0 >= 3 }.count) / Double(max(1, runs.count))
             print(String(format: "[bench] stability(%@) a shown list stays for %.2f keystrokes on average; %.1f%% of lists last >= 3 keystrokes", label, meanRun, ge3))
+            print(String(format: "[bench] rows(%@) %.1f%% of shown rows are 2+ words", label, 100.0 * Double(phraseRows) / Double(max(1, rowsShown))))
             if label == "personal" { for e in examples { print("[example] \(e)") } }
             dump("predict-\(label).json", ["afterSpace": afterSpace, "midWord": midWord, "runs": runs])
+        }
+    }
+
+    // MARK: - 1b. Phrase rows: how often a whole row is right, and keystrokes saved taking only exact rows
+
+    func testPhraseRowsAccuracy() throws {
+        try XCTSkipUnless(enabled)
+        let lines = try corpusLines()
+        let split = lines.count * 2 / 3
+        let ctx = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: false, now: Date())
+        let personal = PersonalPredictionModel(store: nil)
+        personal.enabled = true
+        for l in lines[..<split] { personal.observe(CommittedPhrase(text: l), context: ctx) }
+        let variants: [(String, PredictionEngine.PhraseExtension, Int)] = [
+            ("off", .off, 2), ("replace ctx>=2", .replace, 2), ("both ctx>=2", .both, 2),
+            ("replace ctx>=3", .replace, 3), ("personal-only replace ctx>=2", .replace, 2),
+            ("personal-only replace ctx>=1", .replace, 1),
+        ]
+        for (name, mode, minCtx) in variants {
+            let engine = PredictionEngine(corpus: .shared, personal: personal, dictionary: VikeyDictionaryCompleter.shared,
+                                          phraseExtension: mode, minExtensionContext: minCtx)
+            engine.personalExtensionOnly = name.hasPrefix("personal-only") || mode == .off
+            var total = 0, savedTab = 0, savedAny = 0
+            var multi = 0, multiFirstRight = 0, multiExact = 0, phraseAccepts = 0
+            var lat: [Double] = []
+            for line in lines[split...] {
+                let ws = Self.words(line)
+                let lower = ws.map { $0.lowercased() }
+                total += ws.reduce(0) { $0 + $1.count + 1 }
+                for policy in 0..<2 { // 0: Tab takes row 1 only; 1: ↓ to any exact row (cost: ↓×(i+1) + Tab)
+                    var wi = 0
+                    while wi < ws.count {
+                        let chars = Array(ws[wi])
+                        var took = false
+                        for k in 0..<chars.count where !(k == 1) && !(k == 0 && wi == 0) {
+                            let t0 = CFAbsoluteTimeGetCurrent()
+                            let rows = engine.predict(PredictionQuery(previousWords: Array(ws[..<wi]), currentWord: String(chars[..<k]),
+                                                                      followsNonSpaceBreak: false, atWordStartAfterSpace: k == 0,
+                                                                      isVietnamese: true))
+                            if policy == 0 { lat.append((CFAbsoluteTimeGetCurrent() - t0) * 1000) }
+                            if policy == 0, let r = rows.first {
+                                let rw = r.display.lowercased().split(separator: " ").map(String.init)
+                                if rw.count > 1 {
+                                    multi += 1
+                                    if rw.first == lower[wi] {
+                                        multiFirstRight += 1
+                                        if wi + rw.count <= ws.count, Array(lower[wi..<(wi + rw.count)]) == rw { multiExact += 1 }
+                                    }
+                                }
+                            }
+                            for (ri, r) in rows.enumerated() where policy == 1 || ri == 0 {
+                                let rw = r.display.lowercased().split(separator: " ").map(String.init)
+                                guard wi + rw.count <= ws.count, Array(lower[wi..<(wi + rw.count)]) == rw else { continue }
+                                let gain = rw.reduce(0) { $0 + $1.count + 1 } - k - (policy == 0 ? 1 : ri + 2)
+                                if policy == 0 { savedTab += gain; if rw.count > 1 { phraseAccepts += 1 } } else { savedAny += gain }
+                                wi += rw.count
+                                took = true
+                                break
+                            }
+                            if took { break }
+                        }
+                        if !took { wi += 1 }
+                    }
+                }
+            }
+            print(String(format: "[bench] phrase(%@): saved %.1f%% keys taking row 1 when exact, %.1f%% with ↓ to any exact row; row-1 phrases: %d shown, first word right %.1f%%, whole row right %.1f%%; %d phrase accepts; predict %@",
+                         name, 100.0 * Double(savedTab) / Double(total), 100.0 * Double(savedAny) / Double(total), multi,
+                         100.0 * Double(multiFirstRight) / Double(max(1, multi)), 100.0 * Double(multiExact) / Double(max(1, multiFirstRight)),
+                         phraseAccepts, Self.stats(lat)))
         }
     }
 

@@ -246,4 +246,31 @@ final class PredictionEngineTests: XCTestCase {
         print("PredictionEngine avg latency: \(String(format: "%.4f", avgMs)) ms/query")
         XCTAssertLessThan(avgMs, 0.5, "Prediction runs on the event-tap thread: keep each query under 0.5 ms")
     }
+
+    func testWordRowGrowsIntoPhraseTheUserTypedBefore() {
+        let personal = PersonalPredictionModel(store: nil)
+        personal.enabled = true
+        let ctx = LearnContext(bundleID: "com.apple.TextEdit", secureInput: false, secureField: false, now: Date())
+        for _ in 0..<2 { personal.observe(CommittedPhrase(text: "Em gửi báo cáo tiến độ Q4 nhé"), context: ctx) }
+        let engine = PredictionEngine(corpus: corpus, personal: personal, dictionary: nil,
+                                      phraseExtension: .replace, minExtensionContext: 2)
+        let rows = engine.predict(PredictionQuery(previousWords: ["Em", "gửi"], currentWord: "bá",
+                                                  followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: true))
+        XCTAssertEqual(rows.first?.display, "báo cáo tiến độ Q4 nhé")
+        XCTAssertEqual(rows.first?.deleteCount, 2)
+        XCTAssertEqual(rows.first?.insertion, "báo cáo tiến độ Q4 nhé ")
+
+        personal.enabled = false // learning off: learned phrases must not surface, rows stay words
+        let off = engine.predict(PredictionQuery(previousWords: ["Em", "gửi"], currentWord: "bá",
+                                                 followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: true))
+        XCTAssertFalse(off.contains { $0.display.contains("tiến độ") })
+    }
+
+    func testBuiltInPhraseTableIsNotGluedOntoWordRows() {
+        let engine = PredictionEngine(corpus: corpus, personal: nil, dictionary: nil, phraseExtension: .replace)
+        let off = PredictionEngine(corpus: corpus, personal: nil, dictionary: nil)
+        let q = PredictionQuery(previousWords: ["cảm"], currentWord: "", followsNonSpaceBreak: false,
+                                atWordStartAfterSpace: true, isVietnamese: true)
+        XCTAssertEqual(engine.predict(q).map(\.display), off.predict(q).map(\.display))
+    }
 }

@@ -71,7 +71,7 @@ public struct PredictionSettingsSection: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Hiện danh sách gợi ý khi gõ").font(.system(size: 13))
-                    Text("↓↑ chọn dòng, Tab hoặc Enter để nhận, Esc để ẩn")
+                    Text("↓ chọn rồi Tab/Enter nhận · Esc ẩn")
                         .font(.system(size: 11))
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
                         .lineLimit(1)

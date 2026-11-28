@@ -1637,6 +1637,7 @@ private func keyboardCallback(
 
     let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
     defer { if keyCode == UInt16(KeyCode.tab) || keyCode == 0x24 || keyCode == 0x4C { DetectionCache.expire() } } // LEANKEYS-HOOK: engine-dispatch (Tab/Return may move focus to a sign-in field)
+    if !PredictionController.listKeyCodes.contains(keyCode) { PredictionController.shared.clearSelection() } // LEANKEYS-HOOK: engine-dispatch (any other key edits the text: Enter must not take a row chosen before it)
 
     // Custom shortcut to toggle Vietnamese (default: Ctrl+Space)
     if matchesToggleShortcut(keyCode: keyCode, flags: flags) {
@@ -1658,6 +1659,21 @@ private func keyboardCallback(
     // then clear buffer. Engine sets pending_capitalize when it sees Enter key.
     // Also handle auto-restore and shortcut results (same as ESC handling)
     if keyCode == 0x24 || keyCode == 0x4C { // Return (0x24) or Enter/Numpad (0x4C)
+        // LEANKEYS-HOOK-BEGIN: engine-dispatch
+        // 4A+ list: Enter takes the row picked with ↓ (spec 2026-11-28-prediction-dropdown); otherwise it hides below.
+        if PredictionController.shared.selectedIndex != nil, !hasCmdOrCtrl, !hasOption, !shift {
+            let (method, delays) = detectMethod()
+            if method != .passthrough,
+               case .accept(let index) = PredictionController.shared.handleListKey(.enter),
+               let (bs, chars) = PredictionController.shared.acceptCandidate(
+                   at: index, router: .shared, isVietnamese: EngineRouter.shared.currentVietnamese
+               )
+            {
+                sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
+                return nil
+            }
+        }
+        // LEANKEYS-HOOK-END
         PredictionController.shared.hide() // LEANKEYS-HOOK: engine-dispatch
         if isDiscordFocusedContext() {
             RustBridge.clearBufferAll()
@@ -1723,14 +1739,13 @@ private func keyboardCallback(
     }
     Log.info("keyDown: code=\(DebugLog.keyLabel(keyCode))") // LEANKEYS-HOOK: debug-log (after pass-through: nothing logged in a sign-in field)
     // LEANKEYS-HOOK-BEGIN: engine-dispatch
-    // 4A+ list (spec 2026-11-28-prediction-dropdown): ↓/↑ select, Tab/Enter accept, Esc hides; Option+1..3 accept;
-    // other plain cursor movement hides.
+    // 4A+ list (spec 2026-11-28-prediction-dropdown): ↓/↑ select, Tab accepts, Esc hides; Option+1..3 accept;
+    // other plain cursor movement hides. Enter is handled at the top of keyDown, where it always went.
     if PredictionController.shared.isVisible {
         let listKey: SuggestionListKey? = switch keyCode {
         case UInt16(KeyCode.downArrow): .down
         case UInt16(KeyCode.upArrow): .up
         case UInt16(KeyCode.tab): .tab
-        case UInt16(KeyCode.returnKey), UInt16(KeyCode.enter): .enter
         case UInt16(KeyCode.esc): .escape
         default: nil
         }

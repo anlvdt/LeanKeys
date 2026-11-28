@@ -152,4 +152,20 @@ final class SuggestionListNavigatorTests: XCTestCase {
         let after = CandidatePanelController.attributedRow(cand("bạn nhiều"))
         XCTAssertEqual(after.attribute(.font, at: 0, effectiveRange: nil) as? NSFont, bold)
     }
+
+    func testAnyOtherKeyVoidsTheRowPickedBeforeIt() {
+        _ = NSApplication.shared
+        let (c, _, defaults, suite) = controller()
+        defer { c.hide(); defaults.removePersistentDomain(forName: suite) }
+        c.presentForTesting([cand("một"), cand("mới")], anchor: anchor, clock: { 0 })
+        _ = c.handleListKey(.down)
+        XCTAssertEqual(c.selectedIndex, 0)
+        c.clearSelection() // e.g. ⌫ or ⌃⌫ restore reached the tap
+        XCTAssertNil(c.selectedIndex)
+        XCTAssertEqual(c.handleListKey(.enter), .passAndHide, "Enter after an edit must stay an Enter")
+    }
+
+    func testListKeyCodesMatchTheKeysTheTapMaps() {
+        XCTAssertEqual(PredictionController.listKeyCodes, [0x7D, 0x7E, 0x30, 0x24, 0x4C, 0x35])
+    }
 }
