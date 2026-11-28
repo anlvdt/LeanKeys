@@ -38,7 +38,11 @@ Phần dưới đây là những gì LeanKeys tự làm thêm quanh hai lõi đ�
 
 - **Tự chọn lõi gõ.** Mặc định dùng Vikey. Khi bạn gõ VNI, hoặc khi Vikey không khởi động được, LeanKeys tự chuyển sang lõi Gõ Nhanh, không cần vào cài đặt.
 - **Gõ đúp phím dấu rồi ⌫ không còn hỏng từ.** Với Vikey gốc, gõ `hocjj` rồi ⌫ sẽ thành chữ thô và chuyển sang tiếng Anh giữa chừng. LeanKeys trả lại "học". Trên kho 20.676 từ tin nhắn, tỉ lệ từ tiếng Việt bị hỏng ở lỗi này giảm từ 28,6% xuống 0,95%.
-- **Tự học từ ⌫⌫.** Khi bạn bấm ⌫⌫ để giữ nguyên một từ bị tự đổi (`cos`, `car`, `been`…), LeanKeys nhớ lại. Từ đó thường xuất hiện sau từ nào thì lần sau gặp đúng chỗ ấy nó được giữ nguyên ngay; sau hai lần hoàn tác thì được giữ ở mọi nơi. Danh sách nằm ở Cài đặt › Nâng cao › Từ giữ nguyên.
+- **⌃⌫ đổi từ vừa gõ Việt ⇄ Anh.** Khi bộ gõ chọn sai ngôn ngữ cho một từ, bấm ⌃⌫ (Control + Delete) ngay sau từ đó: "có" thành `cos`, "bể" thành `beer`, `cos` thành "có". Dấu cách và dấu câu phía sau giữ nguyên; bấm ⌃⌫ lần nữa để đổi lại. Đây là loại lỗi ⌫⌫ không cứu được, vì Vikey để nguyên từ chứ không tự sửa. Trên kho 20.676 từ tin nhắn, bấm ⌃⌫ ở mỗi từ sai đưa số từ sai từ 41 xuống 13, và không làm sai từ nào đang đúng. Đổi phím ở Cài đặt › Phím tắt.
+- **Tự học từ ⌫⌫ và ⌃⌫.** Khi bạn bấm ⌫⌫ để giữ nguyên một từ bị tự đổi (`cos`, `car`, `been`…), hay bấm ⌃⌫ để đổi một từ bị chọn sai, LeanKeys nhớ lại cả chiều đổi. Từ đó thường xuất hiện sau từ nào thì lần sau gặp đúng chỗ ấy nó ra đúng ngay; sau hai lần sửa thì đúng ở mọi nơi. Bấm ⌃⌫ hay ⌫⌫ ngay sau một lần LeanKeys tự đổi theo luật để đổi ý. Danh sách nằm ở Cài đặt › Nâng cao › Từ đã học.
+- **Từ của tôi.** Dán sẵn một danh sách từ luôn giữ như gõ (tên sản phẩm, viết tắt, tên riêng tiếng Anh) bằng nút "Thêm từ giữ nguyên…": gõ xong từ là ra đúng chữ đã dán (`mix` không còn thành "mĩ").
+- **⌫⌫ để sửa chữ cuối không còn hỏng từ tiếng Anh.** Gõ `test`, Space trả về "test", rồi ⌫⌫ để sửa chữ cuối: Vikey gốc hiểu đó là hoàn tác và ra "tétt". LeanKeys hiểu ⌫⌫ rồi gõ chữ là sửa từ, còn ⌫⌫ rồi phím ngắt vẫn là hoàn tác.
+- **Gõ được địa danh Tây Nguyên.** Đắk Lắk, Đăk Lăk, Krông Búk, Krông Pắc, Cư M'gar, Đắk R'Lấp… ra đúng, kể cả khi gõ dấu sau chữ k (`Ddawks`).
 - **Tự viết hoa tên riêng.** `tooi owr haf nooij` ra "tôi ở Hà Nội", `nguyeenx vawn an` ra "Nguyễn Văn An". LeanKeys học thêm những tên bạn tự viết hoa từ hai lần trở lên. Bấm ⌫ ngay sau khi viết hoa sai thì chữ trở về thường, và LeanKeys nhớ điều đó.
 - **Bỏ phím lỡ bấm cùng Enter.** Một `\` hay `]` gõ dính ngay trước Enter trong ô chat được bỏ đi, không bị gửi kèm tin nhắn.
 - **Gợi ý gõ tắt** (tắt sẵn, bạn tự bật). Cụm bạn gõ lại từ 3 lần trong 30 ngày, như địa chỉ, số điện thoại, mã số thuế, được gợi ý thành gõ tắt; bạn bấm Thêm hoặc Bỏ qua.
@@ -139,7 +143,8 @@ Chạy tay `.githooks/pre-push --all` để thêm bản build Release.
 
 - **Đồng bộ với repo gốc:** `sync/install-launchd.sh` cài một job chạy lúc 3 giờ sáng mỗi ngày. Job kéo release mới của Gõ Nhanh và Vikey, chạy test, build sẵn bản mới. Nó không bao giờ tự phát hành.
 - **Đăng bản:** chạy `sync/release.sh --dry-run` để xem trước, rồi `sync/release.sh`. Danh sách thử tay trước khi đăng nằm trong `sync/manual-checklist.md`.
-- **Thiết kế:** [docs/superpowers/specs/2026-11-15-leankeys-design.md](../docs/superpowers/specs/2026-11-15-leankeys-design.md).
+- **Đo gõ trộn Việt/Anh:** `tools/mixbench` gõ mô phỏng qua engine thật và đếm từ sai, gồm cả kiểu chat (kết thúc bằng Return, mang trạng thái sang câu sau, ⌫⌫ ngay sau Space) và phím ⌃⌫ (`--convert-wrong`, `--learn`). Cách chạy và số liệu trong [tools/mixbench/README.md](../tools/mixbench/README.md).
+- **Thiết kế:** [docs/superpowers/specs/2026-11-15-leankeys-design.md](../docs/superpowers/specs/2026-11-15-leankeys-design.md); phím ⌃⌫: [docs/superpowers/specs/2026-11-28-convert-last-word-design.md](../docs/superpowers/specs/2026-11-28-convert-last-word-design.md).
 
 ## Ghi công
 
