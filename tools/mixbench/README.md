@@ -136,7 +136,8 @@ Return và mang trạng thái: số từ ra sai trên tổng số từ, kèm s�
 |---|---|---|
 | Không sửa (văn bản sạch) | 1 (0.23%) | 41 (0.20%) |
 | `bsbs` từ tiếng Việt (16 / 907 lần sửa) | 1 (VN 0.36%) | 42 (VN 0.16%) |
-| `enbsbs` từ tiếng Anh (70 / 3.885 lần sửa) | **14 (EN 8.07%)** | **638 (EN 6.62%)** |
+| `enbsbs` từ tiếng Anh (70 / 3.885 lần sửa), trước bản sửa §12.2a | **14 (EN 8.07%)** | **638 (EN 6.62%)** |
+| `enbsbs`, sau bản sửa §12.2a | 1 (EN 0.00%) | 44 (EN 0.30%) |
 
 - **`enbsbs` là lỗi mới tìm ra, và đúng là ví dụ `test` → `tét` người dùng hay than.**
   - Phím Telex `test` hiện "tét", rồi Space khôi phục thành "test".
@@ -144,6 +145,7 @@ Return và mang trạng thái: số từ ra sai trên tổng số từ, kèm s�
   - Gặp ở mọi từ tiếng Anh có phím dấu hoặc phím biến đổi: `push` → púhh, `merge` → mẻgee, `window` → ưindowư, `database` → dâtbasee.
   - `--no-fix` cho cùng số: đây là hành vi của Vikey, không phải của bản sửa 12.1.
   - Bộ học ⌫⌫ (UndoLearning) còn có thể ghi một luật "giữ như gõ" từ lần hoàn tác ngoài ý muốn này. Bộ đo không cài bộ lọc học nên không đếm được.
+- **Đã sửa ngày 2026-11-28** trong shim (spec §12.2a): sau lần hoàn tác đó, phím chữ được hiểu là sửa từ. `enbsbs` trên chat giảm từ 638 (EN 6.62%) xuống **44 (EN 0.30%)**; trên mine.txt giảm từ 14 xuống 1. Mọi chế độ khác và văn bản sạch cho đầu ra giống hệt từng byte. Phần lớn lỗi còn lại là các từ trùng ở cả hai ngôn ngữ mà Vikey để nguyên dạng tiếng Việt (`mix` → mĩ, ⌫⌫ xoá "ĩ").
 - `bsbs` phía tiếng Việt gần như vô hại: từ tiếng Việt hiếm khi bị sửa ở Space, nên ⌫⌫ là ⌫ thường.
 - **Giới hạn của chế độ này:**
   - Người gõ thật thường xoá rồi gõ một chữ *khác*, chứ không gõ lại đúng chữ cũ.

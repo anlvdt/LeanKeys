@@ -204,4 +204,35 @@ final class UndoShimTests: XCTestCase {
         none.type(sentence)
         XCTAssertEqual(none.edits, vikey.edits)
     }
+    // ⌫⌫ right after the Space that put an English word back ("tét" -> "test", which Vikey lets ⌫⌫ undo) and then a
+    // letter is an edit of that word, not an undo: the two Backspaces delete the Space and the last letter.
+    func testLetterAfterUndoOfEnglishRestoreEdits() {
+        XCTAssertEqual(line(1).type("test "), "test ", "Vikey puts the keys back (precondition)")
+        XCTAssertEqual(lk_vikey_language(), 0)
+        XCTAssertEqual(line(1).type("test ⌫⌫t"), "test")
+        XCTAssertNil(takeUndo(), "an edit is no undo for the learner")
+        XCTAssertEqual(line(1).type("test ⌫⌫t xin"), "test xin", "Vikey goes on deciding the next word")
+        XCTAssertEqual(line(1).type("test ⌫⌫s "), "tess ")
+        XCTAssertEqual(line(1).type("push ⌫⌫h vaf "), "push và ")
+        XCTAssertEqual(line(1).type("test ⌫⌫⌫xt "), "text ", "more Backspaces delete more letters")
+        XCTAssertEqual(line(1).type("traffic "), "traffic ", "a doubled letter Vikey puts back (precondition)")
+        XCTAssertEqual(line(1).type("traffic ⌫⌫c "), "traffic ")
+        _ = takeUndo()
+    }
+
+    func testBreakAfterUndoOfEnglishRestoreStillUndoes() {
+        let l = line(1)
+        XCTAssertEqual(l.type("I like its ⌫⌫"), "I like ít")
+        XCTAssertNil(takeUndo(), "held until the next key tells an undo from an edit")
+        XCTAssertEqual(l.type(" "), "I like ít ")
+        let undo = takeUndo()
+        XCTAssertEqual(undo?.before, "ít")
+        XCTAssertEqual(undo?.after, "its")
+        XCTAssertEqual(undo?.previous, "like")
+        XCTAssertEqual(undo?.reverse, false)
+        // A reset (click, arrow, app switch) also lets the held undo through.
+        line(1).type("I like its ⌫⌫")
+        lk_vikey_reset_context()
+        XCTAssertEqual(takeUndo()?.before, "ít")
+    }
 }
