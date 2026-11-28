@@ -1,0 +1,19 @@
+Another instance of SwiftPM (PID: 89904) is already running using '<worktree>/.build', waiting until that process has finished execution...Building for production...
+[Using on-disk description]
+[2 / 4] LeanKeysKitTests-product
+[3 / 5] LeanKeysKitTests-product
+[7 / 11] LeanKeysKitTests-product
+[9 / 11] LeanKeysKitTests-product
+Build complete! (25,25 secs)
+Test Suite 'Selected tests' started at 2026-11-28 21:19:10.102.
+Test Suite 'LeanKeysKitTests.xctest' started at 2026-11-28 21:19:10.103.
+Test Suite 'KeyPathBenchTests' started at 2026-11-28 21:19:10.103.
+Test Case '-[LeanKeysKitTests.KeyPathBenchTests testEngineReplay]' started.
+Test Case '-[LeanKeysKitTests.KeyPathBenchTests testEngineReplay]' passed (0.082 seconds).
+Test Suite 'KeyPathBenchTests' passed at 2026-11-28 21:19:10.186.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.082 (0.082) seconds
+Test Suite 'LeanKeysKitTests.xctest' passed at 2026-11-28 21:19:10.186.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.082 (0.082) seconds
+Test Suite 'Selected tests' passed at 2026-11-28 21:19:10.186.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.082 (0.084) seconds
+[bench] engine init ms 0.889333 key p50/p95/p99 ns [833, 1042, 1583]

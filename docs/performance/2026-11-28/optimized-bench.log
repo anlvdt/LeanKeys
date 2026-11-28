@@ -1,0 +1,77 @@
+Another instance of SwiftPM (PID: 91910) is already running using '<worktree>/.build', waiting until that process has finished execution...Building for production...
+[Using on-disk description]
+[2 / 4] LeanKeysKitTests-product
+[3 / 5] LeanKeysKitTests-product
+[8 / 12] LeanKeysKitTests-product
+[10 / 12] LeanKeysKitTests-product
+Build complete! (25,36 secs)
+Test Suite 'Selected tests' started at 2026-11-28 21:25:22.735.
+Test Suite 'LeanKeysKitTests.xctest' started at 2026-11-28 21:25:22.737.
+Test Suite 'LearningCostBenchTests' started at 2026-11-28 21:25:22.737.
+Test Case '-[LeanKeysKitTests.LearningCostBenchTests testConcurrentLearningAndReadCost]' started.
+Test Case '-[LeanKeysKitTests.LearningCostBenchTests testConcurrentLearningAndReadCost]' passed (15.336 seconds).
+Test Case '-[LeanKeysKitTests.LearningCostBenchTests testCorpusLearningCost]' started.
+Test Case '-[LeanKeysKitTests.LearningCostBenchTests testCorpusLearningCost]' passed (9.104 seconds).
+Test Suite 'LearningCostBenchTests' passed at 2026-11-28 21:25:47.177.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 24.440 (24.440) seconds
+Test Suite 'PersonalPredictionModelTests' started at 2026-11-28 21:25:47.177.
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testCoalescedSaveFlushesLatestSnapshotAndEraseCancelsIt]' started.
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testCoalescedSaveFlushesLatestSnapshotAndEraseCancelsIt]' passed (0.001 seconds).
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testCoalescedSaveRunsAtDeadline]' started.
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testCoalescedSaveRunsAtDeadline]' passed (0.022 seconds).
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testEncryptedPersistenceRoundTripAndEraseAll]' started.
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testEncryptedPersistenceRoundTripAndEraseAll]' passed (0.004 seconds).
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testExcludesSensitiveContextsAndSecrets]' started.
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testExcludesSensitiveContextsAndSecrets]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testLearnsBigramsTrigramsAndPhrasesAfterThreshold]' started.
+Test Case '-[LeanKeysKitTests.PersonalPredictionModelTests testLearnsBigramsTrigramsAndPhrasesAfterThreshold]' passed (0.014 seconds).
+Test Suite 'PersonalPredictionModelTests' passed at 2026-11-28 21:25:47.220.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.042 (0.043) seconds
+Test Suite 'PredictionLatencyBenchTests' started at 2026-11-28 21:25:47.220.
+Test Case '-[LeanKeysKitTests.PredictionLatencyBenchTests testPanelShowCost]' started.
+Test Case '-[LeanKeysKitTests.PredictionLatencyBenchTests testPanelShowCost]' passed (35.029 seconds).
+Test Suite 'PredictionLatencyBenchTests' passed at 2026-11-28 21:26:22.249.
+	 Executed 1 test, with 0 failures (0 unexpected) in 35.029 (35.029) seconds
+Test Suite 'SuggestionListNavigatorTests' started at 2026-11-28 21:26:22.249.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testAnyOtherKeyVoidsTheRowPickedBeforeIt]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testAnyOtherKeyVoidsTheRowPickedBeforeIt]' passed (0.022 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testControllerDownThenEnterTakesSecondRow]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testControllerDownThenEnterTakesSecondRow]' passed (0.020 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testControllerFastTabStaysATabAndHides]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testControllerFastTabStaysATabAndHides]' passed (0.022 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testDownEntersListThenMovesAndStopsAtLastRow]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testDownEntersListThenMovesAndStopsAtLastRow]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testEmptyListPassesEverything]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testEmptyListPassesEverything]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testEnterAcceptsOnlyWhenARowIsSelected]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testEnterAcceptsOnlyWhenARowIsSelected]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testEscapeDismisses]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testEscapeDismisses]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testListKeyCodesMatchTheKeysTheTapMaps]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testListKeyCodesMatchTheKeysTheTapMaps]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testRowBoldsOnlyWhatTheSuggestionAdds]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testRowBoldsOnlyWhatTheSuggestionAdds]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testSameListKeepsSelectionAndSettleClock]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testSameListKeepsSelectionAndSettleClock]' passed (0.019 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testTabAcceptsFirstRowOnlyOnceListHasSettled]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testTabAcceptsFirstRowOnlyOnceListHasSettled]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testTabAcceptsSelectedRow]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testTabAcceptsSelectedRow]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testTypingOrNewListClearsSelection]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testTypingOrNewListClearsSelection]' passed (0.000 seconds).
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testUpLeavesListFromFirstRowAndPassesWhenNothingSelected]' started.
+Test Case '-[LeanKeysKitTests.SuggestionListNavigatorTests testUpLeavesListFromFirstRowAndPassesWhenNothingSelected]' passed (0.000 seconds).
+Test Suite 'SuggestionListNavigatorTests' passed at 2026-11-28 21:26:22.336.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.085 (0.086) seconds
+Test Suite 'LeanKeysKitTests.xctest' passed at 2026-11-28 21:26:22.336.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 59.596 (59.599) seconds
+Test Suite 'Selected tests' passed at 2026-11-28 21:26:22.336.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 59.596 (59.600) seconds
+[audit] concurrent=false read p50=0.044041 p95=0.162917 p99=0.561583 max=2.226917 ms
+[audit] concurrent=true read p50=0.038083 p95=0.119208 p99=0.377625 max=4.912875 ms
+[audit] learning disk=false n=1869 p50=2.487083 p95=4.473833 p99=5.952458 max=23.820834 ms stats=Stats(bigramCount: 7521, trigramCount: 2360, phraseCount: 0, vocabCount: 1156)
+[audit] learning disk=true n=1869 p50=2.476291 p95=4.516333 p99=5.978 max=32.578083 ms stats=Stats(bigramCount: 7526, trigramCount: 2361, phraseCount: 0, vocabCount: 1155)
+[bench] v1.14 SwiftUI bar texts changed (show + commit): n=120 mean=11.827 p50=11.394 p95=16.339 p99=25.408 max=27.345 ms
+[bench] v1.14 SwiftUI bar texts same    (show + commit): n=120 mean=1.143 p50=0.631 p95=3.965 p99=7.606 max=8.243 ms
+[bench] AppKit list texts changed (show + commit): n=120 mean=4.428 p50=3.927 p95=8.909 p99=10.184 max=10.380 ms
+[bench] AppKit list texts same    (show + commit): n=120 mean=1.044 p50=0.421 p95=4.721 p99=5.706 max=6.144 ms

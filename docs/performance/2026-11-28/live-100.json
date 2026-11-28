@@ -1,0 +1,1 @@
+{"interval_ms": 100, "output": "Ch\u00e0o b\u1ea1n ch\u00e0o b\u1ea1n ", "correct": true, "key": {"n": 24, "p50": 2.463, "p95": 17.555, "max": 17.609}, "send": {"n": 4, "p50": 12.399, "p95": 14.405, "max": 14.405}}

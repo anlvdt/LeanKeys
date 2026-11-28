@@ -1,0 +1,13 @@
+Another instance of SwiftPM (PID: 90359) is already running using '<worktree>/.build', waiting until that process has finished execution...Test Suite 'Selected tests' started at 2026-11-28 21:19:11.275.
+Test Suite 'LeanKeysKitTests.xctest' started at 2026-11-28 21:19:11.276.
+Test Suite 'LearningCostBenchTests' started at 2026-11-28 21:19:11.276.
+Test Case '-[LeanKeysKitTests.LearningCostBenchTests testConcurrentLearningAndReadCost]' started.
+Test Case '-[LeanKeysKitTests.LearningCostBenchTests testConcurrentLearningAndReadCost]' passed (15.933 seconds).
+Test Suite 'LearningCostBenchTests' passed at 2026-11-28 21:19:27.210.
+	 Executed 1 test, with 0 failures (0 unexpected) in 15.933 (15.934) seconds
+Test Suite 'LeanKeysKitTests.xctest' passed at 2026-11-28 21:19:27.210.
+	 Executed 1 test, with 0 failures (0 unexpected) in 15.933 (15.934) seconds
+Test Suite 'Selected tests' passed at 2026-11-28 21:19:27.210.
+	 Executed 1 test, with 0 failures (0 unexpected) in 15.933 (15.935) seconds
+[audit] concurrent=false read p50=0.045125 p95=0.158542 p99=0.456458 max=2.040916 ms
+[audit] concurrent=true read p50=1.962667 p95=8.163166 p99=13.014583 max=20.128583 ms

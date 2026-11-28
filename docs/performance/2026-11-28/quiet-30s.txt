@@ -1,0 +1,2 @@
+wakeups idle 0 interrupt 17 cpu ms 0.87 footprint MiB 26.70
+wakeups idle 0 interrupt 17 cpu ms 0.96 footprint MiB 26.70

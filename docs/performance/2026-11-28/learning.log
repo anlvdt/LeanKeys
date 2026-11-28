@@ -1,0 +1,21 @@
+Another instance of SwiftPM (PID: 87069) is already running using '<worktree>/.build', waiting until that process has finished execution...Building for production...
+[Constructing description]
+[Planning deferred tasks]
+[5 / 9] LeanKeysKitTests-product
+[6 / 10] LeanKeysKitTests-product
+[13 / 17] LeanKeysKitTests-product
+[15 / 17] LeanKeysKitTests-product
+Build complete! (23,23 secs)
+Test Suite 'Selected tests' started at 2026-11-28 21:15:24.067.
+Test Suite 'LeanKeysKitTests.xctest' started at 2026-11-28 21:15:24.068.
+Test Suite 'LearningCostBenchTests' started at 2026-11-28 21:15:24.068.
+Test Case '-[LeanKeysKitTests.LearningCostBenchTests testCorpusLearningCost]' started.
+Test Case '-[LeanKeysKitTests.LearningCostBenchTests testCorpusLearningCost]' passed (46.804 seconds).
+Test Suite 'LearningCostBenchTests' passed at 2026-11-28 21:16:10.872.
+	 Executed 1 test, with 0 failures (0 unexpected) in 46.804 (46.804) seconds
+Test Suite 'LeanKeysKitTests.xctest' passed at 2026-11-28 21:16:10.873.
+	 Executed 1 test, with 0 failures (0 unexpected) in 46.804 (46.804) seconds
+Test Suite 'Selected tests' passed at 2026-11-28 21:16:10.873.
+	 Executed 1 test, with 0 failures (0 unexpected) in 46.804 (46.806) seconds
+[audit] learning disk=false n=1869 p50=2.427291 p95=4.274292 p99=5.884375 max=16.950959 ms stats=Stats(bigramCount: 7522, trigramCount: 2361, phraseCount: 0, vocabCount: 1156)
+[audit] learning disk=true n=1869 p50=25.37675 p95=30.293917 p99=38.475916 max=84.326583 ms stats=Stats(bigramCount: 7521, trigramCount: 2360, phraseCount: 0, vocabCount: 1155)

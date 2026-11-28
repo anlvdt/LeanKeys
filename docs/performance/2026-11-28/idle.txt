@@ -1,0 +1,10 @@
+wakeups idle 0 interrupt 16 cpu ms 0.90 footprint MiB 28.11
+wakeups idle 0 interrupt 16 cpu ms 1.01 footprint MiB 28.08
+wakeups idle 0 interrupt 20 cpu ms 1.48 footprint MiB 28.14
+wakeups idle 0 interrupt 38 cpu ms 2.62 footprint MiB 26.99
+wakeups idle 0 interrupt 19 cpu ms 1.10 footprint MiB 26.95
+wakeups idle 0 interrupt 262 cpu ms 8.32 footprint MiB 27.17
+wakeups idle 0 interrupt 257 cpu ms 8.51 footprint MiB 27.38
+wakeups idle 0 interrupt 17 cpu ms 1.02 footprint MiB 27.33
+wakeups idle 0 interrupt 16 cpu ms 0.95 footprint MiB 27.33
+wakeups idle 0 interrupt 17 cpu ms 0.89 footprint MiB 27.33
