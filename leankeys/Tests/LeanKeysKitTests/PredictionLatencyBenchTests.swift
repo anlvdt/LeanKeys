@@ -285,6 +285,8 @@ final class PredictionLatencyBenchTests: XCTestCase {
         var lat: [Double] = []
         var count = 0
         let limit = Int(ProcessInfo.processInfo.environment["LEANKEYS_BENCH_QT_N"] ?? "600") ?? 600
+        PredictionEngine.aheadFirstMinLength = Int(ProcessInfo.processInfo.environment["LEANKEYS_BENCH_AHEAD_MIN"] ?? "3") ?? 3
+        defer { PredictionEngine.aheadFirstMinLength = 3 }
         outer: for line in lines[split...] {
             let ws = Self.words(line)
             guard ws.count >= 2 else { continue }
@@ -293,8 +295,30 @@ final class PredictionLatencyBenchTests: XCTestCase {
                 if count > limit { break outer }
                 let prev = Array(ws[..<wi])
                 let target = ws[wi].lowercased()
-                for typed in ["", String(ws[wi].prefix(2))] where typed.isEmpty || target.count >= 3 {
-                    let phase = typed.isEmpty ? "next" : "mid2"
+                if wi + 1 < ws.count {
+                    // Look-ahead: the word is typed, Space not yet. Which source guesses the word after it?
+                    let nextTarget = ws[wi + 1].lowercased()
+                    let la = PredictionEngine(corpus: .shared, personal: personal, dictionary: nil, lookAhead: true)
+                    let oursAhead = la.predict(PredictionQuery(previousWords: prev, currentWord: ws[wi], followsNonSpaceBreak: false,
+                                                               atWordStartAfterSpace: false, isVietnamese: true))
+                        .map(\.display).compactMap { d -> String? in
+                            let p = d.split(separator: " ").map(String.init)
+                            return p.count >= 2 && p[0].lowercased() == target ? p[1] : nil
+                        }
+                    let (qtAhead, _) = Self.quickType((prev + [ws[wi]]).joined(separator: " ") + " ", checker: checker, tag: tag)
+                    score("ahead ours", oursAhead, nextTarget, typed: "")
+                    let aq = PredictionQuery(previousWords: prev, currentWord: ws[wi], followsNonSpaceBreak: false,
+                                             atWordStartAfterSpace: false, isVietnamese: true)
+                    let appAhead = PredictionEngine.merge(ours: la.predict(aq), quickType: qtAhead, phase: la.phase(of: aq), query: aq)
+                        .map(\.display).compactMap { d -> String? in
+                            let p = d.split(separator: " ").map(String.init)
+                            return p.count >= 2 && p[0].lowercased() == target ? p[1] : nil
+                        }
+                    score("ahead APP merge", appAhead, nextTarget, typed: "")
+                    score("ahead quicktype", qtAhead, nextTarget, typed: "")
+                }
+                for typed in ["", String(ws[wi].prefix(2)), String(ws[wi].prefix(3))] where typed.count < target.count {
+                    let phase = typed.isEmpty ? "next" : "mid\(typed.count)"
                     let ours = engine.predict(PredictionQuery(previousWords: prev, currentWord: typed, followsNonSpaceBreak: false,
                                                               atWordStartAfterSpace: typed.isEmpty, isVietnamese: true)).map(\.display)
                     let (qt, ms) = Self.quickType(prev.joined(separator: " ") + " " + typed, checker: checker, tag: tag)
@@ -306,6 +330,19 @@ final class PredictionLatencyBenchTests: XCTestCase {
                     score("\(phase) ours", ours, target, typed: typed)
                     score("\(phase) quicktype", qt, target, typed: typed)
                     score("\(phase) learned+quicktype", learned + qt, target, typed: typed)
+                    score("\(phase) quicktype+ours", qt + ours, target, typed: typed)
+                    let la2 = PredictionEngine(corpus: .shared, personal: personal, dictionary: VikeyDictionaryCompleter.shared, lookAhead: true)
+                    let q2 = PredictionQuery(previousWords: prev, currentWord: typed, followsNonSpaceBreak: false,
+                                             atWordStartAfterSpace: typed.isEmpty, isVietnamese: true)
+                    score("\(phase) APP merge", PredictionEngine.merge(ours: la2.predict(q2), quickType: qt, phase: la2.phase(of: q2), query: q2).map(\.display), target, typed: typed)
+                    score("\(phase) ours+quicktype", ours + qt, target, typed: typed)
+                    // interleave: best of each first
+                    var inter: [String] = []
+                    for i in 0..<3 { if i < ours.count { inter.append(ours[i]) }; if i < qt.count { inter.append(qt[i]) } }
+                    score("\(phase) ours/qt interleave", inter, target, typed: typed)
+                    var inter2: [String] = []
+                    for i in 0..<3 { if i < qt.count { inter2.append(qt[i]) }; if i < ours.count { inter2.append(ours[i]) } }
+                    score("\(phase) qt/ours interleave", inter2, target, typed: typed)
                 }
             }
         }

@@ -45,3 +45,18 @@ Người dùng chọn kiểu này sau bản đánh giá `docs/superpowers/review
 ## Enter
 
 Gõ Nhanh xử lý Enter ở đầu `keyboardCallback`, trước khối 4A+, và ẩn danh sách ngay tại đó. Vì vậy Enter nhận dòng được viết trong nhánh Enter ấy (`LEANKEYS-HOOK-BEGIN/END`). Mọi phím không phải ↓ ↑ Tab Enter Esc đều xoá dòng đang chọn trước khi xử lý gì khác (`PredictionController.clearSelection`). Nhờ vậy ↓ → ⌫ → Enter không nhận một dòng đã cũ.
+
+## Nguồn thứ hai: macOS QuickType (2026-11-28)
+
+Đo bằng `testOursVersusQuickType`, 600 vị trí; giữa hai lần chạy số đo lệch nhau khoảng ±4 điểm:
+
+| Trạng thái | LeanKeys một mình: ô đầu / 3 ô | App (gộp với QuickType): ô đầu / 3 ô |
+|---|---|---|
+| Sau dấu cách (từ kế tiếp) | 7 % / 14 % | **10,8 % / 20,3 %** |
+| Vừa gõ xong từ (đi trước một từ) | 5,5 % / 10 % | **9 % / 15 %** |
+| Đã gõ 2 chữ | 53–57 % / 68 % | 53–57 % / 66 % |
+| Đã gõ 3 chữ | 68–72 % / 75–81 % | 69–73 % / 76–81 % |
+
+- QuickType trả kết quả bất đồng bộ (p50 4,8 ms, p95 8,5 ms). Danh sách chờ QuickType tối đa 25 ms rồi mới hiện lần đầu, chạy song song với việc tìm vị trí con trỏ qua AX. Nếu QuickType trả lời muộn hơn, danh sách cập nhật thêm một lần.
+- Không hỏi QuickType khi đang gõ giữa URL hay mã, và không hỏi ở những app/ô đã bị loại trừ như ô mật khẩu. Chữ chỉ được gửi tới dịch vụ chính tả của macOS, chạy ngay trên máy này.
+- Đã sửa một lỗi của `c092ca0`: những tiền tố 2 chữ cũng là một từ (`đi` trong `điện`) bị gợi ý đi trước chiếm chỗ, làm độ chính xác ô đầu giữa từ tụt xuống 18 %. Giờ gợi ý đi trước được xếp dưới các gợi ý hoàn thành từ. Chỉ khi từ đã gõ dài từ 3 chữ trở lên thì gợi ý đi trước mới được xếp lên trước.

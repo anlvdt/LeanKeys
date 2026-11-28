@@ -110,6 +110,9 @@ public final class PredictionEngine {
     /// Stay one word ahead (spec 2026-11-28-prediction-dropdown): once the typed word is a whole word, offer
     /// "word + next word" rows, and suggest from the first letter instead of hiding until the second.
     public var lookAhead: Bool
+    /// Whether `word` is a whole corpus word (look-ahead may start).
+    public func isWholeWord(_ word: String) -> Bool { corpus.isWord(word) }
+
     /// Shortest typed prefix that gets suggestions (`minPrefixLength`, or 1 with `lookAhead`).
     public var minPrefix: Int { lookAhead ? 1 : Self.minPrefixLength }
 
@@ -131,6 +134,15 @@ public final class PredictionEngine {
         self.minExtensionContext = minExtensionContext
         self.personalExtensionOnly = personalExtensionOnly
         self.lookAhead = lookAhead
+    }
+
+    /// Whether `query` may get suggestions at all (the same gates as `predict`): not mid-URL, a word start after
+    /// Space with words before it, or a prefix of letters at least `minPrefix` long.
+    public func accepts(_ query: PredictionQuery) -> Bool {
+        guard !query.followsNonSpaceBreak else { return false }
+        if query.currentWord.isEmpty { return query.atWordStartAfterSpace && !query.previousWords.isEmpty }
+        let current = query.currentWord.precomposedStringWithCanonicalMapping
+        return current.count >= minPrefix && current.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" }
     }
 
     public func predict(_ query: PredictionQuery) -> [PredictionCandidate] {
@@ -325,7 +337,8 @@ public final class PredictionEngine {
                     insertion: text + (Self.endsWithSentencePunctuation(text) ? "" : " "),
                     deleteCount: deleteCount,
                     kind: next.kind == .word ? .phrase : .sentence,
-                    score: next.score + 100,
+                    // Below the word's own completions: many prefixes are words too ("đi" of "điện").
+                    score: next.score - 1000,
                     isPersonal: next.isPersonal
                 ))
             }
@@ -392,7 +405,7 @@ public final class PredictionEngine {
         return .word
     }
 
-    private static func endsWithSentencePunctuation(_ text: String) -> Bool {
+    static func endsWithSentencePunctuation(_ text: String) -> Bool {
         guard let last = text.last else { return false }
         return [".", "!", "?", ",", ";", ":"].contains(last)
     }

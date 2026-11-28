@@ -40,13 +40,16 @@ public final class PredictionController: ObservableObject {
     private let panel: CandidatePanelController
     private let onLearnerQueue: (@escaping () -> Void) -> Void
     private let onMain: (@escaping () -> Void) -> Void
+    private let quickType: AsyncPredictionSource?
+    /// How long a refresh waits for QuickType before showing our rows alone (a late answer still merges in).
+    static let quickTypeWait: TimeInterval = 0.025
 
     private weak var router: EngineRouter?
     private var shortcutsProvider: () -> [(trigger: String, replacement: String)] = { [] }
     private var injectText: (_ deleteCount: Int, _ chars: [Character]) -> Void = { _, _ in }
     private var contextProbe: () -> LearnContextProbe = LearnContextReader.probe
     private var secureField: (LearnContextProbe) -> Bool = LearnContextReader.isSecureField
-    private var caretAnchor: () -> CaretLocator.CaretAnchor? = { CaretLocator.currentAnchor() }
+    var caretAnchor: () -> CaretLocator.CaretAnchor? = { CaretLocator.currentAnchor() }
 
     private var appSwitchObserver: NSObjectProtocol?
     private let axQueue = DispatchQueue(label: "io.github.anlvdt.leankeys.predict.ax", qos: .userInteractive)
@@ -56,6 +59,20 @@ public final class PredictionController: ObservableObject {
     private var refreshToken: UInt64 = 0
     private var navigator = SuggestionListNavigator()
     private var trace = PredictionTrace()
+
+    /// One refresh waiting for its caret anchor and QuickType's answer (main thread only).
+    private struct Pending {
+        let token: UInt64
+        let query: PredictionQuery
+        let phase: PredictionPhase
+        let ours: [PredictionCandidate]
+        var quickType: [String]?
+        var waitedOut = false
+        var anchor: CaretLocator.CaretAnchor?
+        var shown: [String]?
+        var askedQuickType = false
+    }
+    private var pending: Pending?
     private var now: () -> CFAbsoluteTime = CFAbsoluteTimeGetCurrent
 
     public init(
@@ -65,8 +82,10 @@ public final class PredictionController: ObservableObject {
         dictionary: DictionaryCompleting? = VikeyDictionaryCompleter.shared,
         panel: CandidatePanelController = CandidatePanelController(),
         onLearnerQueue: @escaping (@escaping () -> Void) -> Void,
-        onMain: @escaping (@escaping () -> Void) -> Void
+        onMain: @escaping (@escaping () -> Void) -> Void,
+        quickType: AsyncPredictionSource? = nil
     ) {
+        self.quickType = quickType
         self.defaults = defaults
         self.personal = personal
         // Google-style rows: a word grows into the phrase the user typed before (learned phrases only).
@@ -243,17 +262,35 @@ public final class PredictionController: ObservableObject {
         )
         let candidates = engine.predict(query)
         trace.predicted()
-        guard !candidates.isEmpty else {
+        let askQuickType = quickType != nil && engine.accepts(query)
+        guard !candidates.isEmpty || askQuickType else {
             hide()
             return
         }
 
         refreshToken &+= 1
         let token = refreshToken
+        let phase = engine.phase(of: query)
+        pending = Pending(token: token, query: query, phase: phase, ours: candidates)
+        pending?.askedQuickType = askQuickType
+
+        if askQuickType, let quickType {
+            let text = PredictionEngine.quickTypeText(for: query, phase: phase)
+            quickType.request(text: text, vietnamese: isVietnamese) { [weak self] words in
+                DispatchQueue.main.async { self?.quickTypeArrived(words, token: token) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.quickTypeWait) { [weak self] in
+                guard let self, self.pending?.token == token else { return }
+                self.pending?.waitedOut = true
+                self.presentPending()
+            }
+        }
+
         let now = CFAbsoluteTimeGetCurrent()
         if let cached = lastAnchor, now - lastAnchorTime < 0.08 {
             trace.axCacheHit()
-            present(candidates: candidates, anchor: cached, token: token)
+            pending?.anchor = cached
+            presentPending()
             return
         }
 
@@ -269,13 +306,46 @@ public final class PredictionController: ObservableObject {
                 self.lastAnchor = resolved
                 self.lastAnchorTime = CFAbsoluteTimeGetCurrent()
                 guard let resolved else {
+                    self.pending = nil
                     self.panel.hide()
                     self.currentCandidates = []
                     return
                 }
-                self.present(candidates: candidates, anchor: resolved, token: token)
+                self.pending?.anchor = resolved
+                self.presentPending()
             }
         }
+    }
+
+    func quickTypeArrived(_ words: [String], token: UInt64) {
+        guard pending?.token == token else { return }
+        trace.quickTypeArrived()
+        pending?.quickType = words
+        presentPending()
+    }
+
+    /// Shows the pending refresh once its anchor is known and QuickType answered or `quickTypeWait` ran out. A late
+    /// QuickType answer updates the shown rows once.
+    private func presentPending() {
+        guard var p = pending, p.token == refreshToken, let anchor = p.anchor else { return }
+        let ready = !p.askedQuickType || p.quickType != nil || p.waitedOut
+        guard ready else { return }
+        let rows = p.quickType.map { PredictionEngine.merge(ours: p.ours, quickType: $0, phase: p.phase, query: p.query) } ?? p.ours
+        let texts = rows.map(\.display)
+        if p.shown == texts { return }
+        p.shown = texts
+        pending = p
+        guard !rows.isEmpty else {
+            if p.quickType != nil || !p.askedQuickType { hideKeepingPending() }
+            return
+        }
+        present(candidates: rows, anchor: anchor, token: p.token)
+    }
+
+    private func hideKeepingPending() {
+        currentCandidates = []
+        navigator.listChanged(count: 0, at: now())
+        panel.hide()
     }
 
     func present(candidates: [PredictionCandidate], anchor: CaretLocator.CaretAnchor, token: UInt64) {
@@ -372,6 +442,7 @@ public final class PredictionController: ObservableObject {
     public func hide() {
         pendingRefresh?.cancel()
         pendingRefresh = nil
+        pending = nil
         refreshToken &+= 1
         currentCandidates = []
         navigator.listChanged(count: 0, at: now())
@@ -390,7 +461,8 @@ extension PredictionController {
         return PredictionController(
             personal: personal,
             onLearnerQueue: { queue.async(execute: $0) },
-            onMain: { DispatchQueue.main.async(execute: $0) }
+            onMain: { DispatchQueue.main.async(execute: $0) },
+            quickType: QuickTypeSource.shared
         )
     }()
 }

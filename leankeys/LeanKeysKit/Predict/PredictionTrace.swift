@@ -22,6 +22,7 @@ struct PredictionTrace {
     private var predictMs: Double = 0
     private var ax = "?"
     private var dropped = 0
+    private var qt = "-"
 
     mutating func keyEvent() {
         guard Self.isOn else { return }
@@ -34,14 +35,16 @@ struct PredictionTrace {
     mutating func axCacheHit() { ax = "cache" }
     mutating func axResolved(ms: Double) { ax = String(format: "%.1f", ms) }
     mutating func axDropped() { dropped += 1 }
+    mutating func quickTypeArrived() { if Self.isOn { qt = String(format: "%.1f", (CFAbsoluteTimeGetCurrent() - refreshAt) * 1000) } }
 
     mutating func shown(showMs: Double, rows: Int) {
         guard Self.isOn else { return }
         let now = CFAbsoluteTimeGetCurrent()
         let start = tapAt > 0 ? tapAt : scheduledAt
-        DebugLog.appendLine(String(format: "[4A] tap→refresh=%.1f predict=%.2f ax=%@ show=%.1f total=%.1f dropped=%d rows=%d\n",
-                                   (refreshAt - start) * 1000, predictMs, ax, showMs, (now - start) * 1000, dropped, rows))
+        DebugLog.appendLine(String(format: "[4A] tap→refresh=%.1f predict=%.2f ax=%@ qt=%@ show=%.1f total=%.1f dropped=%d rows=%d\n",
+                                   (refreshAt - start) * 1000, predictMs, ax, qt, showMs, (now - start) * 1000, dropped, rows))
         dropped = 0
         ax = "?"
+        qt = "-"
     }
 }
