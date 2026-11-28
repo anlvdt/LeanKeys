@@ -336,6 +336,22 @@ Viết ngày 2026-11-15, viết lại ngày 2026-11-16 sau khi đo. Người dù
   - Gõ Nhanh chỉ được dùng cho VNI (gõ dấu bằng số, nên gần như không trùng với tiếng Anh) hoặc khi người dùng tự chọn.
   - Làm cho Gõ Nhanh phải sửa lõi Rust của repo gốc.
 
+### 12.2a ⌫⌫ rồi gõ chữ sau khi Vikey trả về tiếng Anh là sửa, không phải hoàn tác
+Viết ngày 2026-11-28, sau khi `tools/mixbench` đo chế độ `enbsbs`.
+
+- **Lỗi.** Gõ `test`, màn hình hiện "tét", và Space trả về "test ". Người dùng bấm ⌫⌫ để xoá Space và chữ cuối, rồi gõ lại. Vikey hiểu ⌫⌫ là hoàn tác: màn hình quay về "tét", gõ tiếp `t` ra "tétt".
+  - Gặp ở mọi từ tiếng Anh có phím dấu, phím biến đổi hay chữ đôi: `push` → púhh, `merge` → mẻgee, `traffic` → traficc.
+  - Bộ học 12.2 còn ghi một luật "giữ nguyên tét" từ lần hoàn tác ngoài ý muốn đó.
+- **Quy tắc.** Lần hoàn tác áp dụng khi Vikey đã trả về một từ tiếng Anh (chữ sau khi đổi là ASCII và khác chữ trước). Shim giữ báo hoàn tác đó lại, chờ phím kế tiếp:
+  - **Phím chữ** (có thể sau thêm vài ⌫): đây là sửa. Màn hình thành đúng như khi ⌫ chỉ là xoá thường: "test" bớt 1 chữ, cộng 1 chữ cho mỗi ⌫ thêm. Engine được nạp lại chữ đó ở tiếng Anh, rồi phím chữ được gõ tiếp. Bộ học không nhận báo hoàn tác.
+    - `test ⌫⌫t` → `test`; `test ⌫⌫s ` → `tess `; `test ⌫⌫⌫xt ` → `text `.
+  - **Phím khác** (Space, dấu câu, Return…), bấm chuột, chuyển app hay đổi ngôn ngữ: lần hoàn tác đứng, và bộ học nhận báo lúc đó.
+    - `I like its ⌫⌫ ` → `I like ít `.
+- **Không đổi:** ⌫⌫ sau khi Vikey đổi Anh → Việt (`cos` → `có`, đã có `keepSwitchBackUnlessEnglish`), và ⌫⌫ sau khi luật giữ nguyên (đổi ý, 12.2).
+- **Đánh đổi.** Ai hoàn tác về chữ Việt rồi muốn gõ thêm chữ vào chính từ đó (ví dụ một phím dấu khác) sẽ được chữ tiếng Anh. Trường hợp này hiếm hơn nhiều so với sửa chữ cuối.
+- **Đo (mixbench, chat_messages, seed 5).** `enbsbs` giảm từ 638 từ sai (EN 6.62%) xuống 44 (EN 0.30%); văn bản sạch là 41. Văn bản sạch, Return và mọi chế độ lỗi khác cho đầu ra giống hệt từng byte.
+- **Nơi xử lý.** Shim: `HeldUndo` và `editAfterUndo` trong `leankeys/VikeyShim/lk_vikey.cpp`. Test: `UndoShimTests`.
+
 ### 12.3 Cài đặt và bảo mật
 - **Bật sẵn, không có bước cài đặt.** Cả 12.1 và 12.2 đều bật mặc định.
 - **Trang Nâng cao có thẻ "Tự sửa và tự học" gồm:**
@@ -371,6 +387,7 @@ Viết ngày 2026-11-15, viết lại ngày 2026-11-16 sau khi đo. Người dù
 - **Thử tay:**
   - `hocjj` rồi ⌫ ra `học`, biểu tượng vẫn VI.
   - Gõ "its" trong câu tiếng Anh, ⌫⌫, lần sau trong cùng ngữ cảnh giữ "its".
+  - Gõ "test ", ⌫⌫, gõ "t": ra "test", không phải "tétt" (12.2a). Thử cả trong Chrome và Slack.
   - Gõ "cos" hai lần ở hai câu khác nhau, mỗi lần ⌫⌫, lần thứ ba giữ "cos".
   - Trong ô mật khẩu không học.
 

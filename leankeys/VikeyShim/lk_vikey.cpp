@@ -308,11 +308,16 @@ struct Veto {
 static Veto veto;
 static bool hasPendingUndo = false;
 static lk_undo pendingUndo;
-
-static void forgetFixes() {
-    hasLastFix = false;
-    veto = Veto();
-}
+// Spec 12.2a: Vikey's ⌫⌫ undo of an English word it put back at the break ("tét" -> "test ", ⌫⌫ shows "tét"; a
+// doubled letter: "trafic" -> "traffic "), held until the next key tells an undo from an edit (editAfterUndo): a
+// letter means the user was deleting the Space and the last letter to change the word; any other key, a reset or a
+// language change lets the undo stand, and only then does the learner hear of it.
+struct HeldUndo {
+    bool active = false;
+    Fix fix;
+    int backspaces = 0;                // further Backspaces after the undo
+};
+static HeldUndo heldUndo;
 
 static void copyWord(const std::u16string& w, uint16_t* out, int* length) {
     for (size_t i = 0; i < w.size(); i++) out[i] = (uint16_t)w[i];
@@ -332,6 +337,18 @@ static void queueUndo(const Fix& f, bool reverse) {
     pendingUndo.fix = toC(f);
     pendingUndo.reverse = reverse ? 1 : 0;
     hasPendingUndo = true;
+}
+
+// A held undo stands: the learner may take it now.
+static void releaseHeldUndo() {
+    if (heldUndo.active) queueUndo(heldUndo.fix, false);
+    heldUndo = HeldUndo();
+}
+
+static void forgetFixes() {
+    hasLastFix = false;
+    veto = Veto();
+    releaseHeldUndo();
 }
 
 // The fix Vikey made on this key, if Backspace can undo it: rememberFix (Driver.cpp) armed the undo on this very key
@@ -700,8 +717,52 @@ static void comeBackAfterDoubledKey(uint16_t key, int shift, int languageBefore,
     model.languageAfterLastKey = 1;
 }
 
+// A letter right after Vikey's ⌫⌫ undo of an English word it put back (`heldUndo`): the user was not undoing but
+// deleting the Space and the word's last letter (and one more letter per further Backspace) to change the word.
+// "test " ⌫⌫ shows "tét" and "t" would give "tétt"; plain Backspaces give "tes", and the letter goes on from it in
+// English, the word's language after the fix. `e` becomes the edit that puts that word on screen; the learner never
+// hears of the undo. false (nothing done) when the word on screen is not the undone word Backspace left.
+static bool editAfterUndo(double now, VKEdit& e) {
+    const HeldUndo held = heldUndo;
+    const std::u16string& typed = held.fix.after;
+    const size_t deleted = 1 + (size_t)held.backspaces;
+    const std::u16string word = currentWord();
+    const size_t shown = held.fix.before.size() > (size_t)held.backspaces ? held.fix.before.size() - held.backspaces : 0;
+    if (typed.size() <= deleted || word.size() != shown) return false;
+    const std::u16string kept = typed.substr(0, typed.size() - deleted);
+    heldUndo = HeldUndo();
+    const int languageBefore = vLanguage;
+    e = VKEdit();
+    e.deleteCount = (int)word.size();
+    e.text = kept;
+    applyToModel(e);
+    rebuildEngineWord(kept, 0, now);
+    e.languageChanged = vLanguage != languageBefore;
+    model.wordStartLanguage = 0;
+    model.lastKey = model.keyBefore = kNoKey;
+    model.lastKeyReplaced = false;
+    model.languageAfterLastKey = vLanguage;
+    model.wordBeforeLastKey.clear();
+    model.wordKeys = kept;
+    model.wordKeysKnown = true;
+    doubledKeyFlip = false;
+    return true;
+}
+
+static VKEdit pressUserKey(uint16_t macKeyCode, int shift, double now);
+
 // One key the user pressed: Vikey's edit with the shim's repairs, vetoes and undo bookkeeping.
 static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
+    if (heldUndo.active) {
+        VKEdit edit;
+        if (macKeyCode == KEY_DELETE) heldUndo.backspaces++;
+        else if (isLetterKey(macKeyCode) && editAfterUndo(now, edit)) return composeEdits(edit, pressUserKey(macKeyCode, shift, now));
+        else releaseHeldUndo();
+    }
+    return pressUserKey(macKeyCode, shift, now);
+}
+
+static VKEdit pressUserKey(uint16_t macKeyCode, int shift, double now) {
     const ScreenModel before = model;
     const bool backspace = macKeyCode == KEY_DELETE;
     VKEdit e;
@@ -730,7 +791,15 @@ static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
             model.wordKeysKnown = false;
         }
         if (driver->undos != undosBefore) {
-            if (hasLastFix) queueUndo(lastFix, false);
+            // An undo of an English word Vikey put back ("tét" -> "test", "trafic" -> "traffic") waits for the next
+            // key (editAfterUndo).
+            if (hasLastFix && isAscii(lastFix.after) && lastFix.after != lastFix.before) {
+                heldUndo = HeldUndo();
+                heldUndo.active = true;
+                heldUndo.fix = lastFix;
+            } else if (hasLastFix) {
+                queueUndo(lastFix, false);
+            }
             hasLastFix = false;
         }
         Fix fix;

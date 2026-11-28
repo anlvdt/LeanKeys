@@ -72,3 +72,85 @@ Số từ ra sai trên tổng số từ, kèm tỉ lệ sai ở phía bị chèn
 - Không chế độ nào có số từ sai tăng khi bật bản sửa; văn bản sạch cho đầu ra giống hệt.
 - Chat `dbl`: số từ tiếng Anh sai là 22 với Vikey và 24 với LeanKeys. 24 chính là mức của văn bản sạch: Vikey "đúng" thêm 2 từ tiếng Anh chỉ vì nó đã chuyển sang tiếng Anh ở từ tiếng Việt gõ lỗi ngay trước.
 - Bảng ở spec §12 đo với 50% số từ tiếng Việt (bản thử `typo2.py`), không phải 30%. Đổi tỉ lệ VN trong `typo.py` thành 0.5 thì harness này ra đúng các số đó trên chat: `dbl` VN 28.64% → 0.95%, `extra` 9.54% → 9.09%, `mid` 7.43% → 7.43%. Các chế độ EN (50%) trùng với spec ở cả hai cách.
+
+## Gõ kiểu chat: Return, mang trạng thái, ⌫⌫ sau Space (2026-11-28)
+
+Các bảng trên đều cho mỗi câu bắt đầu ở tiếng Việt và kết thúc bằng Space, nên không thấy ba lỗi xảy ra khi chat. `lk` và `vk` có thêm các cờ sau (không cờ nào thì đầu ra giống hệt từng byte bản cũ, trên cả hai kho):
+
+- `--end space|return|return-fix`: câu kết thúc bằng Space (mặc định) hay Return.
+  - `return`: như ô một dòng hoặc thanh địa chỉ. Vikey D62 để nguyên từ cuối như đã gõ.
+  - `return-fix` (chỉ `lk`): như ô AXTextArea, nơi LeanKeys cho Return chốt từ như Space (`lk_vikey_set_fix_at_return`).
+- `--chain`: cả kho là một cuộc chat. Việt/Anh mang sang câu sau. Sau Return chỉ reset ngữ cảnh gõ, như `VikeyEngine` làm trong app.
+- `--start-en`: câu đầu (hoặc mọi câu, khi không có `--chain`) bắt đầu ở tiếng Anh.
+- `--langs FILE`: ghi `V`/`E` cho ngôn ngữ lúc bắt đầu mỗi câu. Đưa file này cho `score.py --langs FILE` để tách lỗi theo ngôn ngữ đầu câu. `score.py --detail` tách riêng lỗi ở từ cuối câu.
+- `--undo-bad-fix` (chỉ `lk`): người gõ bấm ⌫⌫ ngay sau mỗi lần Vikey tự sửa làm hỏng từ (từ trước khi sửa đúng là đích), rồi gõ lại phím ngắt. Số đếm in ra stderr.
+
+`typo.py` có thêm hai chế độ:
+- `bsbs` (30% từ tiếng Việt) và `enbsbs` (50% từ tiếng Anh).
+- Ngay sau Space kết thúc từ, người gõ bấm ⌫ hai lần (xoá Space và chữ cuối), rồi gõ lại chữ đó và Space. Đây là một lần sửa, không phải hoàn tác.
+- Chỉ áp dụng cho từ có chữ cuối trên màn hình chính là phím cuối (`coong` → công; không áp dụng cho `laf` → là).
+
+```sh
+cd tools/mixbench   # from the repository root; lk, vk, mine.tsv, chat.tsv built as above
+for o in "--end space" "--end return" "--chain --end return"; do
+  ./vk ${=o} --langs chat.langs < chat.tsv > chat.out; python3 -I score.py chat.tsv chat.out "Vikey $o" --langs chat.langs
+done
+for o in "--end return" "--end return-fix" "--chain --end return" "--chain --end return-fix"; do
+  ./lk ${=o} --langs chat.langs < chat.tsv > chat.out; python3 -I score.py chat.tsv chat.out "LeanKeys $o" --langs chat.langs
+done
+for m in bsbs enbsbs; do
+  python3 -I typo.py chat.tsv $m 5 > chat.$m.tsv
+  ./lk < chat.$m.tsv > chat.$m.out; python3 -I score.py chat.$m.tsv chat.$m.out "LeanKeys $m"
+done
+./lk --undo-bad-fix < chat.tsv > /dev/null
+```
+
+(`${=o}` là cách zsh tách chuỗi thành nhiều đối số; với bash thì viết `$o`.)
+
+### Kết quả (LeanKeys 1.10, Vikey v1.0.34 `79547aa`)
+
+Return và mang trạng thái: số từ ra sai trên tổng số từ, kèm số từ cuối câu sai trên tổng số câu.
+
+| Cấu hình | mine.txt (437 từ, 40 câu) | Từ cuối sai | chat_messages (20.676 từ, 1.869 câu) | Từ cuối sai |
+|---|---|---|---|---|
+| Space, mỗi câu reset (như bảng cũ) | 1 (0.23%) | 0 | 41 (0.20%) | 5 (0.27%) |
+| Return, ô một dòng (`--end return`; Vikey và LeanKeys như nhau) | 6 (1.37%) | 5 (12.5%) | **169 (0.82%)** | **132 (7.06%)** |
+| Return trong AXTextArea (`lk --end return-fix`) | 1 (0.23%) | 0 | 41 (0.20%) | 5 (0.27%) |
+| `--chain --end return` | 6 (1.37%) | 5 | 169 (0.82%) | 132 |
+| `lk --chain --end return-fix` | 1 (0.23%) | 0 | 42 (0.20%) | 5 |
+| `--start-en`, Space | 1 (0.23%) | 0 | 38 (0.18%) | 5 (0.27%) |
+
+- **Lỗi lớn nhất là từ cuối tin nhắn khi Return không chốt từ.** Lỗi tăng gấp 4 lần (0.20% → 0.82%), và 132 trên 169 lỗi là từ cuối câu.
+  - LeanKeys sửa đúng chỗ này, nhưng chỉ ở ô mà `FocusedField.allowsFixAtReturn` nhận là AXTextArea.
+  - Bộ đo không biết Slack, Messenger, Zalo hay Discord có lọt vào nhánh đó không. Phải thử tay, hoặc ghi lại vai trò AX của từng app.
+- **Mang trạng thái sang câu sau gần như không thêm lỗi** (41 → 42 với `return-fix`; 169 → 169 với `return`).
+  - Với `--chain --end return`, 408 câu bắt đầu ở tiếng Anh, sai 0.93%. 1.461 câu bắt đầu ở tiếng Việt, sai 0.79%.
+  - Vậy "kẹt tiếng Anh" có lỗi đo được chủ yếu là do từ cuối không được chốt, không phải do câu sau bắt đầu sai.
+- **`--undo-bad-fix`: 1.254 lần Vikey tự sửa trên chat, 0 lần làm hỏng từ** (mine.txt: 23 và 0).
+  - Mọi lỗi trên văn bản sạch là từ Vikey **để nguyên** ở ngôn ngữ sai (`cos implement`, `nos ra sao`, `bể`/beer, `lát`/last).
+  - ⌫⌫ không cứu được các lỗi này, vì không có lần sửa nào để hoàn tác. Phải có phím "đổi từ vừa gõ" (đề xuất 2 của báo cáo gõ trộn).
+
+⌫⌫ ngay sau Space để sửa chữ cuối (seed 5):
+
+| Chế độ | mine.txt | chat_messages |
+|---|---|---|
+| Không sửa (văn bản sạch) | 1 (0.23%) | 41 (0.20%) |
+| `bsbs` từ tiếng Việt (16 / 907 lần sửa) | 1 (VN 0.36%) | 42 (VN 0.16%) |
+| `enbsbs` từ tiếng Anh (70 / 3.885 lần sửa), trước bản sửa §12.2a | **14 (EN 8.07%)** | **638 (EN 6.62%)** |
+| `enbsbs`, sau bản sửa §12.2a | 1 (EN 0.00%) | 44 (EN 0.30%) |
+
+- **`enbsbs` là lỗi mới tìm ra, và đúng là ví dụ `test` → `tét` người dùng hay than.**
+  - Phím Telex `test` hiện "tét", rồi Space khôi phục thành "test".
+  - ⌫⌫ ngay sau đó bị Vikey hiểu là **hoàn tác lần khôi phục**: màn hình quay về "tét", gõ lại `t` thành "tétt".
+  - Gặp ở mọi từ tiếng Anh có phím dấu hoặc phím biến đổi: `push` → púhh, `merge` → mẻgee, `window` → ưindowư, `database` → dâtbasee.
+  - `--no-fix` cho cùng số: đây là hành vi của Vikey, không phải của bản sửa 12.1.
+  - Bộ học ⌫⌫ (UndoLearning) còn có thể ghi một luật "giữ như gõ" từ lần hoàn tác ngoài ý muốn này. Bộ đo không cài bộ lọc học nên không đếm được.
+- **Đã sửa ngày 2026-11-28** trong shim (spec §12.2a): sau lần hoàn tác đó, phím chữ được hiểu là sửa từ. `enbsbs` trên chat giảm từ 638 (EN 6.62%) xuống **44 (EN 0.30%)**; trên mine.txt giảm từ 14 xuống 1. Mọi chế độ khác và văn bản sạch cho đầu ra giống hệt từng byte. Phần lớn lỗi còn lại là các từ trùng ở cả hai ngôn ngữ mà Vikey để nguyên dạng tiếng Việt (`mix` → mĩ, ⌫⌫ xoá "ĩ").
+- `bsbs` phía tiếng Việt gần như vô hại: từ tiếng Việt hiếm khi bị sửa ở Space, nên ⌫⌫ là ⌫ thường.
+- **Giới hạn của chế độ này:**
+  - Người gõ thật thường xoá rồi gõ một chữ *khác*, chứ không gõ lại đúng chữ cũ.
+  - Không có khoảng thời gian giữa hai lần ⌫.
+  - Tỉ lệ 50% là giả định, không phải số đo hành vi.
+  - Con số chỉ cho thấy độ lớn của vùng va chạm, không phải tần suất gặp thật.
+
+Gõ Nhanh (`gn`) không có các cờ mới. Nó không có trạng thái Việt/Anh mang sang câu sau, và ESC là phím hoàn tác của nó, không phải ⌫⌫.
