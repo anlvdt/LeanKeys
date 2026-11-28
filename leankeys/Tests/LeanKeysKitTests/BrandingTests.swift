@@ -45,6 +45,7 @@ final class BrandingTests: XCTestCase {
     func testBrandingValues() {
         XCTAssertEqual(LeanBranding.name, "LeanKeys")
         XCTAssertEqual(LeanBranding.repository, "https://github.com/anlvdt/LeanKeys")
+        XCTAssertEqual(LeanBranding.repositoryLabel, "github.com/anlvdt/LeanKeys")
         XCTAssertEqual(LeanBranding.releasesAPI, "https://api.github.com/repos/anlvdt/LeanKeys/releases")
         XCTAssertEqual(LeanBranding.issuesURL, "https://github.com/anlvdt/LeanKeys/issues")
     }

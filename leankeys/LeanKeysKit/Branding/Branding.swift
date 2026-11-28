@@ -8,6 +8,10 @@ public enum LeanBranding {
     /// GitHub's list endpoint, not /latest, so UpdateChecker can pick the highest version.
     public static let releasesAPI = "https://api.github.com/repos/anlvdt/LeanKeys/releases"
     public static let issuesURL = repository + "/issues"
+    /// The repository as shown on the About page, without the scheme: "github.com/anlvdt/LeanKeys".
+    public static var repositoryLabel: String {
+        repository.replacingOccurrences(of: "https://", with: "")
+    }
 }
 
 /// LeanKeys' own version and the upstream tags it is built from, read from Resources/Versions.json.
