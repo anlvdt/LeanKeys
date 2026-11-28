@@ -47,8 +47,8 @@ public final class LearnedNames: LearnedNameLookup {
     }
 
     private let store: LearnStore?
-    /// Guarded by `lock`: a "Xoá tất cả" that erased an unreadable file takes the store's new key.
-    private var key: SymmetricKey
+    /// Guarded by `lock`: nil until `record` needs a digest, so a fresh install with learning off touches no disk.
+    private var key: SymmetricKey?
     private let titles: Set<String>
     private let isDictionaryWord: (String) -> Bool
     private let now: () -> Date
@@ -77,7 +77,7 @@ public final class LearnedNames: LearnedNameLookup {
         if let hmacKey, hmacKey.count == 32 {
             key = SymmetricKey(data: hmacKey)
         } else {
-            key = SymmetricKey(size: .bits256)
+            key = nil
         }
         self.titles = Set(titles.map(Self.normalized))
         self.isDictionaryWord = isDictionaryWord
@@ -143,6 +143,7 @@ public final class LearnedNames: LearnedNameLookup {
     public func record(_ sighting: Sighting) {
         let (form, id, afterTitle, anywhere) = (sighting.form, sighting.id, sighting.afterTitle, sighting.anywhere)
         let namesChanged: Bool = lock.withLock {
+            let key = hmacKeyLocked()
             let digest = Self.digest(id, key: key)
             let date = now()
             if var name = learned[id] {
@@ -241,9 +242,10 @@ public final class LearnedNames: LearnedNameLookup {
                     lock.withLock { eraseQueued = false }
                     return
                 }
-                // The erase removed the store's HMAC key too: digest new hidden counts with its new one, so they
-                // still match after a restart (review M2).
-                let newKey = (store as? LearnKeyProvider).flatMap { try? $0.hmacKey() }
+                // The erase removed the store's HMAC key too: if we already held one, fetch the new one so new
+                // hidden counts still match after a restart (review M2).
+                let hadKey = lock.withLock { key != nil }
+                let newKey = hadKey ? (store as? LearnKeyProvider).flatMap { try? $0.hmacKey() } : nil
                 lock.withLock {
                     eraseQueued = false
                     persistent = true
@@ -251,6 +253,9 @@ public final class LearnedNames: LearnedNameLookup {
                         key = SymmetricKey(data: newKey)
                         // Counts made since `removeAll` are digests under the deleted key: they can never match
                         // again (re-review Minor 2).
+                        pending = [:]
+                    } else if !hadKey {
+                        key = nil
                         pending = [:]
                     }
                 }
@@ -298,6 +303,20 @@ public final class LearnedNames: LearnedNameLookup {
 
     private static func normalized(_ word: String) -> String {
         word.precomposedStringWithCanonicalMapping.lowercased()
+    }
+
+    /// Called under `lock` when `record` needs to digest a word. Creates/loads the store's HMAC key lazily so
+    /// an unused or unconsented instance never creates key files on disk.
+    private func hmacKeyLocked() -> SymmetricKey {
+        if let key { return key }
+        let made: SymmetricKey
+        if let data = try? (store as? LearnKeyProvider)?.hmacKey(), data.count == 32 {
+            made = SymmetricKey(data: data)
+        } else {
+            made = SymmetricKey(size: .bits256)
+        }
+        key = made
+        return made
     }
 
     private static func digest(_ text: String, key: SymmetricKey) -> String {

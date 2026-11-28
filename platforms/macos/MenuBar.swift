@@ -556,8 +556,8 @@ class MenuBarController: NSObject, NSWindowDelegate {
                 UserDefaults.standard.set(true, forKey: SettingsKey.permissionGranted)
                 UserDefaults.standard.set(true, forKey: SettingsKey.hasCompletedOnboarding)
                 let task = Process()
-                task.launchPath = "/bin/sh"
-                task.arguments = ["-c", "sleep 0.5 && open \"\(Bundle.main.bundlePath)\""]
+                task.executableURL = URL(fileURLWithPath: "/bin/sh")
+                task.arguments = ["-c", "sleep 0.5 && open \"$1\"", "_", Bundle.main.bundlePath]
                 try? task.run()
                 NSApp.terminate(nil)
             }
@@ -731,7 +731,7 @@ class MenuBarController: NSObject, NSWindowDelegate {
             guard self?.pendingRestart?.isCancelled == false else { return }
             let task = Process()
             task.executableURL = URL(fileURLWithPath: "/bin/sh")
-            task.arguments = ["-c", "sleep 0.5 && open '\(path)'"]
+            task.arguments = ["-c", "sleep 0.5 && open \"$1\"", "_", path] // LEANKEYS-HOOK: settings-engine
             try? task.run()
             NSApp.terminate(nil)
         }

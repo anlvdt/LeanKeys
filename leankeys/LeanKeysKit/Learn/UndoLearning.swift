@@ -87,6 +87,9 @@ public final class UndoLearning: ObservableObject {
     /// Names learned from the user's own capitals (spec 17.1.3).
     public let learnedNames: LearnedNames
 
+    /// Lookup for `AutoCapitalizer`: returns learned names only while `learning` is on (spec 2026-11-28-privacy-opt-in §1, §3).
+    var activeLearnedNames: LearnedNameLookup { GatedLearnedNames(owner: self) }
+
     /// `learnedNames.names` for the settings card (spec 17.3), most recently used first; updated on main.
     @Published public private(set) var names: [LearnedName]
 
@@ -266,11 +269,12 @@ public final class UndoLearning: ObservableObject {
     /// name made it. Key-handling thread; the record runs on the background queue, as in `afterPress`.
     func capitalizationUndone(_ text: String, previous: String, learnedName: String?) {
         // On the queue, after any sighting of the name already there (review M1). It only removes data: no
-        // secure-field check.
+        // secure-field check. Nothing runs when learning is off (spec 2026-11-28-privacy-opt-in).
+        guard learning else { return }
         if let learnedName {
             onRecordQueueUnlessCleared { [learnedNames] in learnedNames.undone(word: learnedName) }
         }
-        guard learning, let probe = includedProbe() else { return }
+        guard let probe = includedProbe() else { return }
         // A secret-shaped word before the phrase is never kept as its context (ruling R14).
         let previous = Exclusions.looksLikeSecret(previous) ? "" : previous
         record(probe) { [book] in book.record(before: text, previous: previous, reverse: false) }
@@ -358,20 +362,31 @@ public final class UndoLearning: ObservableObject {
         learnedNames.flush()
     }
 
-    /// Secure Input or an excluded app, from the key-thread probe; the password-field check comes on the queue.
+    /// Secure Input, unknown app (`bundleID == nil`), or an excluded app, from the key-thread probe;
+    /// the password-field check comes on the queue. Fail closed when bundleID is unknown.
     private func isExcluded(_ context: LearnContextProbe) -> Bool {
         if context.secureInput { return true }
-        guard let bundleID = context.bundleID else { return false }
+        guard let bundleID = context.bundleID else { return true }
         return Exclusions.isExcludedByDefault(bundleID)
             || (defaults.stringArray(forKey: ShortcutSuggestionsModel.excludedAppsKey) ?? []).contains(bundleID)
     }
 }
 
+private final class GatedLearnedNames: LearnedNameLookup {
+    private weak var owner: UndoLearning?
+    init(owner: UndoLearning) { self.owner = owner }
+    func name(after previous: String?, word: String) -> String? {
+        guard let owner, owner.learning else { return nil }
+        return owner.learnedNames.name(after: previous, word: word)
+    }
+}
+
 public extension LearnedNames {
     /// The app's learned names, in `learned-names.bin` with their own Keychain item (spec 17.1.3).
+    /// `hmacKey` is nil so the key file on disk is only created once the user consents and a name is recorded.
     static let shared: LearnedNames = {
         let store = KeychainEncryptedFileStore(url: namesURL, keychainService: "io.github.anlvdt.leankeys.names")
-        return LearnedNames(store: store, hmacKey: try? store.hmacKey(), titles: Set(ProperNounData.bundled.titles),
+        return LearnedNames(store: store, hmacKey: nil, titles: Set(ProperNounData.bundled.titles),
                             isDictionaryWord: LearnedNames.isDictionaryWord)
     }()
 

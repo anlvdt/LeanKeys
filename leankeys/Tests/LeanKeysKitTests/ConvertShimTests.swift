@@ -493,4 +493,15 @@ final class ConvertShimTests: XCTestCase {
         XCTAssertEqual(takeEvent()?.kind, 2)
         XCTAssertNil(takeEvent())
     }
+
+    func testLongWordDoesNotOverflowFixBuffer() {
+        let l = line(1)
+        let longWord = String(repeating: "bcdfg", count: 14) // 70 chars > kFixWordMax (64)
+        l.type(longWord)
+        l.type("⌃")
+        XCTAssertEqual(l.lastConvertResult, 0)
+        l.type(" ")
+        XCTAssertNil(takeEvent())
+        XCTAssertEqual(l.type("cos "), longWord + " có ")
+    }
 }

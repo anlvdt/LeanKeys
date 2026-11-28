@@ -342,8 +342,7 @@ enum PhraseDetector {
         let ns = text as NSString
         let ranges = pieces ?? Self.pieces(in: text).map(\.0)
         var words = 0
-        let wordRegex = try! NSRegularExpression(pattern: #"\S+"#)
-        for m in wordRegex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+        for m in Self.wordPattern.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             words += 1
             // The word without the punctuation around it ("an@vidu.vn." ends a sentence): covered by a recognised
             // piece (email, phone, tax code, address), it is that piece, not a password.

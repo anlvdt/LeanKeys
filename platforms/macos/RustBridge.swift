@@ -41,6 +41,9 @@ private enum Log {
         _enabled = DebugLog.isOnAfterExpiry() // LEANKEYS-HOOK: debug-log
         if _enabled == true {
             startPerfLogging()
+        } else { // LEANKEYS-HOOK: debug-log
+            perfTimer?.invalidate() // LEANKEYS-HOOK: debug-log
+            perfTimer = nil // LEANKEYS-HOOK: debug-log
         }
         return _enabled!
     }
@@ -48,6 +51,10 @@ private enum Log {
     /// Call to refresh enabled state (e.g., on app activation)
     static func refresh() {
         _enabled = nil
+        if !DebugLog.isOnAfterExpiry() { // LEANKEYS-HOOK: debug-log
+            perfTimer?.invalidate() // LEANKEYS-HOOK: debug-log
+            perfTimer = nil // LEANKEYS-HOOK: debug-log
+        } // LEANKEYS-HOOK: debug-log
     }
 
     /// Increment keystroke counter (for perf stats)
@@ -56,21 +63,27 @@ private enum Log {
     }
 
     private static func write(_ msg: @autoclosure () -> String) {
-        guard isEnabled, let handle = FileHandle(forWritingAtPath: logPath) else { return }
+        guard isEnabled else { return } // LEANKEYS-HOOK: debug-log
         let now = CFAbsoluteTimeGetCurrent()
         let secs = Int(now) % 86400
         let ms = Int((now - floor(now)) * 1000)
         let ts = String(format: "%02d:%02d:%02d.%03d", secs / 3600, (secs / 60) % 60, secs % 60, ms)
-        handle.seekToEndOfFile()
-        handle.write("[\(ts)] \(msg())\n".data(using: .utf8)!)
-        handle.closeFile()
+        DebugLog.appendLine("[\(ts)] \(msg())\n") // LEANKEYS-HOOK: debug-log
     }
 
     /// Start periodic performance logging (every 5 min)
     private static func startPerfLogging() {
         guard perfTimer == nil else { return }
         logPerf() // Log immediately on start
-        perfTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in logPerf() }
+        // LEANKEYS-HOOK-BEGIN: debug-log
+        perfTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
+            guard DebugLog.isOnAfterExpiry() else {
+                refresh()
+                return
+            }
+            logPerf()
+        }
+        // LEANKEYS-HOOK-END
     }
 
     /// Log memory/thread stats
@@ -635,6 +648,7 @@ class RustBridge {
         ime_init()
         isInitialized = true
     }
+    static func refreshDebugLog() { Log.refresh() } // LEANKEYS-HOOK: debug-log
 
     /// Process a keystroke. Returns (backspace, chars, keyConsumed) or nil if no action.
     ///

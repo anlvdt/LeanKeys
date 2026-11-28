@@ -60,8 +60,7 @@ block() {
 
 notify() {
   (( notify )) || return 0
-  local msg="${1//\"/\\\"}"
-  osascript -e "display notification \"$msg\" with title \"LeanKeys\"" >/dev/null 2>&1 || true
+  osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "LeanKeys"' -e 'end run' "$1" >/dev/null 2>&1 || true
 }
 
 g() { git -C "$repo" "$@"; }

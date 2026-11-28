@@ -57,6 +57,10 @@ EOF
 cat > "$bin/codesign" <<'FAKECS'
 #!/bin/zsh
 print -r -- "codesign $*" >> "$FAKE_LOG"
+if [[ "$1" == "--verify" ]]; then
+  [[ -n "${FAKE_CODESIGN_VERIFY_FAIL:-}" ]] && exit 1
+  exit 0
+fi
 print -r -- "${FAKE_CODESIGN_REQ:-designated => identifier \"io.github.anlvdt.leankeys\" and certificate leaf[subject.CN] = \"LeanKeys Self-Signed\"}"
 exit 0
 FAKECS
@@ -175,6 +179,16 @@ test_debug_keep_in_dmg_refused() {
   check $0 "names debug.keep" out_has "debug.keep" &&
   check $0 "no local tag" not local_tag v1.1 &&
   check $0 "not pushed" not remote_tag v1.1
+}
+
+test_invalid_codesign_refused() {
+  setup badsig
+  ready 1.1
+  FAKE_CODESIGN_VERIFY_FAIL=1 LEANKEYS_RELEASE_ASSUME_YES=1 run_release
+  check $0 "exit 1" is_rc 1 &&
+  check $0 "names codesign" out_has "codesign --verify" &&
+  check $0 "no local tag" not local_tag v1.1 &&
+  check $0 "DMG detached" log_has "hdiutil detach"
 }
 
 test_missing_dmg_exits_1() {
@@ -402,7 +416,7 @@ test_developer_id_release_passes() {
   check $0 "release created" log_has "gh release create v1.1"
 }
 
-for t in test_no_ready_exits_1 test_dry_run_prints_plan test_privacy_gate_refuses test_debug_keep_in_dmg_refused test_missing_dmg_exits_1 \
+for t in test_no_ready_exits_1 test_dry_run_prints_plan test_privacy_gate_refuses test_debug_keep_in_dmg_refused test_invalid_codesign_refused test_missing_dmg_exits_1 \
   test_existing_local_tag_refused test_existing_remote_tag_refused \
   test_failure_cleans_up test_first_release_creates_repo test_not_confirmed_aborts \
   test_piped_yes_without_tty_refuses test_existing_origin_disables_actions_before_push \

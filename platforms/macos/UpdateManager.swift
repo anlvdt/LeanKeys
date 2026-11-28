@@ -33,6 +33,7 @@ class UpdateManager: NSObject, ObservableObject {
     private var backgroundTimer: Timer?
     private var idleInstallTimer: Timer? // LEANKEYS-HOOK: branding
     private var popoverInstallRequested = false // LEANKEYS-HOOK: branding
+    private var isInstalling = false // LEANKEYS-HOOK: branding
 
     private let checkInterval: TimeInterval = 60 * 60 // 1 hour
     private let dmgKey = "gonhanh.update.dmgPath"
@@ -46,8 +47,14 @@ class UpdateManager: NSObject, ObservableObject {
            FileManager.default.fileExists(atPath: path)
         {
             let version = UserDefaults.standard.string(forKey: versionKey) ?? "?"
-            state = .readyToInstall(dmgPath: URL(fileURLWithPath: path))
-            pendingVersion = version
+            if SafeInstaller.isNewer(version, than: AppMetadata.version) { // LEANKEYS-HOOK: branding
+                state = .readyToInstall(dmgPath: URL(fileURLWithPath: path)) // LEANKEYS-HOOK: branding
+                pendingVersion = version // LEANKEYS-HOOK: branding
+            } else { // LEANKEYS-HOOK: branding
+                try? FileManager.default.removeItem(atPath: path) // LEANKEYS-HOOK: branding
+                UserDefaults.standard.removeObject(forKey: dmgKey) // LEANKEYS-HOOK: branding
+                UserDefaults.standard.removeObject(forKey: versionKey) // LEANKEYS-HOOK: branding
+            } // LEANKEYS-HOOK: branding
         }
     }
 
@@ -130,6 +137,7 @@ class UpdateManager: NSObject, ObservableObject {
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: .main)
         downloadTask = session.downloadTask(with: info.downloadURL)
         downloadTask?.resume()
+        session.finishTasksAndInvalidate() // LEANKEYS-HOOK: branding
     }
 
     /// Mount DMG, copy .app to /Applications, relaunch
@@ -217,6 +225,7 @@ class UpdateManager: NSObject, ObservableObject {
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: .main)
         downloadTask = session.downloadTask(with: info.downloadURL)
         downloadTask?.resume()
+        session.finishTasksAndInvalidate() // LEANKEYS-HOOK: branding
         // Don't update state to .downloading — keep it silent
     }
 
@@ -255,10 +264,25 @@ extension UpdateManager: URLSessionDownloadDelegate {
         }
     }
 
+    // LEANKEYS-HOOK-BEGIN: branding
+    func urlSession(
+        _: URLSession,
+        task _: URLSessionTask,
+        willPerformHTTPRedirection _: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        if let url = request.url, SafeInstaller.isTrustedDownloadURL(url) {
+            completionHandler(request)
+        } else {
+            completionHandler(nil)
+        }
+    }
+    // LEANKEYS-HOOK-END
     func urlSession(_: URLSession, downloadTask _: URLSessionDownloadTask, didWriteData _: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         // Only show progress if user triggered download manually
-        if case .downloading = state {
-            state = .downloading(progress: Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+        if case .downloading = state, totalBytesExpectedToWrite > 0 { // LEANKEYS-HOOK: branding
+            state = .downloading(progress: min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1)) // LEANKEYS-HOOK: branding
         }
     }
 
@@ -655,6 +679,8 @@ extension UpdateManager {
     /// popover's checks: a stably signed update, newer than this app, carrying this app's designated requirement when
     /// this app is stably signed. An update with a different identity is dropped, not kept for the click.
     private func installSafely(_ dmgPath: URL, silent: Bool) {
+        guard !isInstalling else { return }
+        isInstalling = true
         let installedApp = URL(fileURLWithPath: Bundle.main.bundlePath)
         let bundleID = Bundle.main.bundleIdentifier
         let requireSameIdentity = silent || UpdateInstallPolicy.installsSilently()
@@ -665,6 +691,7 @@ extension UpdateManager {
                                                     currentVersion: currentVersion)
             DispatchQueue.main.async {
                 guard let self else { return }
+                self.isInstalling = false
                 if case let .prepared(prepared) = preparation,
                    SafeInstaller.launchSwap(prepared, dmg: dmgPath, installedApp: installedApp)
                 {
@@ -764,6 +791,8 @@ extension UpdateManager {
     /// signed app the update must carry the same identity; from an ad-hoc app it must at least be stably signed (the
     /// §15.3 move). Any refusal drops the update and shows one line in the popover.
     private func installFromPopover(_ dmgPath: URL) {
+        guard !isInstalling else { return }
+        isInstalling = true
         idleInstallTimer?.invalidate() // One install at a time: no unattended attempt alongside this one.
         idleInstallTimer = nil
         let installedApp = URL(fileURLWithPath: Bundle.main.bundlePath)
@@ -776,6 +805,7 @@ extension UpdateManager {
                                                     currentVersion: currentVersion)
             DispatchQueue.main.async {
                 guard let self else { return }
+                self.isInstalling = false
                 if case let .prepared(prepared) = preparation,
                    SafeInstaller.launchSwap(prepared, dmg: dmgPath, installedApp: installedApp)
                 {

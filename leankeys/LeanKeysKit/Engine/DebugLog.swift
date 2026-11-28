@@ -74,10 +74,27 @@ public enum DebugLog {
         }
     }
 
+    /// Maximum log size on disk (10 MB) before truncating so a long-lived debug.keep log cannot fill the disk.
+    public static let maxBytes: UInt64 = 10 * 1024 * 1024
+
+    /// Appends `line` using throwing FileHandle APIs (safe against Obj-C exceptions on disk-full) and truncates
+    /// if the file reached `maxBytes`.
+    public static func appendLine(_ line: String, path: String = path, maxBytes: UInt64 = maxBytes) {
+        guard let data = line.data(using: .utf8),
+              let handle = FileHandle(forWritingAtPath: path) else { return }
+        defer { try? handle.close() }
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+           let size = attrs[.size] as? UInt64, size >= maxBytes {
+            try? handle.truncate(atOffset: 0)
+        }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: data)
+    }
+
     /// Empties the log, keeping it on.
     public static func clear() {
         guard isOn, let handle = FileHandle(forWritingAtPath: path) else { return }
-        handle.truncateFile(atOffset: 0)
-        handle.closeFile()
+        try? handle.truncate(atOffset: 0)
+        try? handle.close()
     }
 }

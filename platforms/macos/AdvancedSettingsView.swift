@@ -7,7 +7,7 @@ import SwiftUI
 struct AdvancedSettingsView: View {
     @ObservedObject var appState: AppState
     @State private var showAddApp = false
-    @State private var logEnabled = DebugLog.isOn // LEANKEYS-HOOK: debug-log
+    @State private var logEnabled = DebugLog.isOnAfterExpiry() // LEANKEYS-HOOK: debug-log
 
     var body: some View {
         ScrollView(showsIndicators: false) {

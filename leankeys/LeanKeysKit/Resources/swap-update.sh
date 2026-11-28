@@ -15,13 +15,22 @@ finish() {
     [ ! -e "$DEST" ] && [ -e "$DEST.old" ] && mv "$DEST.old" "$DEST"
     hdiutil detach "$MOUNT" -quiet
     rm -f "$DMG"
+    case "$0" in
+        "${TMPDIR:-/tmp}"/leankeys-swap-*.sh|*/leankeys-swap-*.sh)
+            rm -f "$0" ;;
+    esac
     open "$DEST"
 }
 # A signal exits through the EXIT trap, so finish runs exactly once.
 trap finish EXIT
 trap 'exit 1' INT TERM HUP
 
-while kill -0 "$PID" 2>/dev/null; do sleep 0.2; done
+WAIT_COUNT=0
+while kill -0 "$PID" 2>/dev/null; do
+    WAIT_COUNT=$((WAIT_COUNT + 1))
+    [ "$WAIT_COUNT" -ge 150 ] && exit 1
+    sleep 0.2
+done
 
 # A previous run that died between the two moves left only .old: put it back before clearing leftovers.
 if [ ! -e "$DEST" ] && [ -e "$DEST.old" ]; then mv "$DEST.old" "$DEST"; fi

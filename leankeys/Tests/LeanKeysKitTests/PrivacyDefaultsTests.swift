@@ -114,4 +114,63 @@ final class PrivacyDefaultsTests: XCTestCase {
         XCTAssertFalse(learning.learning)
         XCTAssertFalse(learning.privacyNoticePending)
     }
+
+    // MARK: Audit regressions
+
+    func testLearnedNamesDoNotApplyWhileLearningIsOff() {
+        let names = LearnedNames(store: nil, hmacKey: nil, titles: Set(ProperNounData.bundled.titles),
+                                 isDictionaryWord: { _ in false })
+        names.observe(word: "Shopee", previous: nil)
+        names.observe(word: "Shopee", previous: nil)
+        XCTAssertEqual(names.names.map(\.form), ["Shopee"])
+
+        let learning = UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults, probe: {
+            LearnContextProbe(bundleID: "com.apple.TextEdit", pid: nil, secureInput: false, now: Date())
+        }, secureField: { _ in false }, names: names, onRecordQueue: { $0() })
+
+        XCTAssertFalse(learning.learning)
+        XCTAssertNil(learning.activeLearnedNames.name(after: nil, word: "shopee"),
+                     "existing learned names must not apply while learning is off")
+
+        _ = learning.setLearning(true)
+        learning.confirmLearningConsent()
+        XCTAssertEqual(learning.activeLearnedNames.name(after: nil, word: "shopee"), "Shopee")
+    }
+
+    func testFreshInstallWritesNoStoreOrKeyFilesBeforeConsent() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let undoURL = dir.appendingPathComponent("undo-rules.bin")
+        let namesURL = dir.appendingPathComponent("learned-names.bin")
+        let book = UndoRuleBook(store: KeychainEncryptedFileStore(url: undoURL, keychainService: "test.undo"))
+        let namesStore = KeychainEncryptedFileStore(url: namesURL, keychainService: "test.names")
+        let names = LearnedNames(store: namesStore, hmacKey: nil, titles: Set(ProperNounData.bundled.titles),
+                                 isDictionaryWord: { _ in false })
+        let learning = UndoLearning(book: book, defaults: defaults, probe: {
+            LearnContextProbe(bundleID: "com.apple.TextEdit", pid: nil, secureInput: false, now: Date())
+        }, secureField: { _ in false }, names: names, onRecordQueue: { $0() })
+
+        learning.userCapitalized("Shopee", previous: nil)
+        learning.capitalizationUndone("cap:shopee", previous: "", learnedName: nil)
+        learning.flush()
+
+        let contents = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+        XCTAssertTrue(contents.isEmpty, "expected no files written before consent, found \(contents)")
+    }
+
+    func testNilBundleIDIsExcludedFromLearning() {
+        defaults.set(true, forKey: UndoLearning.learningKey)
+        let names = LearnedNames(store: nil, hmacKey: nil, titles: Set(ProperNounData.bundled.titles),
+                                 isDictionaryWord: { _ in false })
+        let learning = UndoLearning(book: UndoRuleBook(store: nil), defaults: defaults, probe: {
+            LearnContextProbe(bundleID: nil, pid: nil, secureInput: false, now: Date())
+        }, secureField: { _ in false }, names: names, onRecordQueue: { $0() })
+
+        XCTAssertTrue(learning.learning)
+        learning.userCapitalized("Shopee", previous: nil)
+        learning.userCapitalized("Shopee", previous: nil)
+        XCTAssertTrue(names.names.isEmpty, "unknown app (nil bundleID) must fail closed")
+    }
 }

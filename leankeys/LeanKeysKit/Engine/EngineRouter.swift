@@ -526,7 +526,7 @@ public final class EngineRouter {
                 let learning = makeUndoLearning()
                 undoLearning = learning
                 learning.install()
-                capitalizer = AutoCapitalizer(learned: learning.learnedNames)
+                capitalizer = AutoCapitalizer(learned: learning.activeLearnedNames)
             }
             vikey?.setVietnamese(vietnamese)
             vikey?.setAutoSwitch(autoSwitch)

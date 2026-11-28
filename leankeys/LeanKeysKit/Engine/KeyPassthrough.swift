@@ -194,7 +194,7 @@ public enum KeyPassthrough {
     // MARK: Chromium and Electron
 
     private static let preparedLock = NSLock()
-    private static var preparedPIDs: Set<pid_t> = []
+    private static var preparedProcesses: Set<String> = []
 
     /// Electron apps (Slack, Discord, Bitwarden…) build their web accessibility tree only once an assistive client
     /// asks for it, so until then a sign-in box reads as a plain web area and its words are never seen. Sets
@@ -202,7 +202,8 @@ public enum KeyPassthrough {
     public static func prepare(_ app: NSRunningApplication?) {
         guard let app, let url = app.bundleURL else { return }
         let pid = app.processIdentifier
-        let fresh = preparedLock.withLock { preparedPIDs.insert(pid).inserted }
+        let key = "\(pid)-\(app.launchDate?.timeIntervalSince1970 ?? 0)"
+        let fresh = preparedLock.withLock { preparedProcesses.insert(key).inserted }
         guard fresh else { return }
         DispatchQueue.global(qos: .utility).async {
             let electron = url.appendingPathComponent("Contents/Frameworks/Electron Framework.framework")

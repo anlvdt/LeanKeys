@@ -178,11 +178,12 @@ public enum SafeInstaller {
                                   pid: Int32 = ProcessInfo.processInfo.processIdentifier) -> Bool
     {
         // Run a copy: the bundle holding the original is about to be replaced.
-        let script = FileManager.default.temporaryDirectory.appendingPathComponent("leankeys-swap-update.sh")
+        let script = FileManager.default.temporaryDirectory.appendingPathComponent("leankeys-swap-\(UUID().uuidString).sh")
         do {
             guard let source = swapScriptURL else { throw CocoaError(.fileNoSuchFile) }
             try? FileManager.default.removeItem(at: script)
             try FileManager.default.copyItem(at: source, to: script)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/bash")
             process.arguments = [script.path, prepared.app.path, installedApp.path, prepared.mountPoint.path, dmg.path, String(pid)]

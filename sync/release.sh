@@ -187,6 +187,8 @@ ${log:-- (không có commit mới)}"
   hdiutil attach -nobrowse -readonly -noverify -mountpoint "$mnt" "$dmg" >/dev/null || die "không mở được $dmg."
   attached=1
   [[ -x "$mnt/LeanKeys.app/Contents/MacOS/LeanKeys" ]] || die "$dmg không chứa LeanKeys.app chạy được."
+  codesign --verify --deep --strict "$mnt/LeanKeys.app" >/dev/null 2>&1 ||
+    die "$dmg có chữ ký không hợp lệ (codesign --verify lỗi)."
   # Refuse an ad-hoc build: its requirement is a cdhash, so every user would lose the Accessibility grant.
   # A stable one names a certificate leaf (self-signed or Developer ID) or the Apple anchor.
   local req; req="$(codesign -dr - "$mnt/LeanKeys.app" 2>&1 || true)"

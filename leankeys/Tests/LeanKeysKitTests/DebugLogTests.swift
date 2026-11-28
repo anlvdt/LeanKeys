@@ -68,4 +68,16 @@ final class DebugLogTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: file))
         XCTAssertEqual(DebugLog.keepPath, (DebugLog.path as NSString).deletingLastPathComponent + "/debug.keep")
     }
+
+    func testAppendLineCapsSizeAtMaxBytes() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("debug.log").path
+        FileManager.default.createFile(atPath: file, contents: Data(repeating: 0x41, count: 100))
+
+        DebugLog.appendLine("line\n", path: file, maxBytes: 100)
+        let data = try Data(contentsOf: URL(fileURLWithPath: file))
+        XCTAssertEqual(String(data: data, encoding: .utf8), "line\n")
+    }
 }

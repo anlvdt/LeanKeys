@@ -148,6 +148,7 @@ final class PhraseLearnerTests: XCTestCase {
         XCTAssertTrue(Exclusions.looksLikeSecret("P4ssw0rd!"))
         XCTAssertTrue(Exclusions.looksLikeSecret("Abc@12345"))
         XCTAssertTrue(Exclusions.looksLikeSecret("Matkhau.2024"), "a dotted password is no web address")
+        XCTAssertTrue(Exclusions.looksLikeSecret("https://api.example.com/?token=Abc123456"), "query tokens must not bypass secret check")
         XCTAssertFalse(Exclusions.looksLikeSecret("shopee.vn/abc-xyz"))
     }
 

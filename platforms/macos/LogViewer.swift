@@ -17,6 +17,7 @@ struct LogToggleButton: View {
                 } else {
                     DebugLog.setOn(false) // LEANKEYS-HOOK: debug-log
                 }
+                RustBridge.refreshDebugLog() // LEANKEYS-HOOK: debug-log
             }
     }
 }
@@ -172,9 +173,14 @@ struct LogViewerSection: View {
 
         guard size != lastFileSize else { return }
 
-        // Tail-read: only read new bytes since last poll
+        // Tail-read: only read new bytes since last poll (cap initial read to 64 KB) // LEANKEYS-HOOK: debug-log
         guard let handle = FileHandle(forReadingAtPath: path) else { return }
         defer { handle.closeFile() }
+        // LEANKEYS-HOOK-BEGIN: debug-log
+        if lastFileSize == 0, size > 65_536 {
+            lastFileSize = size - 65_536
+        }
+        // LEANKEYS-HOOK-END
         handle.seek(toFileOffset: lastFileSize)
         let newData = handle.readDataToEndOfFile()
         lastFileSize = size

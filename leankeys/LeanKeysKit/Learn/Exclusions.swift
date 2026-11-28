@@ -38,7 +38,7 @@ public enum Exclusions {
         let core = trimmedWord(word)
         guard core.count >= 6 else { return false }
         let lower = core.lowercased()
-        if lower.range(of: #"^(https?://)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(/\S*)?$"#, options: .regularExpression) != nil { return false }
+        if lower.range(of: #"^(https?://)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(/[a-z0-9._~/%+-]*)?$"#, options: .regularExpression) != nil { return false }
         if lower.range(of: #"^\d[\d.,]*(đ|d|k|vnđ|vnd|usd|tr|đồng)$"#, options: .regularExpression) != nil { return false }
         if lower.range(of: #"^\d{1,2}h(\d{1,2})?(p|ph)?$"#, options: .regularExpression) != nil { return false }
         var letters = false, digits = false, special = false

@@ -353,8 +353,9 @@ struct LastConvert {
 static LastConvert lastConvert;
 
 static void copyWord(const std::u16string& w, uint16_t* out, int* length) {
-    for (size_t i = 0; i < w.size(); i++) out[i] = (uint16_t)w[i];
-    *length = (int)w.size();
+    const size_t n = w.size() <= kFixWordMax ? w.size() : kFixWordMax;
+    for (size_t i = 0; i < n; i++) out[i] = (uint16_t)w[i];
+    *length = (int)n;
 }
 
 static lk_fix toC(const Fix& f) {
@@ -845,7 +846,11 @@ static bool renderTelex(const std::u16string& keys, std::u16string& shown) {
         vAutoSwitchRequest = -1;
         vKeyHandleEvent(vKeyEvent::Keyboard, vKeyEventState::KeyDown, p.first, p.second ? 1 : 0, false);
         const Uint32 caps = p.second ? CAPS_MASK : 0;
-        if (HookState.code == vDoNothing) { screen[len++] = (char16_t)keyCodeToCharacter(p.first | caps); continue; }
+        if (HookState.code == vDoNothing) {
+            if (len >= (int)(sizeof(screen) / sizeof(screen[0]))) { ok = false; break; }
+            screen[len++] = (char16_t)keyCodeToCharacter(p.first | caps);
+            continue;
+        }
         len -= HookState.backspaceCount;
         if (len < 0 || len + HookState.newCharCount + 1 > (int)(sizeof(screen) / sizeof(screen[0]))) { ok = false; break; }
         for (int c = HookState.newCharCount - 1; c >= 0; c--) {
@@ -926,9 +931,17 @@ static bool decideConvert(const std::u16string& target, const std::u16string& ke
 // event (kind 1), held for the next key.
 static bool convertWord(const std::u16string& target, const std::u16string& keys, const std::u16string& breaks,
                         bool hold, double now, VKEdit& e) {
+    if (target.size() > kFixWordMax || keys.size() > kFixWordMax) {
+        if (breaks.empty()) rebuildEngineWord(target, vLanguage, now);
+        return false;
+    }
     std::u16string newWord;
     int newLanguage = 0;
     if (!decideConvert(target, keys, breaks, now, newWord, newLanguage)) return false;
+    if (newWord.size() > kFixWordMax) {
+        if (breaks.empty()) rebuildEngineWord(target, vLanguage, now);
+        return false;
+    }
     const int languageBefore = vLanguage;
     LastConvert done;
     done.active = true;
@@ -1067,7 +1080,7 @@ static bool convertLastWord(double now, VKEdit& e) {
             for (size_t k = 0; k < 26; k++) if (kLetterKeys[k] == p.first) keys += (char16_t)((p.second ? 'A' : 'a') + k);
         }
     }
-    if (keys.empty()) return false;
+    if (keys.empty() || keys.size() > kFixWordMax) return false;
     return convertWord(target, keys, breaks, hold, now, e);
 }
 
@@ -1155,7 +1168,12 @@ static VKEdit pressUserKey(uint16_t macKeyCode, int shift, double now) {
             if (wordStarted) { model.wordKeys.clear(); model.wordKeysKnown = true; }
             for (size_t k = 0; k < 26; k++) {
                 if (kLetterKeys[k] != macKeyCode) continue;
-                model.wordKeys += (char16_t)((shift ? 'A' : 'a') + k);
+                if (model.wordKeys.size() >= kFixWordMax) {
+                    model.wordKeysKnown = false;
+                    model.wordKeys.clear();
+                } else if (model.wordKeysKnown) {
+                    model.wordKeys += (char16_t)((shift ? 'A' : 'a') + k);
+                }
             }
         } else if (backspace) {
             model.wordKeysKnown = false;
@@ -1413,6 +1431,7 @@ int lk_vikey_types_as_is(const char* letters) {
         vAutoSwitchRequest = -1;
         vKeyHandleEvent(vKeyEvent::Keyboard, vKeyEventState::KeyDown, key, 0, false);
         if (HookState.code == vDoNothing) {
+            if (len >= (int)(sizeof(screen) / sizeof(screen[0]))) { ok = false; break; }
             screen[len++] = (char16_t)keyCodeToCharacter(key);
             continue;
         }
