@@ -154,3 +154,70 @@ Return và mang trạng thái: số từ ra sai trên tổng số từ, kèm s�
   - Con số chỉ cho thấy độ lớn của vùng va chạm, không phải tần suất gặp thật.
 
 Gõ Nhanh (`gn`) không có các cờ mới. Nó không có trạng thái Việt/Anh mang sang câu sau, và ESC là phím hoàn tác của nó, không phải ⌫⌫.
+
+## ⌃⌫ đổi từ vừa gõ (2026-11-28)
+
+`lk` có thêm ba cờ để đo phím "đổi từ vừa gõ" (`lk_vikey_convert_last_word`) và bộ học luật `convert` (spec `2026-11-28-convert-last-word-design.md`). Không cờ nào thì đầu ra giống hệt từng byte bản trước: so bằng `cmp` với `lk` build từ `e19d871` (main) trên `mine.tsv`, `chat.tsv`, 8 chế độ `typo.py` seed 5, và các cờ `--no-fix`, `--end`, `--chain`, `--start-en`, `--undo-bad-fix` (64 cặp, 0 khác).
+
+- `--convert-wrong`: người gõ bấm ⌃⌫ **một lần** khi từ vừa chốt hiện khác đích (so như `score.py`: không phân biệt hoa thường và chỗ đặt dấu). Kiểm ở phím ngắt của từ (`Space , . ; ? ! ) ] " '`; chữ số, `-` và `/` không chốt từ). Với `--end return`, từ cuối được kiểm ngay trước Return. Với `return-fix` thì không kiểm, vì người gõ tin Return sẽ chốt từ. Đếm ra stderr: `presses` (số lần bấm), `fixed` (từ bằng đích ngay sau lần bấm), `still wrong`.
+- `--learn`: bộ luật trong tiến trình với ngưỡng của spec §12.2.
+  - Luật có ngữ cảnh (từ đứng trước không rỗng) áp dụng sau 1 sự kiện, không ngữ cảnh sau 2 sự kiện cùng chữ.
+  - Hoàn tác ngược xoá luật của chữ đó và chặn tới khi có thêm 2 sự kiện cùng loại.
+  - Hai bảng `keep` và `convert` riêng; ghi một loại cho (từ đứng trước, chữ) thì xoá loại kia.
+  - Nuôi bằng `lk_vikey_take_undo` sau mỗi lần bấm; trả lời cả bộ lọc `keep` (`lk_vikey_set_fix_filter`) lẫn bộ lọc `convert`. Luật `convert` khoá theo **phím thô**.
+  - Cùng `--convert-wrong` thì in số lần bấm ⌃⌫ mỗi 500 tin.
+- `--learn-direction` (thử nghiệm, không phải thiết kế): như `--learn` nhưng luật `convert` khoá theo phím thô **và chiều** (về tiếng Anh hay về Telex).
+
+```sh
+cd tools/mixbench   # from the repository root; lk, mine.tsv, chat.tsv built as above
+for c in mine chat; do for o in "" "--chain --end return-fix" "--end return" "--chain --end return"; do
+  echo "== $c $o"
+  ./lk ${=o} < $c.tsv > $c.out;                         python3 -I score.py $c.tsv $c.out "sạch"
+  ./lk ${=o} --convert-wrong < $c.tsv > $c.out;         python3 -I score.py $c.tsv $c.out "--convert-wrong"
+  ./lk ${=o} --convert-wrong --learn < $c.tsv > $c.out; python3 -I score.py $c.tsv $c.out "--convert-wrong --learn"
+  ./lk ${=o} --convert-wrong --learn-direction < $c.tsv > $c.out
+done; done
+```
+
+### Kết quả (LeanKeys 1.10, Vikey v1.0.34 `79547aa`)
+
+Số từ ra sai (tỉ lệ). Mỗi ô là một lần chạy cả kho.
+
+| Cấu hình | mine.txt sạch | mine `--convert-wrong` | chat sạch | chat `--convert-wrong` | chat `--convert-wrong --learn` |
+|---|---|---|---|---|---|
+| Space, mỗi câu reset | 1 (0.23%) | 1 (0.23%), 0 lần bấm | 41 (0.20%) | **13 (0.06%)** | 13 (0.06%) |
+| `--chain --end return-fix` | 1 (0.23%) | 1 (0.23%), 0 lần bấm | 42 (0.20%) | **16 (0.08%)** | 16 (0.08%) |
+| `--end return` | 6 (1.37%) | **1 (0.23%)**, 5/5 sửa được | 169 (0.82%) | **14 (0.07%)** | 14 (0.07%) |
+| `--chain --end return` | 6 (1.37%) | **1 (0.23%)** | 169 (0.82%) | **14 (0.07%)** | 14 (0.07%) |
+
+Số lần bấm ⌃⌫ trên chat (tổng, trong ngoặc: sửa được / còn sai sau khi bấm):
+
+| Cấu hình | `--convert-wrong` | `--convert-wrong --learn` | `--convert-wrong --learn-direction` |
+|---|---|---|---|
+| Space, mỗi câu reset | 52 (46 / 6) | 57 (51 / 6) | **41** (35 / 6) |
+| `--chain --end return-fix` | 50 (45 / 5) | 57 (52 / 5) | **40** (35 / 5) |
+| `--end return` | 177 (171 / 6) | 208 (202 / 6) | **167** (161 / 6) |
+| `--chain --end return` | 179 (173 / 6) | 211 (205 / 6) | **168** (162 / 6) |
+
+Số lần bấm theo từng khối 500 tin (chat, 1.869 tin, khối cuối 369 tin):
+
+| Cấu hình | `--learn` | `--learn-direction` |
+|---|---|---|
+| Space | 10 · 18 · 14 · 15 | 9 · 14 · 8 · 10 |
+| `--end return` | 52 · 49 · 60 · 47 | 48 · 39 · 45 · 35 |
+
+- **⌃⌫ xoá gần hết lỗi còn lại và không làm hỏng từ nào.** So từng từ với bản sạch cùng cấu hình: chat Space có 28 từ sai thành đúng, 0 từ đúng thành sai, 13 từ vẫn sai. Chat `--end return`: 155 sai thành đúng, 0 đúng thành sai.
+  - Chat Return: từ cuối không được chốt là lỗi lớn nhất (169 từ sai). ⌃⌫ kéo về 14, ngang mức Space.
+  - Công thức "số từ sai = số từ sai bản sạch trừ số lần sửa được" không khớp (41 − 46): 18 trong 46 từ trông sai ở phím ngắt nhưng đúng khi gõ xong (Vikey đổi sau đó). Người gõ thật cũng sẽ bấm ở các từ đó.
+- **13 từ vẫn sai trên chat Space.**
+  - 6 từ đã bấm mà ⌃⌫ không dựng lại được: chữ ngoài từ điển Telex thường (`pâté`, `Mbappé`, `Lumière`, `bthường`, `tượo`).
+  - 7 từ không bấm vì phép đo không thấy chúng sai ở một phím ngắt: từ nối bằng `-` hoặc `/` (`air-con`), hoặc Vikey đổi từ **sau** phím ngắt, khi từ kế tiếp được gõ (`Bên marketing` ra `Been marketing` trên mine.txt, 1 từ).
+- **Bộ học theo thiết kế hiện tại (luật khoá theo phím thô, không có chiều) không làm giảm số lần bấm, mà tăng 10–18%** (Space 52 lên 57, Return 177 lên 208).
+  - Mỗi khối 500 tin vẫn bấm 10–18 lần (Space) hoặc 47–60 lần (Return), không giảm dần.
+  - Nguyên nhân: nhiều cặp trùng nhau giữa hai ngôn ngữ (`cos` có/cos, `nos` nó/nos, `last` lát/last, `this` thí/this). Luật học từ một chiều (ví dụ `last` về tiếng Anh, 2 lần) cũng chạy khi Vikey để chữ ở chiều ngược lại, nên đổi nhầm sang tiếng Việt. Người gõ phải bấm ⌃⌫ để huỷ (sự kiện `kind = 2`): 8 lần huỷ trên 45 sự kiện (Space), 33 trên 171 (Return).
+  - Khoá thêm chiều (`--learn-direction`) thì chỉ còn 1 lần huỷ. Số lần bấm giảm 21% (Space 52 xuống 41) và 6% (Return 177 xuống 167) so với không học. Số từ sai cuối cùng không đổi.
+  - Mức giảm nhỏ vì chat_messages hầu như không lặp lại cặp (từ đứng trước, chữ). Người gõ thật lặp lại cùng từ nhiều hơn, nhưng bộ đo này không cho thấy điều đó.
+- **Giới hạn:**
+  - Người gõ lý tưởng: nhìn đúng chỗ, bấm đúng một lần, không bấm nhầm, không dùng ⌫⌫. Cả chat chỉ có 1 sự kiện `keep`.
+  - Không có thời gian giữa các phím.
+  - `mine.txt` chỉ có 5 lần bấm nên không nói được gì về bộ học.
