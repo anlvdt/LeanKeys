@@ -44,6 +44,9 @@ public final class UndoLearning: ObservableObject {
     /// The rules worth showing (`UndoRuleBook.rules`), most recently used first.
     @Published public private(set) var rules: [UndoRule]
 
+    /// The pinned words ("Thêm từ giữ nguyên…"), sorted, as pasted.
+    @Published public private(set) var pinnedWords: [String]
+
     /// Spec 12.1: ⌫ right after a doubled key gives the Vietnamese word back.
     @Published public var doubleKeyFix: Bool {
         didSet {
@@ -106,6 +109,7 @@ public final class UndoLearning: ObservableObject {
         learnedNames = names
         self.names = names.names
         rules = book.rules
+        pinnedWords = book.pinnedWords
         doubleKeyFix = defaults.object(forKey: Self.doubleKeyFixKey) as? Bool ?? true
         learning = defaults.object(forKey: Self.learningKey) as? Bool ?? true
         autoCapitalize = defaults.object(forKey: Self.autoCapitalizeKey) as? Bool ?? true
@@ -113,6 +117,7 @@ public final class UndoLearning: ObservableObject {
         book.onChange = { [weak self] in
             guard let self else { return }
             rules = self.book.rules
+            pinnedWords = self.book.pinnedWords
         }
         names.onChange = { [weak self] in
             guard let self else { return }
@@ -245,6 +250,12 @@ public final class UndoLearning: ObservableObject {
     }
 
     public func remove(_ rule: UndoRule) { book.remove(rule) }
+
+    /// Pins pasted words, one per line (`UndoRuleBook.pin`): how many lines were added and skipped.
+    @discardableResult
+    public func pin(_ lines: [String]) -> (added: Int, skipped: Int) { book.pin(lines) }
+
+    public func unpin(_ word: String) { book.unpin(word) }
 
     public func remove(_ name: LearnedName) { learnedNames.remove(name) }
 

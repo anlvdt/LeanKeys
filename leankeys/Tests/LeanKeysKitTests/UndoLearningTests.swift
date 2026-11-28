@@ -682,9 +682,9 @@ final class UndoLearningTests: XCTestCase {
     func testCardCopy() {
         // Copy audit C2–C6: titles start with a word (VoiceOver), say what they fix, and the lists say how they fill.
         XCTAssertEqual(UndoLearningSection.doubleKeyFixTitle, "Sửa lỗi bấm đúp phím dấu")
-        XCTAssertEqual(UndoLearningSection.learningTitle, "Nhớ từ bạn giữ nguyên")
+        XCTAssertEqual(UndoLearningSection.learningTitle, "Nhớ từ bạn sửa")
         XCTAssertEqual(UndoLearningSection.strayEnterTitle, #"Bỏ phím \ ] ' lỡ bấm cùng Enter"#)
-        XCTAssertEqual(UndoLearningSection.listTitle, "Từ giữ nguyên")
+        XCTAssertEqual(UndoLearningSection.listTitle, "Từ đã học")
         XCTAssertEqual(UndoLearningSection.namesTitle, "Tên đã học")
         for subtitle in [UndoLearningSection.doubleKeyFixSubtitle, UndoLearningSection.learningSubtitle,
                          UndoLearningSection.autoCapitalizeSubtitle, UndoLearningSection.strayEnterSubtitle] {
@@ -695,7 +695,43 @@ final class UndoLearningTests: XCTestCase {
             XCTAssertTrue(title.first?.isLetter == true, title)
         }
         XCTAssertTrue(UndoLearningSection.emptyText.contains("⌫⌫"))
+        XCTAssertTrue(UndoLearningSection.emptyText.contains("⌃⌫"))
+        XCTAssertEqual(UndoLearningSection.emptyText, "Chưa có. Bấm ⌫⌫ hoặc ⌃⌫ ngay sau một từ sai để thêm.")
+        XCTAssertEqual(UndoLearningSection.pinButtonTitle, "Thêm từ giữ nguyên…")
         XCTAssertFalse(UndoLearningSection.removeAllConfirmMessage.isEmpty)
+    }
+
+    func testKindLabels() {
+        XCTAssertEqual(UndoLearningSection.kindLabel(.keep), "giữ như gõ")
+        XCTAssertEqual(UndoLearningSection.kindLabel(.convert), "đổi")
+    }
+
+    func testConvertRuleDisplayTextAndHelp() {
+        let date = Date(timeIntervalSince1970: 0)
+        let toRaw = UndoRule(text: "beer", previous: "", count: 2, lastUsed: date, kind: .convert, toRaw: true)
+        let toTelex = UndoRule(text: "cos", previous: "", count: 2, lastUsed: date, kind: .convert, toRaw: false)
+        XCTAssertEqual(UndoLearningSection.displayText(toRaw), "beer")
+        XCTAssertEqual(UndoLearningSection.displayText(toTelex), "cos")
+        XCTAssertEqual(UndoLearningSection.convertHelp(toRaw), "beer → kiểu gõ thô")
+        XCTAssertEqual(UndoLearningSection.convertHelp(toTelex), "cos → Telex")
+        XCTAssertNil(UndoLearningSection.convertHelp(UndoRule(text: "its", previous: "", count: 2, lastUsed: date)))
+    }
+
+    func testPinResultLine() {
+        XCTAssertEqual(UndoLearningSection.pinResultLine(added: 3, skipped: 1), "Đã thêm 3 từ, bỏ 1 dòng.")
+    }
+
+    func testModelPinsPublishAndUnpin() {
+        let model = UndoLearning.preview()
+        XCTAssertEqual(model.pinnedWords, [])
+        let result = model.pin(["Beer", "x", "beer", "cos"])
+        XCTAssertEqual(result.added, 2)
+        XCTAssertEqual(result.skipped, 2)
+        settle(model)
+        XCTAssertEqual(model.pinnedWords, ["Beer", "cos"])
+        model.unpin("beer")
+        settle(model)
+        XCTAssertEqual(model.pinnedWords, ["cos"])
     }
 
     func testCapitalizeAndStrayEnterDefaultOnAndPersist() {
