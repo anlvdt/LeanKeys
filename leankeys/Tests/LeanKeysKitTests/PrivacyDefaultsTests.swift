@@ -35,6 +35,7 @@ final class PrivacyDefaultsTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: PredictionController.enabledKey), "Gợi ý từ & câu tiếp theo is off")
         XCTAssertFalse(defaults.bool(forKey: PredictionController.learnKey), "Học gợi ý câu is off until the user agrees")
         XCTAssertFalse(defaults.bool(forKey: PredictionController.learnConsentKey))
+        XCTAssertFalse(LeanSettings(defaults: defaults).advancedTelex, "Telex nâng cao is off on fresh install")
     }
 
     func testDebugLogKeepFileIsNotShipped() {

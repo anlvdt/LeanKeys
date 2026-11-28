@@ -45,6 +45,10 @@ Phần dưới đây là những gì LeanKeys tự làm thêm quanh hai lõi đ�
 - **Gõ được địa danh Tây Nguyên.** Đắk Lắk, Đăk Lăk, Krông Búk, Krông Pắc, Cư M'gar, Đắk R'Lấp… ra đúng, kể cả khi gõ dấu sau chữ k (`Ddawks`).
 - **Tự viết hoa tên riêng.** `tooi owr haf nooij` ra "tôi ở Hà Nội", `nguyeenx vawn an` ra "Nguyễn Văn An". LeanKeys học thêm những tên bạn tự viết hoa từ hai lần trở lên. Bấm ⌫ ngay sau khi viết hoa sai thì chữ trở về thường, và LeanKeys nhớ điều đó.
 - **Bỏ phím lỡ bấm cùng Enter.** Một `\` hay `]` gõ dính ngay trước Enter trong ô chat được bỏ đi, không bị gửi kèm tin nhắn.
+- **Gợi ý từ, cụm từ, câu tiếp theo kiểu Laban Key** (tắt sẵn, bạn tự bật). Hiện tối đa 3 gợi ý ngay cạnh con trỏ khi vừa gõ xong từ hoặc đang gõ dở (`Tab` chọn nhanh, `⌥1`–`⌥3` hoặc bấm chuột, `Esc` để ẩn). Tùy chọn bật tự học cá nhân (mã hoá trên máy) để gợi ý sát giọng văn riêng.
+- **Kéo dài chữ trong tin nhắn.** Gõ `nhéee`, `hảaa`, `áaaa`, `ôiii`, `ơiii` giữ nguyên dấu tiếng Việt khi bạn nhấn giữ hoặc lặp nguyên âm cuối.
+- **Telex nâng cao kiểu Laban Key** (tuỳ chọn ở Cài đặt › Nâng cao › Lõi gõ, tắt sẵn): `cc→ch`, `gg→gi`, `kk→kh`, `nn→ng`, `pp→ph`, `qq→qu`, `tt→th` ở đầu từ.
+- **Tắt nhanh theo ứng dụng & Bộ công cụ chữ.** Ô nổi trên thanh menu có nút tắt nhanh 1 chạm cho ứng dụng đang dùng và trình đơn **Công cụ chữ** kiểu UniKey (bỏ dấu, đổi HOA/thường, chuyển mã TCVN3/VNI Windows trên clipboard khi bạn bấm).
 - **Gợi ý gõ tắt** (tắt sẵn, bạn tự bật). Cụm bạn gõ lại từ 3 lần trong 30 ngày, như địa chỉ, số điện thoại, mã số thuế, được gợi ý thành gõ tắt; bạn bấm Thêm hoặc Bỏ qua.
 - **Gõ tắt chạy với cả lõi Vikey**, theo đúng quy tắc chữ hoa của Gõ Nhanh: `vn` → "Việt Nam", `VN` → "VIỆT NAM".
 

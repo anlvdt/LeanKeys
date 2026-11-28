@@ -20,6 +20,13 @@ public final class EngineSettingsModel: ObservableObject {
         }
     }
 
+    @Published public var advancedTelex: Bool {
+        didSet {
+            guard advancedTelex != oldValue else { return }
+            router.advancedTelex = advancedTelex
+        }
+    }
+
     /// The Vikey-only note shows under "Tự động" only: with "Chỉ dùng Gõ Nhanh" every Gõ Nhanh setting works.
     public var showsVikeyNote: Bool { selected == .vikey }
 
@@ -36,6 +43,7 @@ public final class EngineSettingsModel: ObservableObject {
         self.router = router
         self.onEngineChanged = onEngineChanged
         selected = router.selected
+        advancedTelex = router.advancedTelex
         // Gõ Nhanh's method picker calls RustBridge.setMethod (and so the router) before it writes UserDefaults,
         // so a defaults change is the cue to re-render with the router's current fallback.
         defaultsObserver = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
@@ -102,6 +110,18 @@ public struct EngineSettingsSection: View {
                     WarningLine(reason)
                         .padding(.leading, 20)
                 }
+                Divider().padding(.vertical, 4)
+                Toggle(isOn: $model.advancedTelex) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Telex nâng cao (kiểu Laban Key)").font(.system(size: 13))
+                        Text("cc→ch, gg→gi, kk→kh, nn→ng, pp→ph, qq→qu, tt→th ở đầu từ")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(NSColor.secondaryLabelColor))
+                            .lineLimit(1)
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 8)

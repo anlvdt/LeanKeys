@@ -51,6 +51,8 @@ public final class EngineRouter {
     private var autoSwitch = true
     /// `settings.autoFix`, read once at init and kept by the setter: `intercept` runs on every key.
     private var autoFixCached = true
+    /// `settings.advancedTelex`, read once at init and kept by the setter.
+    private var advancedTelexCached = false
     private var modernTone = true
 
     /// The language the user had before Vikey's first switch by itself since the user's last explicit choice;
@@ -99,6 +101,7 @@ public final class EngineRouter {
                 fieldAllowsFixAtReturn: @escaping () -> Bool = { false }) {
         settings = LeanSettings(defaults: defaults)
         autoFixCached = settings.autoFix
+        advancedTelexCached = settings.advancedTelex
         self.makeVikey = makeVikey
         makeUndoLearning = undoLearning
         self.now = now
@@ -143,6 +146,15 @@ public final class EngineRouter {
             vikey?.resetContext()
             mirror.discard()
             forgetWord()
+        }
+    }
+
+    /// Laban Key-style initial consonant doubling (`cc→ch`, etc.), stored under "LeanKeys.advancedTelex" (off by default).
+    public var advancedTelex: Bool {
+        get { advancedTelexCached }
+        set {
+            settings.advancedTelex = newValue
+            advancedTelexCached = newValue
         }
     }
 
@@ -212,7 +224,13 @@ public final class EngineRouter {
                 returnFixNote = "returnFix=0 field"
             }
         }
-        let processed = vikey.process(keyCode: keyCode, caps: caps, shift: shift)
+        let effectiveKeyCode = AdvancedTelex.translatedKeyCode(
+            keyCode: keyCode,
+            currentWord: mirror.currentWord,
+            vietnamese: vietnamese,
+            enabled: advancedTelexCached
+        )
+        let processed = vikey.process(keyCode: effectiveKeyCode, caps: caps, shift: shift)
         if let vikeyEngine { undoLearning?.afterPress(engine: vikeyEngine) }
         guard let edit = processed else {
             // Vikey left the word as typed: LeanKeys may capitalise it (spec 17.1). After a fix of Vikey's own at
@@ -221,12 +239,18 @@ public final class EngineRouter {
                 learnName(committed)
                 if let result = capitalize(committed, keyCode: keyCode, shift: shift, caps: caps) { return result }
             }
+            if effectiveKeyCode != keyCode,
+               let mappedChar = VikeyEngine.typedCharacter(keyCode: effectiveKeyCode, shift: shift, caps: caps) {
+                let res = (0, [mappedChar], true)
+                observe(keyCode: effectiveKeyCode, shift: shift, caps: caps, result: res)
+                return res
+            }
             observe(keyCode: keyCode, shift: shift, caps: caps, result: nil)
             return nil
         }
         if edit.languageChanged { announceLanguage(vikey.isVietnamese) }
         let result = (edit.deleteCount, edit.text, !edit.keyPassesThrough)
-        observe(keyCode: keyCode, shift: shift, caps: caps, result: result)
+        observe(keyCode: effectiveKeyCode, shift: shift, caps: caps, result: result)
         return result
     }
 

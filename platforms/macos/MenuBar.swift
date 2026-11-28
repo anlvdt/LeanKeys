@@ -471,7 +471,37 @@ class MenuBarController: NSObject, NSWindowDelegate {
                     return alert.runModal() == .alertFirstButtonReturn
                 }
             },
-            dismissPrivacyNotice: { UndoLearning.shared.dismissPrivacyNotice() }
+            dismissPrivacyNotice: { UndoLearning.shared.dismissPrivacyNotice() },
+            frontApp: {
+                guard let app = NSWorkspace.shared.frontmostApplication,
+                      let bundleID = app.bundleIdentifier,
+                      bundleID != Bundle.main.bundleIdentifier,
+                      KeyPassthrough.reason(bundleID: bundleID, focused: nil) == nil
+                else { return nil }
+                let name = app.localizedName ?? bundleID
+                let disabled = AppState.shared.perAppProfiles[bundleID]?.enabledState == -1
+                return (name: name, disabled: disabled)
+            },
+            toggleFrontApp: {
+                guard let app = NSWorkspace.shared.frontmostApplication,
+                      let bundleID = app.bundleIdentifier,
+                      bundleID != Bundle.main.bundleIdentifier
+                else { return }
+                var profiles = AppState.shared.perAppProfiles
+                var cfg = profiles[bundleID] ?? PerAppConfig()
+                cfg.enabledState = (cfg.enabledState == -1) ? 0 : -1
+                if cfg.enabledState == 0 && cfg.delayPreset == 0 && cfg.injectionOverride == -1 {
+                    profiles.removeValue(forKey: bundleID)
+                } else {
+                    profiles[bundleID] = cfg
+                }
+                AppState.shared.perAppProfiles = profiles
+                AppState.shared.applyPerAppProfile(bundleId: bundleID)
+                clearDetectionCache()
+            },
+            runTextTool: { action in
+                _ = VietnameseTextToolkit.applyToClipboard(action)
+            }
         ))
         // Check, download progress and install show while the popover is open (spec §16).
         NotificationCenter.default.publisher(for: .updateStateChanged)

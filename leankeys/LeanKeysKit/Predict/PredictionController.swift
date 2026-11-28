@@ -49,9 +49,11 @@ public final class PredictionController: ObservableObject {
     private var caretAnchor: () -> CaretLocator.CaretAnchor? = { CaretLocator.currentAnchor() }
 
     private var appSwitchObserver: NSObjectProtocol?
+    private let axQueue = DispatchQueue(label: "io.github.anlvdt.leankeys.predict.ax", qos: .userInteractive)
     private var lastAnchor: CaretLocator.CaretAnchor?
     private var lastAnchorTime: CFAbsoluteTime = 0
     private var pendingRefresh: DispatchWorkItem?
+    private var refreshToken: UInt64 = 0
 
     public init(
         defaults: UserDefaults = .standard,
@@ -188,6 +190,7 @@ public final class PredictionController: ObservableObject {
             return
         }
         pendingRefresh?.cancel()
+        refreshToken &+= 1
         let item = DispatchWorkItem { [weak self] in
             self?.refreshNow(router: router, bundleID: bundleID, isVietnamese: isVietnamese,
                              atWordStartAfterSpace: atWordStartAfterSpace)
@@ -236,21 +239,33 @@ public final class PredictionController: ObservableObject {
             return
         }
 
-        // Reuse cached anchor for 80 ms on rapid typing to minimize AX IPC calls.
+        refreshToken &+= 1
+        let token = refreshToken
         let now = CFAbsoluteTimeGetCurrent()
-        let anchor: CaretLocator.CaretAnchor?
         if let cached = lastAnchor, now - lastAnchorTime < 0.08 {
-            anchor = cached
-        } else {
-            anchor = caretAnchor()
-            lastAnchor = anchor
-            lastAnchorTime = now
-        }
-        guard let anchor else {
-            hide()
+            present(candidates: candidates, anchor: cached, token: token)
             return
         }
 
+        let locate = caretAnchor
+        axQueue.async { [weak self] in
+            let resolved = locate()
+            DispatchQueue.main.async {
+                guard let self, self.enabled, self.refreshToken == token else { return }
+                self.lastAnchor = resolved
+                self.lastAnchorTime = CFAbsoluteTimeGetCurrent()
+                guard let resolved else {
+                    self.panel.hide()
+                    self.currentCandidates = []
+                    return
+                }
+                self.present(candidates: candidates, anchor: resolved, token: token)
+            }
+        }
+    }
+
+    private func present(candidates: [PredictionCandidate], anchor: CaretLocator.CaretAnchor, token: UInt64) {
+        guard enabled, token == refreshToken else { return }
         currentCandidates = candidates
         panel.show(candidates: candidates, anchor: anchor) { [weak self] idx in
             self?.acceptFromClick(at: idx)
@@ -263,19 +278,22 @@ public final class PredictionController: ObservableObject {
         let candidate = currentCandidates[index]
         let chars = Array(candidate.insertion)
         router.resetWordAfterPrediction(deleteCount: candidate.deleteCount, inserted: chars)
+        pendingRefresh?.cancel()
+        pendingRefresh = nil
+        refreshToken &+= 1
         currentCandidates = []
         lastAnchor = nil
+        panel.hide()
 
         // Chain the next suggestion when the inserted text ends cleanly with whitespace.
         let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        let endsWithSpace = candidate.insertion.last == " "
-        if endsWithSpace {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+        if candidate.insertion.last == " " {
+            let item = DispatchWorkItem { [weak self] in
                 self?.refreshNow(router: router, bundleID: bundleID, isVietnamese: isVietnamese,
                                  atWordStartAfterSpace: true)
             }
-        } else {
-            panel.hide()
+            pendingRefresh = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03, execute: item)
         }
         return (candidate.deleteCount, chars)
     }
@@ -293,6 +311,7 @@ public final class PredictionController: ObservableObject {
     public func hide() {
         pendingRefresh?.cancel()
         pendingRefresh = nil
+        refreshToken &+= 1
         currentCandidates = []
         panel.hide()
     }

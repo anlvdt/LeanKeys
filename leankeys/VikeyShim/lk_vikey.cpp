@@ -57,6 +57,13 @@ struct ScreenModel {
     bool wordCapsLock = false;           // every letter of the current word was typed with Caps Lock on
     std::u16string wordKeys;             // the letter keys the user pressed for the current word, with Shift case
     bool wordKeysKnown = false;          // false once a Backspace or a shim edit inside the word makes them unknown
+    std::u16string tonedStem;            // word ending in a toned Vietnamese vowel (for "nhéee", "hảaa", "áaaa")
+    char16_t tonedVowelLower = 0;
+    int tonedVowelKey = kNoKey;
+    bool elongateActive = false;         // repeating trailing vowel in chat; Space/break keeps vLanguage = 1
+    int elongateKey = kNoKey;
+    char16_t elongateCharLower = 0;
+    int elongateExtras = 0;
 };
 
 static ScreenModel model;
@@ -214,6 +221,34 @@ static VKEdit pressTracked(Uint16 key, bool shift, double now) {
     }
     model.lastKeyReplaced = key != KEY_DELETE && e.deleteCount > 0;
     model.wordBeforeLastKey = wordBefore;
+    if (!model.elongateActive) {
+        const std::u16string nowWord = currentWord();
+        if (nowWord.empty()) {
+            model.tonedStem.clear();
+            model.tonedVowelKey = kNoKey;
+            model.tonedVowelLower = 0;
+        } else {
+            const LKTelexLetter* tail = telexLetter(nowWord.back());
+            if (tail && tail->tone != 0) {
+                char16_t v = (char16_t)(tail->keys[0] | 32);
+                if (v == 'a' || v == 'e' || v == 'i' || v == 'o' || v == 'u' || v == 'y') {
+                    // If the user just typed the same base vowel key after an existing tonedStem ("nhé" + e -> "nhế"),
+                    // preserve "nhé" as tonedStem so a second press yields "nhéee" rather than "nhếee".
+                    const bool transformedSameWord = !model.tonedStem.empty() && key == (Uint16)model.tonedVowelKey &&
+                                                     nowWord.size() == model.tonedStem.size();
+                    if (!transformedSameWord) {
+                        model.tonedStem = nowWord;
+                        model.tonedVowelLower = v;
+                        model.tonedVowelKey = kLetterKeys[v - 'a'];
+                    }
+                }
+            } else if (key != (Uint16)model.tonedVowelKey) {
+                model.tonedStem.clear();
+                model.tonedVowelKey = kNoKey;
+                model.tonedVowelLower = 0;
+            }
+        }
+    }
     return e;
 }
 
@@ -1127,10 +1162,108 @@ static void convertAtBreak(int languageBefore, double now, VKEdit& e) {
 
 static VKEdit pressUserKey(uint16_t macKeyCode, int shift, double now);
 
+static char16_t vowelKeyChar(uint16_t macKeyCode) {
+    static const struct { char16_t c; int idx; } kVowels[] = {
+        {'a', 0}, {'e', 4}, {'i', 8}, {'o', 14}, {'u', 20}, {'y', 24},
+    };
+    for (const auto& v : kVowels) if (kLetterKeys[v.idx] == macKeyCode) return v.c;
+    return 0;
+}
+
+static bool hasVietnameseLetter(const std::u16string& word) {
+    for (char16_t c : word) if (telexLetter(c) != nullptr) return true;
+    return false;
+}
+
+static bool tryElongate(uint16_t macKeyCode, int shift, double now, VKEdit& e) {
+    if (model.elongateActive) {
+        if (macKeyCode == (uint16_t)model.elongateKey) {
+            char16_t ch = shift ? (char16_t)(model.elongateCharLower - 'a' + 'A') : model.elongateCharLower;
+            e.deleteCount = 0;
+            e.text = std::u16string(1, ch);
+            e.languageChanged = false;
+            applyToModel(e);
+            model.elongateExtras++;
+            model.lastKey = macKeyCode;
+            return true;
+        }
+        if (macKeyCode == KEY_DELETE) {
+            e.deleteCount = 1;
+            e.text.clear();
+            e.languageChanged = false;
+            applyToModel(e);
+            if (model.elongateExtras > 0) model.elongateExtras--;
+            if (model.elongateExtras == 0) model.elongateActive = false;
+            return true;
+        }
+        model.elongateActive = false;
+        model.elongateExtras = 0;
+        if (!isLetterKey(macKeyCode)) {
+            if (driver) driver->resetContext();
+            vLanguage = 1;
+            e.deleteCount = 0;
+            e.text.clear();
+            e.languageChanged = false;
+            applyToModel(e);
+            return true;
+        }
+        return false;
+    }
+
+    if (vLanguage != 1 || !vRestoreIfWrongSpelling || !vAutoSwitchByTyping) return false;
+    const char16_t v = vowelKeyChar(macKeyCode);
+    if (!v) return false;
+    const std::u16string cur = currentWord();
+    if (cur.empty()) return false;
+    const char16_t ch = shift ? (char16_t)(v - 'a' + 'A') : v;
+
+    // Trigger A: toned vowel followed by pressing that same vowel twice ("nhé" + e + e -> "nhéee", "hả" + a + a -> "hảaa").
+    if (!model.tonedStem.empty() && macKeyCode == (uint16_t)model.tonedVowelKey &&
+        model.lastKey == model.tonedVowelKey && cur.size() >= model.tonedStem.size() &&
+        cur.size() <= model.tonedStem.size() + 2) {
+        std::u16string rep = model.tonedStem;
+        rep += ch;
+        rep += ch;
+        e.deleteCount = (int)cur.size();
+        e.text = rep;
+        e.languageChanged = false;
+        applyToModel(e);
+        if (driver) driver->resetContext();
+        vLanguage = 1;
+        model.elongateActive = true;
+        model.elongateKey = macKeyCode;
+        model.elongateCharLower = v;
+        model.elongateExtras = 2;
+        model.tonedStem.clear();
+        return true;
+    }
+
+    // Trigger B: Vietnamese word containing a non-ASCII letter ending in two identical base vowels ("ôii" + i -> "ôiii").
+    if (cur.size() >= 3 && hasVietnameseLetter(cur) &&
+        toLower(cur[cur.size() - 1]) == v && toLower(cur[cur.size() - 2]) == v) {
+        e.deleteCount = 0;
+        e.text = std::u16string(1, ch);
+        e.languageChanged = false;
+        applyToModel(e);
+        if (driver) driver->resetContext();
+        vLanguage = 1;
+        model.elongateActive = true;
+        model.elongateKey = macKeyCode;
+        model.elongateCharLower = v;
+        model.elongateExtras = 3;
+        model.tonedStem.clear();
+        return true;
+    }
+
+    return false;
+}
+
 // One key the user pressed: Vikey's edit with the shim's repairs, vetoes and undo bookkeeping.
 static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
     lastConvert = LastConvert();
     releaseHeldConvert();
+    VKEdit elongateEdit;
+    if (tryElongate(macKeyCode, shift, now, elongateEdit)) return elongateEdit;
     if (heldUndo.active) {
         VKEdit edit;
         if (macKeyCode == KEY_DELETE) heldUndo.backspaces++;

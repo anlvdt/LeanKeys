@@ -9,6 +9,7 @@ public enum EngineKind: String {
 public struct LeanSettings {
     public static let engineKey = "LeanKeys.engine"
     public static let autoFixKey = "LeanKeys.autoFix"
+    public static let advancedTelexKey = "LeanKeys.advancedTelex"
 
     private let defaults: UserDefaults
 
@@ -28,5 +29,12 @@ public struct LeanSettings {
     public var autoFix: Bool {
         get { defaults.object(forKey: Self.autoFixKey) as? Bool ?? true }
         nonmutating set { defaults.set(newValue, forKey: Self.autoFixKey) }
+    }
+
+    /// Laban Key-style initial consonant doubling (`cc→ch`, `gg→gi`, `kk→kh`, `nn→ng`, `pp→ph`, `qq→qu`, `tt→th`).
+    /// Off by default so standard Telex users are unaffected.
+    public var advancedTelex: Bool {
+        get { defaults.object(forKey: Self.advancedTelexKey) as? Bool ?? false }
+        nonmutating set { defaults.set(newValue, forKey: Self.advancedTelexKey) }
     }
 }

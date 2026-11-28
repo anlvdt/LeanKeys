@@ -39,6 +39,11 @@ public struct StatusPopoverActions {
     public var enableLearning: () -> Void
     /// "Để tắt": the card is answered, learning stays off.
     public var dismissPrivacyNotice: () -> Void
+    /// One-click toggle for disabling LeanKeys in the frontmost app (`nil` when unavailable / permanently passthrough).
+    public var frontApp: () -> (name: String, disabled: Bool)?
+    public var toggleFrontApp: () -> Void
+    /// Optional UniKey-style clipboard text toolkit action (`nil` omits the menu).
+    public var runTextTool: ((VietnameseTextToolkit.Action) -> Void)?
 
     public init(
         snapshot: @escaping () -> StatusSnapshot,
@@ -64,7 +69,10 @@ public struct StatusPopoverActions {
         appIcon: @escaping () -> NSImage = { NSImage(named: NSImage.applicationIconName) ?? NSImage() },
         privacyNotice: @escaping () -> Bool = { false },
         enableLearning: @escaping () -> Void = {},
-        dismissPrivacyNotice: @escaping () -> Void = {}
+        dismissPrivacyNotice: @escaping () -> Void = {},
+        frontApp: @escaping () -> (name: String, disabled: Bool)? = { nil },
+        toggleFrontApp: @escaping () -> Void = {},
+        runTextTool: ((VietnameseTextToolkit.Action) -> Void)? = nil
     ) {
         self.snapshot = snapshot
         self.method = method
@@ -88,6 +96,9 @@ public struct StatusPopoverActions {
         self.privacyNotice = privacyNotice
         self.enableLearning = enableLearning
         self.dismissPrivacyNotice = dismissPrivacyNotice
+        self.frontApp = frontApp
+        self.toggleFrontApp = toggleFrontApp
+        self.runTextTool = runTextTool
     }
 }
 
@@ -103,6 +114,8 @@ public final class StatusPopoverModel: ObservableObject {
     @Published public private(set) var autoFix: Bool
     @Published public private(set) var newVersion: String?
     @Published public private(set) var privacyNotice: Bool
+    @Published public private(set) var frontApp: (name: String, disabled: Bool)?
+    public var hasTextToolkit: Bool { actions.runTextTool != nil }
 
     private let actions: StatusPopoverActions
     var appIcon: NSImage { actions.appIcon() }
@@ -121,6 +134,7 @@ public final class StatusPopoverModel: ObservableObject {
         self.autoFix = actions.autoFix()
         self.newVersion = actions.newVersion()
         self.privacyNotice = actions.privacyNotice()
+        self.frontApp = actions.frontApp()
     }
 
     private static func shortcut(_ actions: StatusPopoverActions) -> String? {
@@ -143,6 +157,7 @@ public final class StatusPopoverModel: ObservableObject {
         autoFix = actions.autoFix()
         newVersion = actions.newVersion()
         privacyNotice = actions.privacyNotice()
+        frontApp = actions.frontApp()
     }
 
     /// The small line under the Việt/Anh control: the quick-switch shortcut and the auto-switch state, joined by
@@ -236,6 +251,16 @@ public final class StatusPopoverModel: ObservableObject {
         actions.dismissPrivacyNotice()
         reload()
     }
+
+    public func toggleFrontApp() {
+        actions.toggleFrontApp()
+        reload()
+    }
+
+    public func runTextTool(_ action: VietnameseTextToolkit.Action) {
+        actions.runTextTool?(action)
+        closePopover()
+    }
 }
 
 public struct StatusPopoverView: View {
@@ -317,6 +342,19 @@ public struct StatusPopoverView: View {
                     .controlSize(.mini)
                     .labelsHidden()
                 }
+                if let app = model.frontApp {
+                    row("Tắt cho \(app.name)") {
+                        Toggle("Tắt cho \(app.name)", isOn: Binding(
+                            get: { app.disabled },
+                            set: { newValue in
+                                if newValue != app.disabled { model.toggleFrontApp() }
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .labelsHidden()
+                    }
+                }
 
                 UpdateRowView(phase: model.updatePhase, newVersion: model.newVersion, tap: { model.tapUpdateRow() })
 
@@ -342,6 +380,16 @@ public struct StatusPopoverView: View {
 
             HStack {
                 Button("Cài đặt…") { model.openSettings() }
+                if model.hasTextToolkit {
+                    Spacer()
+                    Menu("Công cụ chữ") {
+                        ForEach(VietnameseTextToolkit.Action.allCases, id: \.self) { action in
+                            Button(action.rawValue) { model.runTextTool(action) }
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
                 Spacer()
                 Button("Thoát") { model.quit() }
                     .accessibilityLabel(Text(StatusPopoverView.quitLabel))
