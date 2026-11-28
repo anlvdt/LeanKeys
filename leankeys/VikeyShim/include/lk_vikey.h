@@ -109,6 +109,11 @@ int  lk_vikey_types_as_is(const char* letters);
 // (key-handling) thread only: it replays keys through the engine, as lk_vikey_press does.
 int  lk_vikey_convert_last_word(double now, lk_edit* out);
 
+// The app changed the case of the word just typed on screen (auto capitalisation: "hà nội " -> "Hà Nội "): the shim's
+// copy of the line takes the cased `units` for the last word (before the break characters), so ⌃⌫ converts what is
+// on screen. Ignored unless the word there has the same length and the same letters apart from case.
+void lk_vikey_set_last_word_case(const uint16_t* units, int length);
+
 #ifdef __cplusplus
 }
 #endif

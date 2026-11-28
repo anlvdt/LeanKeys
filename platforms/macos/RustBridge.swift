@@ -1436,6 +1436,7 @@ private func matchesModifierOnlyShortcut(flags: CGEventFlags) -> Bool {
         || currentSecondaryShortcut?.matchesModifierOnly(flags: flags) == true
 }
 
+private var restoreRepeatSwallowed = false // LEANKEYS-HOOK: engine-dispatch (the last restore press converted a word under Vikey: its auto-repeats are swallowed)
 /// Trigger restore shortcut - restore raw ASCII and clear buffer
 @discardableResult private func triggerRestoreShortcut(flags: CGEventFlags, proxy: CGEventTapProxy) -> Bool { // LEANKEYS-HOOK: engine-dispatch (false: keys pass through, nothing restored)
     let shift = flags.contains(.maskShift)
@@ -1443,7 +1444,7 @@ private func matchesModifierOnlyShortcut(flags: CGEventFlags) -> Bool {
     // Don't bypass IME for restore shortcut - modifiers are part of the shortcut itself
     // Always pass ctrl=false so engine performs the restore action
     let (method, delays) = detectMethod()
-    if EngineRouter.shared.active == .vikey, method != .passthrough { // LEANKEYS-HOOK: engine-dispatch (⌃⌫ converts the last word; before discardPending so the mirror keeps the edit)
+    if EngineRouter.shared.active == .vikey, method != .passthrough, InputSourceObserver.shared.isAllowedInputSource { // LEANKEYS-HOOK: engine-dispatch (⌃⌫ converts the last word; before discardPending so the mirror keeps the edit; not on a source Vikey is not fed from)
         guard let (bs, chars, _) = EngineRouter.shared.convertLastWord() else { return false } // LEANKEYS-HOOK: engine-dispatch
         sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy) // LEANKEYS-HOOK: engine-dispatch
         return true // LEANKEYS-HOOK: engine-dispatch
@@ -1453,7 +1454,10 @@ private func matchesModifierOnlyShortcut(flags: CGEventFlags) -> Bool {
     if let (bs, chars, _) = RustBridge.processKey(keyCode: UInt16(KeyCode.esc), caps: caps, ctrl: false, shift: shift) {
         Log.key(UInt16(KeyCode.esc), "restore: bs=\(bs) chars=\(DebugLog.redact(chars))") // LEANKEYS-HOOK: debug-log
         sendReplacement(backspace: bs, chars: chars, method: method, delays: delays, proxy: proxy)
-    }
+    } else { // LEANKEYS-HOOK: engine-dispatch (nothing to restore: the key reaches the app, as ⌃⌫ would)
+        RustBridge.clearBuffer() // LEANKEYS-HOOK: engine-dispatch
+        return false // LEANKEYS-HOOK: engine-dispatch
+    } // LEANKEYS-HOOK: engine-dispatch
     RustBridge.clearBuffer()
     return true // LEANKEYS-HOOK: engine-dispatch
 }
@@ -1638,7 +1642,12 @@ private func keyboardCallback(
     // Issue #157: Pass key through after restore so it still functions normally (Tab inserts tab, ESC closes dialog)
     // Issue #303: Only pass through special keys (ESC, Tab, etc.), not letter/number keys with modifiers (Shift-Z, Option-Z)
     if AppState.shared.restoreShortcutEnabled && SettingsLayout.showsRestoreShortcut(active: EngineRouter.shared.active) && matchesRestoreShortcut(keyCode: keyCode, flags: flags) { // LEANKEYS-HOOK: engine-dispatch
-        guard triggerRestoreShortcut(flags: flags, proxy: proxy) else { return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch (pass-through: the key is not swallowed)
+        // Under Vikey a held key repeats: after a ⌃⌫ that converted, the repeats are swallowed (each would toggle the word); // LEANKEYS-HOOK: engine-dispatch
+        let restoreRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0 // LEANKEYS-HOOK: engine-dispatch
+        if restoreRepeat, restoreRepeatSwallowed, EngineRouter.shared.active == .vikey { return nil } // LEANKEYS-HOOK: engine-dispatch
+        let restored = triggerRestoreShortcut(flags: flags, proxy: proxy) // LEANKEYS-HOOK: engine-dispatch
+        if !restoreRepeat { restoreRepeatSwallowed = restored && EngineRouter.shared.active == .vikey } // LEANKEYS-HOOK: engine-dispatch
+        guard restored else { return Unmanaged.passUnretained(event) } // LEANKEYS-HOOK: engine-dispatch (pass-through: the key is not swallowed)
         // Only pass through special keys that should still function after restore
         // (ESC closes dialogs, Tab moves focus, Enter submits, etc.)
         // For letter/number keys with modifiers (Shift-Z, Option-Z), consume the event
@@ -1649,6 +1658,7 @@ private func keyboardCallback(
             KeyCode.forwardDelete,
         ]
         if specialPassthroughKeys.contains(keyCode) {
+            if EngineRouter.shared.active == .vikey { EngineRouter.shared.clear() } // LEANKEYS-HOOK: engine-dispatch (the key moves focus or the cursor: the word is gone)
             return Unmanaged.passUnretained(event) // Pass through special keys
         }
         return nil // Consume letter/number keys with modifiers

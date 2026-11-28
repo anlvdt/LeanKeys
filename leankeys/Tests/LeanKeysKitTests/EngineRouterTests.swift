@@ -395,12 +395,44 @@ final class EngineRouterTests: XCTestCase {
         XCTAssertNil(router.convertLastWord())
     }
 
-    func testConvertLastWordIsNilWithAutoFixOff() {
-        let (router, _, learning) = convertRouter()
+    /// Final review F1: the key then reaches the app, which edits the text itself; the router and the shim start over.
+    func testConvertLastWordGuardResetsRouterAndShimInCodeApps() {
+        let (router, engine, learning) = convertRouter(bundle: "com.microsoft.VSCode")
+        defer { learning.uninstall() }
+        typeKeys(router, [8, 31, 1])
+        XCTAssertFalse(router.mirror.currentWord.isEmpty)
+        XCTAssertNil(router.convertLastWord())
+        XCTAssertTrue(router.mirror.currentWord.isEmpty, "the router dropped its mirror word")
+        XCTAssertNil(engine.convertLastWord(), "the shim started over: no word left to convert")
+    }
+
+    func testConvertLastWordGuardResetsRouterAndShimWithAutoFixOff() {
+        let (router, engine, learning) = convertRouter()
         defer { learning.uninstall() }
         router.autoFix = false
+        typeKeys(router, [8, 31, 1])
+        XCTAssertFalse(router.mirror.currentWord.isEmpty)
+        XCTAssertNil(router.convertLastWord())
+        XCTAssertTrue(router.mirror.currentWord.isEmpty, "the router dropped its mirror word")
+        XCTAssertNil(engine.convertLastWord(), "the shim started over: no word left to convert")
+    }
+
+    /// Ruling 14: with Vietnamese off by the user, ⌃⌫ passes through untouched; after Vikey's own switch to English it
+    /// still converts.
+    func testConvertLastWordPassesThroughWhenVietnameseIsOff() {
+        let (router, _, learning) = convertRouter()
+        defer { learning.uninstall() }
+        router.setEnabled(false, explicit: true)
         typeKeys(router, cosKeys)
         XCTAssertNil(router.convertLastWord())
+    }
+
+    func testConvertLastWordStillConvertsAfterAnAutomaticOff() {
+        let (router, _, learning) = convertRouter()
+        defer { learning.uninstall() }
+        router.setEnabled(false)   // not explicit: auto switch stays on
+        typeKeys(router, cosKeys)
+        XCTAssertNotNil(router.convertLastWord())
     }
 
     func testConvertLastWordIsNilOnAFreshLineAndDropsTheMirror() {

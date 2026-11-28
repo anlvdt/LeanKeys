@@ -1273,6 +1273,16 @@ int lk_vikey_convert_last_word(double now, lk_edit* out) {
     return 1;
 }
 
+void lk_vikey_set_last_word_case(const uint16_t* units, int length) {
+    if (!units || length <= 0 || (size_t)length > kFixWordMax) return;
+    const std::u16string cased((const char16_t*)units, (size_t)length);
+    size_t end = model.line.size();
+    while (end > 0 && isBreakChar(model.line[end - 1])) end--;
+    const std::u16string word = wordEndingAt(model.line, end);
+    if (word.size() != cased.size() || lowerCase(word) != lowerCase(cased)) return;
+    model.line.replace(end - word.size(), word.size(), cased);
+}
+
 void lk_vikey_set_caps_lock(int on) {
     capsLockForNextKey = on != 0;
 }

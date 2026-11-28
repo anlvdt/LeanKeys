@@ -239,9 +239,16 @@ public final class EngineRouter {
 
     /// The ⌃⌫ key (design 5.1): the last word between its Telex form and its raw keys. Returns the edit to send
     /// (backspaces, text, true), or nil when the key goes through to the app: not Vikey, auto fixes off, a code app,
-    /// or nothing to convert (then the shim has reset its context, so the router drops its own word state too).
+    /// Vietnamese paused by the user, or nothing to convert. Under Vikey the app then edits the text itself, so the
+    /// shim, the mirror and the word state start over (final review F1); Gõ Nhanh is not touched.
     public func convertLastWord() -> (Int, [Character], Bool)? {
-        guard active == .vikey, autoFixCached, let vikeyEngine, !CodeApps.contains(frontmostBundleID()) else {
+        guard active == .vikey, let vikeyEngine else { return nil }
+        // Vietnamese off by the user's own toggle also pauses auto switch (`setEnabled`); English reached by Vikey's
+        // auto switch keeps it on, and ⌃⌫ still converts there ("cos" typed in English gives "có").
+        guard autoFixCached, !CodeApps.contains(frontmostBundleID()), vietnamese || autoSwitch else {
+            vikeyEngine.resetContext()
+            mirror.discard()
+            forgetWord()
             return nil
         }
         capitalizer?.last = nil
@@ -349,6 +356,8 @@ public final class EngineRouter {
         else { return nil }
         // A learned name that made it is now in use (review M3: not at lookup, which the rules may still reject).
         if let name = capitalizer.learnedName(in: replacement) { undoLearning.learnedNames.markUsed(word: name) }
+        // The shim's copy of the line holds the word as typed: tell it the capital, so ⌃⌫ converts what is on screen.
+        vikeyEngine?.setLastWordCase(String(replacement.capitalized.reversed().prefix(while: TextMirror.isWordCharacter).reversed()))
         let isSpace = keyCode == Self.spaceKey
         let result = (replacement.original.count, Array(replacement.capitalized) + (isSpace ? [" "] : []), isSpace)
         observe(keyCode: keyCode, shift: shift, caps: caps, result: result)

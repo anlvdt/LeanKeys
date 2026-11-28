@@ -397,7 +397,9 @@ Thiết kế riêng nằm ở `2026-11-28-convert-last-word-design.md` (quyết 
 
 - Luật `convert` mang chiều (dạng Telex → phím thô, hoặc phím thô → dạng Telex) và chỉ chạy khi từ ở phím ngắt đang hiện đúng dạng "từ" của luật. Đo bằng mixbench: luật chỉ khoá theo phím chạy sai chiều trên `cos/có`, `nos/nó`, `last/lát` (mục "⌃⌫" trong README của mixbench).
 - Shim không dựng lại engine để quyết định ở phím ngắt: hỏi bộ lọc trước, chỉ dựng dạng Telex khi thực sự đổi. Dựng lại làm hỏng ⌫ qua Space ("toi ⌫s").
-- ⌃⌫ khi không có gì để đổi thì đi thẳng tới app, và shim đặt lại ngữ cảnh gõ.
+- ⌃⌫ khi không có gì để đổi thì đi thẳng tới app, và shim đặt lại ngữ cảnh gõ. Việc đặt lại nằm ở nơi phím bị chặn ngay lúc đó: nhánh "không có từ" của shim, và các nhánh chặn của router (app code, tắt "Tự sửa khi gõ", Việt tắt tay), vì app sửa chữ nên mirror, shim và trạng thái từ phải bắt đầu lại (soát cuối F1). Khi nguồn nhập không được phép, hook để phím đi thẳng như trước.
+- Phán quyết sau soát cuối: Gõ Nhanh không có gì để trả lại thì phím đi thẳng tới app (F5); từ LeanKeys vừa viết hoa thì shim được báo dạng có chữ hoa, nên ⌃⌫ đổi đúng chữ trên màn hình (F2); Việt tắt bằng công tắc của người dùng thì ⌃⌫ đi thẳng, không đổi (F8; Vikey tự chuyển sang Anh thì vẫn đổi); phím lặp của ⌃⌫ bị nuốt sau lần đổi đầu, và sau một lần đổi mà phím vẫn đi tiếp (Esc, Tab, mũi tên…) thì router và shim đặt lại (F4, F6).
+- Giới hạn chấp nhận: ghim (pin) thắng luật `convert` ở phím ngắt và ⌃⌫ đổi ý trên từ đã ghim không được `convertBlocked` ghi nhận (F9); bản cũ hơn lưu lại tệp luật v1 sẽ làm mất luật convert và từ ghim đã học (F7).
 - Dưới Vikey, bấm Control không đặt lại ngữ cảnh khi phím restore dùng Control; Esc tới router như một phím ngắt từ.
 - Dùng lại tên hook có sẵn (`engine-dispatch`, `settings-engine`), vì `check-divergence` giới hạn tên hook tối đa 12 ký tự.
 

@@ -119,6 +119,13 @@ public final class VikeyEngine: TypingEngine {
         return Self.edit(from: &raw)
     }
 
+    /// LeanKeys changed the case of the word just typed on screen (auto capitalisation): the shim's copy of it follows
+    /// when the letters and length match, otherwise nothing happens. Key-handling thread.
+    public func setLastWordCase(_ word: String) {
+        let units = Array(word.utf16)
+        units.withUnsafeBufferPointer { lk_vikey_set_last_word_case($0.baseAddress, Int32($0.count)) }
+    }
+
     /// A word from one of the shim's fixed UTF-16 buffers (lk_fix: 64 units each).
     static func string<Units>(_ units: Units, _ length: Int32) -> String {
         withUnsafeBytes(of: units) { bytes in

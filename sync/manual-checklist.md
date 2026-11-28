@@ -68,5 +68,8 @@ Câu thử: `Tieengs Vieejt truowfng hojc` phải ra "Tiếng Việt trường h
 | V3 | ⌃⌫ đổi từ vừa gõ · Slack | Ô soạn tin (chưa gửi): như V1; ⌃⌫ khi chưa có từ nào để đổi thì xoá một từ như thường. | — | [ ] |
 | V4 | ⌃⌫ đổi từ vừa gõ · Messenger web | Ô soạn tin trên trình duyệt: như V1, không mất hay lặp chữ. | — | [ ] |
 | V5 | ⌃⌫ đổi từ vừa gõ · Terminal | ⌃⌫ đi thẳng (không đổi từ), hành vi cũ của Terminal giữ nguyên. | — | [ ] |
+| V6 | ⌃⌫ đổi từ vừa gõ · VS Code, Cursor | Gõ một từ Telex (`cos `), bấm ⌃⌫ (ở đây ⌃⌫ đi thẳng tới app, xoá một từ như thường), rồi gõ tiếp `toi thich`: không có chữ nào bị ăn hay mọc thêm, từ mới ra đúng "tôi thích". | — | [ ] |
+| V7 | ⌃⌫ · VNI hoặc Gõ Nhanh | Chọn kiểu gõ VNI, hoặc "Chỉ dùng Gõ Nhanh": ⌃⌫ làm như trước (trả lại phím gốc của từ đang gõ). Khi Gõ Nhanh không có gì để trả lại (vừa gõ xong từ, hoặc đầu dòng), phím tới được app và xoá một từ như thường. | [ ] | — |
+| V8 | ⌃⌫ · từ sau khi đổi sang phím thô | Vikey, tiếng Việt: gõ `cos `, bấm ⌃⌫ ra "cos " (sang tiếng Anh), rồi gõ `toi thich `: ra "tôi thích " bằng tiếng Việt, Vikey tự quay lại tiếng Việt. Thử thêm: giữ ⌃⌫ sau `cos `: từ chỉ đổi một lần, không nhấp nháy. | — | [ ] |
 
-Chỉ gõ `yes` khi cả 73 ô đều đạt.
+Chỉ gõ `yes` khi cả 79 ô đều đạt.
