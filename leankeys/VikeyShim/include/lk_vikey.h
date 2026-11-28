@@ -45,6 +45,13 @@ typedef struct {
 // the language as it was before the key. 0 lets the fix stand.
 typedef int (*lk_fix_filter)(const lk_fix* fix);
 void lk_vikey_set_fix_filter(lk_fix_filter filter); // NULL = never veto (the default)
+// Called at a break key when Vikey made no fix of the word just finished and its raw keys are known (a word with a
+// Backspace in it, or pasted, is not): `before` is the word as shown, `after` what converting it gives (the raw keys
+// when it shows something else, the Telex form when it shows the keys), `keys`, `previous`. Return 1 to convert it
+// within the break key's own edit (language follows the direction); ⌫⌫ or ⌃⌫ right after gives the word back as Vikey
+// had it and queues a LK_UNDO_RULE_REVERSE event at once. A place-name rule of the shim goes first; 0 changes nothing.
+typedef int (*lk_convert_filter)(const lk_fix* fix);
+void lk_vikey_set_convert_filter(lk_convert_filter filter); // NULL = never convert (the default)
 // An undo: the user pressed Backspace twice right after a fix (Vikey puts `before` back; reverse = 0), or right after
 // a veto (the shim applies the fix after all: `after` comes back with its language; reverse = 1). `kind`:
 //   LK_UNDO_BACKSPACE (0)    Backspace twice, or ⌃⌫ on a word Vikey had just fixed (it undoes the fix, reverse = 0).

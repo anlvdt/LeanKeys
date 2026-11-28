@@ -57,6 +57,22 @@ private final class Line {
     }
 }
 
+/// What the convert filter converts (by `keys`) and the words it was shown. The C callback reads these.
+private var converting: Set<String> = []
+private var convertShown: [(before: String, after: String, previous: String, keys: String)] = []
+
+private func units<T>(_ u: T, _ length: Int32) -> String {
+    withUnsafeBytes(of: u) { String(decoding: $0.bindMemory(to: UInt16.self).prefix(Int(length)), as: UTF16.self) }
+}
+
+private let convertFilter: lk_convert_filter = { fix in
+    guard let fix = fix?.pointee else { return 0 }
+    let keys = units(fix.keys, fix.keysLength)
+    convertShown.append((units(fix.before, fix.beforeLength), units(fix.after, fix.afterLength),
+                         units(fix.previous, fix.previousLength), keys))
+    return converting.contains(keys) ? 1 : 0
+}
+
 final class ConvertShimTests: XCTestCase {
     override func setUp() {
         super.setUp()
@@ -71,6 +87,9 @@ final class ConvertShimTests: XCTestCase {
 
     private func clean() {
         lk_vikey_set_fix_filter(nil)
+        lk_vikey_set_convert_filter(nil)
+        converting = []
+        convertShown = []
         var undo = lk_undo()
         while lk_vikey_take_undo(&undo) == 1 {}
         VikeyEngine.setDoubleKeyFix(true)
@@ -302,6 +321,138 @@ final class ConvertShimTests: XCTestCase {
         XCTAssertEqual(l.type("toi thich cos "), "toi thich có ")
         XCTAssertEqual(l.type("⌃⌃"), "toi thich có ")
         l.type("x")
+        XCTAssertNil(takeEvent())
+    }
+
+    // MARK: Convert filter at a break key (spec 5.2, 5.3)
+
+    func testConvertFilterAppliesAtBreak() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["beer"]
+        let l = line(1)
+        XCTAssertEqual(l.type("toi uong beer"), "toi uong bể")
+        let start = l.edits.count
+        XCTAssertEqual(l.type(" "), "toi uong beer ")
+        XCTAssertEqual(l.edits.count, start + 1)
+        XCTAssertEqual(l.edits[start].deleteCount, 2)
+        XCTAssertEqual(l.edits[start].text, "beer ")
+        XCTAssertEqual(lk_vikey_language(), 0)
+        XCTAssertEqual(l.edits[start].languageChanged, true)
+        let seen = convertShown.last
+        XCTAssertEqual(seen?.before, "bể")
+        XCTAssertEqual(seen?.after, "beer")
+        XCTAssertEqual(seen?.previous, "uong")
+        XCTAssertEqual(seen?.keys, "beer")
+        XCTAssertNil(takeEvent(), "a rule's conversion is no event")
+    }
+
+    func testFilterNotCalledWhenVikeyFixes() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["cos"]
+        let l = line(0)
+        XCTAssertEqual(l.type("toi thich cos "), "toi thich có ")
+        XCTAssertTrue(convertShown.isEmpty)
+    }
+
+    func testFilterNotCalledWithoutKeysOrWord() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["beer", "mix", "mi"]
+        let l = line(1)
+        // A Backspace in the word: the keys are unknown.
+        l.type("beers⌫ ")
+        XCTAssertTrue(convertShown.isEmpty)
+        // Two breaks: the second has no word before it.
+        l.type("mix  ")
+        XCTAssertTrue(l.string.hasSuffix(" mix  "), l.string)
+        XCTAssertEqual(convertShown.map { $0.keys }, ["mix"])
+    }
+
+    func testNilFilterChangesNothing() {
+        func run(_ filter: Bool) -> [Edit] {
+            lk_vikey_set_convert_filter(filter ? convertFilter : nil)
+            converting = []
+            let l = line(1)
+            l.type("toi uong beer mix cos, lats  ")
+            return l.edits
+        }
+        XCTAssertEqual(run(true), run(false))
+        lk_vikey_set_convert_filter(nil)
+        XCTAssertEqual(line(1).type("toi uong beer "), "toi uong bể ")
+    }
+
+    func testCtrlBackspaceAfterRuleConvertReverses() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["beer"]
+        let l = line(1)
+        XCTAssertEqual(l.type("toi uong beer ⌃"), "toi uong bể ")
+        XCTAssertEqual(l.lastConvertResult, 1)
+        XCTAssertEqual(lk_vikey_language(), 1)
+        let e = takeEvent()
+        XCTAssertEqual(e?.kind, 2, "queued at once, not held")
+        XCTAssertEqual(e?.keys, "beer")
+        XCTAssertEqual(e?.before, "bể")
+        XCTAssertEqual(e?.after, "beer")
+        XCTAssertEqual(e?.previous, "uong")
+        XCTAssertNil(takeEvent())
+        l.type("n")
+        XCTAssertNil(takeEvent(), "nothing more after the next key")
+    }
+
+    func testCtrlBackspaceReverseEventAfterNextKey() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["beer"]
+        let l = line(1)
+        l.type("toi uong beer ⌃n")
+        XCTAssertEqual(takeEvent()?.kind, 2)
+        XCTAssertNil(takeEvent())
+    }
+
+    func testDoubleBackspaceAfterRuleConvertReverses() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["beer"]
+        let l = line(1)
+        XCTAssertEqual(l.type("toi uong beer ⌫⌫"), "toi uong bể")
+        let e = takeEvent()
+        XCTAssertEqual(e?.kind, 2, "available right after the second Backspace")
+        XCTAssertEqual(e?.keys, "beer")
+        XCTAssertEqual(e?.before, "bể")
+        XCTAssertEqual(e?.after, "beer")
+        XCTAssertEqual(e?.previous, "uong")
+        XCTAssertNil(takeEvent(), "exactly one event")
+        XCTAssertEqual(lk_vikey_language(), 1)
+        // The word is back as Vikey had it: a tone key goes on from it.
+        XCTAssertEqual(l.type("s"), "toi uong bế")
+    }
+
+    func testOneBackspaceAfterRuleConvertIsPlain() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["beer"]
+        let l = line(1)
+        XCTAssertEqual(l.type("toi uong beer ⌫"), "toi uong beer")
+        XCTAssertNil(takeEvent())
+        l.type("x")
+        XCTAssertNil(takeEvent())
+    }
+
+    func testRuleConvertThenAnotherKeyKeepsNoReverse() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["beer"]
+        let l = line(1)
+        l.type("toi uong beer a⌫⌫")
+        XCTAssertNil(takeEvent())
+    }
+
+    // A held ⌃⌫ event released by the very key that queues another: neither is lost nor replaced silently.
+    func testHeldConvertThenRuleConvertKeepsBoth() {
+        lk_vikey_set_convert_filter(convertFilter)
+        converting = ["beer"]
+        let l = line(1)
+        l.type("cos ⌃")                       // held kind 1 event for "cos"
+        XCTAssertNil(takeEvent())
+        l.type("beer ")                        // the first key releases it; the break converts "beer" by the rule
+        XCTAssertEqual(takeEvent()?.kind, 1)
+        l.type("⌫⌫")
+        XCTAssertEqual(takeEvent()?.kind, 2)
         XCTAssertNil(takeEvent())
     }
 }
