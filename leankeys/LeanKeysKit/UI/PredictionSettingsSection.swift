@@ -11,7 +11,7 @@ public enum PredictionSettingsPart {
 /// Settings UI for 4A+ Laban Key-style word/phrase/sentence suggestions (spec 2026-11-28-prediction-4a).
 public struct PredictionSettingsSection: View {
     public static let title = "Gợi ý từ & câu tiếp theo"
-    public static let subtitle = "Hiện thanh gợi ý kiểu Laban Key cạnh con trỏ (Tab, ⌥1–⌥3)"
+    public static let subtitle = "Hiện danh sách gợi ý dưới con trỏ, kiểu Google (↓ chọn, Tab nhận)"
     public static let learnTitle = "Học thói quen viết để gợi ý cụm từ & câu"
     public static let learnSubtitle = "Cá nhân hoá gợi ý theo cách bạn hay nhắn tin và viết bài"
     public static let consentTitle = "Cho LeanKeys học thói quen gợi ý câu?"
@@ -70,8 +70,8 @@ public struct PredictionSettingsSection: View {
 
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Hiện thanh gợi ý khi gõ").font(.system(size: 13))
-                    Text("Bấm Tab chọn gợi ý đầu, ⌥1–⌥3 chọn nhanh, Esc để ẩn")
+                    Text("Hiện danh sách gợi ý khi gõ").font(.system(size: 13))
+                    Text("↓ chọn rồi Tab/Enter nhận · Esc ẩn")
                         .font(.system(size: 11))
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
                         .lineLimit(1)
@@ -81,7 +81,7 @@ public struct PredictionSettingsSection: View {
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     .labelsHidden()
-                    .accessibilityLabel(Text("Hiện thanh gợi ý khi gõ"))
+                    .accessibilityLabel(Text("Hiện danh sách gợi ý khi gõ"))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)

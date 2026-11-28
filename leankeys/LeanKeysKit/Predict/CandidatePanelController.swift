@@ -1,25 +1,64 @@
 import AppKit
-import Combine
-import SwiftUI
 
-/// Observable state backing the floating 4A+ candidate bar.
-final class CandidateBarState: ObservableObject {
-    @Published var candidates: [PredictionCandidate] = []
-    var onAccept: (Int) -> Void = { _ in }
-}
-
-/// Non-activating floating `NSPanel` displaying up to 3 word/phrase/sentence suggestions near the caret.
+/// Non-activating floating `NSPanel`: a Google Search–style list of up to 3 suggestions under the caret
+/// (spec 2026-11-28-prediction-dropdown). What the user already typed is regular, what the row adds is bold.
+///
+/// Plain AppKit, no SwiftUI: `show` runs on the main thread, which also runs the keyboard event tap, so the three
+/// rows are built once and only their text, highlight and the window frame change, and only when they differ.
 public final class CandidatePanelController {
     private final class FloatingPanel: NSPanel {
         override var canBecomeKey: Bool { false }
         override var canBecomeMain: Bool { false }
     }
 
-    private let state = CandidateBarState()
+    /// One clickable row (takes the first click although the panel never becomes key).
+    final class RowView: NSView {
+        let label = NSTextField(labelWithString: "")
+        var onClick: () -> Void = {}
+        var selected = false {
+            didSet { if selected != oldValue { needsDisplay = true } }
+        }
+
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.lineBreakMode = .byTruncatingTail
+            label.maximumNumberOfLines = 1
+            label.cell?.truncatesLastVisibleLine = true
+            addSubview(label)
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+                label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                label.topAnchor.constraint(equalTo: topAnchor, constant: 3),
+                label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -3),
+                label.widthAnchor.constraint(lessThanOrEqualToConstant: CandidatePanelController.maxTextWidth),
+            ])
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func mouseDown(with event: NSEvent) { onClick() }
+
+        override func draw(_ dirtyRect: NSRect) {
+            guard selected else { return }
+            NSColor.controlAccentColor.withAlphaComponent(0.22).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
+        }
+    }
+
+    static let maxTextWidth: CGFloat = 460
+    static let fontSize: CGFloat = 13
+    public static let hint = "↓ chọn · Tab nhận · Esc ẩn"
+
     private var panel: FloatingPanel?
-    private var hostingController: NSHostingController<CandidateBarView>?
+    private var rows: [RowView] = []
+    private var stack: NSStackView?
+    private var onAccept: (Int) -> Void = { _ in }
     private var lastFrame: CGRect = .zero
     private var lastTexts: [String] = []
+    private var lastSelected: Int?
 
     public private(set) var isVisible = false
 
@@ -30,30 +69,52 @@ public final class CandidatePanelController {
 
     public init() {}
 
-    public func show(candidates: [PredictionCandidate], anchor: CaretLocator.CaretAnchor, onAccept: @escaping (Int) -> Void) {
+    /// Row text: the typed part (`deleteCount` leading characters of `display`) regular, the rest bold.
+    static func attributedRow(_ c: PredictionCandidate) -> NSAttributedString {
+        let typedCount = c.kind == .shortcut ? 0 : min(max(c.deleteCount, 0), c.display.count)
+        let split = c.display.index(c.display.startIndex, offsetBy: typedCount)
+        let out = NSMutableAttributedString(string: String(c.display[..<split]), attributes: [
+            .font: NSFont.systemFont(ofSize: fontSize),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+        out.append(NSAttributedString(string: String(c.display[split...]), attributes: [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
+            .foregroundColor: NSColor.labelColor,
+        ]))
+        return out
+    }
+
+    public func show(candidates: [PredictionCandidate], anchor: CaretLocator.CaretAnchor, selectedIndex: Int? = nil,
+                     onAccept: @escaping (Int) -> Void) {
         guard !candidates.isEmpty else {
             hide()
             return
         }
         ensurePanel()
-        guard let panel, let hostingController else { return }
+        guard let panel, let stack else { return }
+        self.onAccept = onAccept
 
-        state.onAccept = onAccept
-        // Same bar as before, but skip SwiftUI re-layout and window resizing when nothing changed: `show` runs on
-        // the main thread, which also runs the keyboard event tap.
-        let texts = candidates.map(\.display)
+        let shown = Array(candidates.prefix(rows.count))
+        let texts = shown.map { "\($0.deleteCount)|\($0.display)" }
         let textsChanged = texts != lastTexts
         if textsChanged {
-            state.candidates = candidates
-            hostingController.rootView = CandidateBarView(state: state)
+            for (i, row) in rows.enumerated() {
+                if i < shown.count {
+                    row.label.attributedStringValue = Self.attributedRow(shown[i])
+                    row.isHidden = false
+                } else {
+                    row.isHidden = true
+                }
+            }
             lastTexts = texts
         }
+        setSelectedIndex(selectedIndex)
 
         var panelSize = lastFrame.size
         if textsChanged || panelSize == .zero {
-            let fitting = hostingController.sizeThatFits(in: CGSize(width: 520, height: 48))
-            panelSize = CGSize(width: max(120, min(520, ceil(fitting.width))),
-                               height: max(30, min(48, ceil(fitting.height))))
+            stack.layoutSubtreeIfNeeded()
+            let fitting = stack.fittingSize
+            panelSize = CGSize(width: max(160, ceil(fitting.width)), height: ceil(fitting.height))
         }
         let origin = Self.panelOrigin(panelSize: panelSize, caretRect: anchor.rect)
         let frame = CGRect(origin: origin, size: panelSize)
@@ -67,12 +128,19 @@ public final class CandidatePanelController {
         isVisible = true
     }
 
+    /// Highlights row `index` (nil: none). Cheap: only the old and new rows redraw.
+    public func setSelectedIndex(_ index: Int?) {
+        guard index != lastSelected else { return }
+        lastSelected = index
+        for (i, row) in rows.enumerated() { row.selected = i == index }
+    }
+
     public func hide() {
         isVisible = false
         guard let panel, panel.isVisible || !lastTexts.isEmpty else { return }
-        state.candidates = []
         lastTexts = []
         lastFrame = .zero
+        setSelectedIndex(nil)
         panel.orderOut(nil)
     }
 
@@ -108,7 +176,7 @@ public final class CandidatePanelController {
     private func ensurePanel() {
         if panel != nil { return }
         let p = FloatingPanel(
-            contentRect: CGRect(x: 0, y: 0, width: 240, height: 34),
+            contentRect: CGRect(x: 0, y: 0, width: 240, height: 80),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -122,74 +190,48 @@ public final class CandidatePanelController {
         p.ignoresMouseEvents = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
 
-        let host = NSHostingController(rootView: CandidateBarView(state: state))
-        host.view.wantsLayer = true
-        host.view.layer?.backgroundColor = .clear
-        p.contentViewController = host
-        self.panel = p
-        self.hostingController = host
-    }
-}
+        let background = NSVisualEffectView()
+        background.material = .popover
+        background.blendingMode = .behindWindow
+        background.state = .active
+        background.wantsLayer = true
+        background.layer?.cornerRadius = 8
+        background.layer?.masksToBounds = true
+        background.layer?.borderWidth = 0.75
+        background.layer?.borderColor = NSColor.separatorColor.cgColor
 
-private struct CandidateBarView: View {
-    @ObservedObject var state: CandidateBarState
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(Array(state.candidates.enumerated()), id: \.element.id) { idx, cand in
-                Button {
-                    state.onAccept(idx)
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(idx == 0 ? "Tab" : "⌥\(idx + 1)")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundColor(idx == 0 ? Color.accentColor : Color(NSColor.secondaryLabelColor))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1.5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(idx == 0 ? Color.accentColor.opacity(0.14) : Color(NSColor.quaternaryLabelColor).opacity(0.45))
-                            )
-                        Text(cand.display)
-                            .font(.system(size: 12.5, weight: idx == 0 ? .medium : .regular))
-                            .foregroundColor(Color(NSColor.labelColor))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: idx == 0 ? 220 : 140, alignment: .leading)
-                    }
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(idx == 0 ? Color.accentColor.opacity(0.08) : Color.clear)
-                    )
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
+        let rowViews = (0..<PredictionEngine.maxCandidates).map { i -> RowView in
+            let r = RowView()
+            r.onClick = { [weak self] in self?.onAccept(i) }
+            return r
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(
-            PopoverBlurBackground()
-                .clipShape(RoundedRectangle(cornerRadius: 9))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 9)
-                .stroke(Color(NSColor.separatorColor).opacity(0.55), lineWidth: 0.75)
-        )
-        .fixedSize()
-    }
-}
+        let hint = NSTextField(labelWithString: Self.hint)
+        hint.font = .systemFont(ofSize: 10)
+        hint.textColor = .tertiaryLabelColor
 
-private struct PopoverBlurBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .popover
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
+        let stack = NSStackView(views: rowViews + [hint])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 1
+        stack.edgeInsets = NSEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
+        stack.setCustomSpacing(3, after: rowViews[rowViews.count - 1])
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        for r in rowViews {
+            r.translatesAutoresizingMaskIntoConstraints = false
+            r.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -8).isActive = true
+        }
+        hint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+        background.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: background.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: background.bottomAnchor),
+        ])
+        p.contentView = background
+        self.panel = p
+        self.rows = rowViews
+        self.stack = stack
+    }
 }

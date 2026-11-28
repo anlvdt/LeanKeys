@@ -38,6 +38,7 @@ public final class BuiltInPredictionCorpus {
     public static let shared = BuiltInPredictionCorpus(data: .bundled)
 
     private let words: [WordEntry]
+    private let singleWords: Set<String>
     private let wordsByFirstChar: [Character: [WordEntry]]
     private let bigrams: [String: [String]]
     private let phrases: [String: [String]]
@@ -62,6 +63,7 @@ public final class BuiltInPredictionCorpus {
             }
         }
         self.words = allWords
+        self.singleWords = Set(allWords.filter { !$0.isCompound }.map(\.lower))
         self.wordsByFirstChar = byFirst
         var bg: [String: [String]] = [:]
         bg.reserveCapacity(data.bigrams.count)
@@ -82,6 +84,11 @@ public final class BuiltInPredictionCorpus {
         }
         self.phrases = ph
         self.maxPhraseTriggerWords = min(maxWords, 4)
+    }
+
+    /// Whether `word` is a whole single word of the corpus ("đang", not "đan…" halfway).
+    public func isWord(_ word: String) -> Bool {
+        singleWords.contains(word.precomposedStringWithCanonicalMapping.lowercased())
     }
 
     /// Lowercased, NFC-normalized single-space join of words.

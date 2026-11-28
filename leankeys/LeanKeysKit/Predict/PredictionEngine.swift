@@ -88,16 +88,61 @@ public final class PredictionEngine {
     public static let maxCandidates = 3
     public static let minPrefixLength = 2
 
+    /// How word rows grow into Google-style phrase rows (spec 2026-11-28-prediction-dropdown).
+    public enum PhraseExtension: Equatable {
+        /// Word rows stay words (v1.14).
+        case off
+        /// Replace a word row by "word + continuation" when a phrase continues `previous + word`.
+        case replace
+        /// Put "word + continuation" first and keep the bare word as the next row.
+        case both
+    }
+
+    /// Longest continuation glued onto a word row.
+    public static let maxExtensionWords = 5
+
     private let corpus: BuiltInPredictionCorpus
     private let personal: PersonalPredictionModel?
     private let dictionary: DictionaryCompleting?
+    public var phraseExtension: PhraseExtension
+    /// Shortest context (in words, the completed word included) a continuation must match to be glued on.
+    public var minExtensionContext: Int
+    /// Stay one word ahead (spec 2026-11-28-prediction-dropdown): once the typed word is a whole word, offer
+    /// "word + next word" rows, and suggest from the first letter instead of hiding until the second.
+    public var lookAhead: Bool
+    /// Whether `word` is a whole corpus word (look-ahead may start).
+    public func isWholeWord(_ word: String) -> Bool { corpus.isWord(word) }
+
+    /// Shortest typed prefix that gets suggestions (`minPrefixLength`, or 1 with `lookAhead`).
+    public var minPrefix: Int { lookAhead ? 1 : Self.minPrefixLength }
+
+    /// Glue only phrases the user typed again and again (the learned model), never the built-in table: on the
+    /// chat bench, rows glued from the built-in table were right past their first word 1–2 % of the time.
+    public var personalExtensionOnly: Bool
 
     public init(corpus: BuiltInPredictionCorpus = .shared,
                 personal: PersonalPredictionModel? = nil,
-                dictionary: DictionaryCompleting? = VikeyDictionaryCompleter.shared) {
+                dictionary: DictionaryCompleting? = VikeyDictionaryCompleter.shared,
+                phraseExtension: PhraseExtension = .off,
+                minExtensionContext: Int = 2,
+                personalExtensionOnly: Bool = true,
+                lookAhead: Bool = false) {
         self.corpus = corpus
         self.personal = personal
         self.dictionary = dictionary
+        self.phraseExtension = phraseExtension
+        self.minExtensionContext = minExtensionContext
+        self.personalExtensionOnly = personalExtensionOnly
+        self.lookAhead = lookAhead
+    }
+
+    /// Whether `query` may get suggestions at all (the same gates as `predict`): not mid-URL, a word start after
+    /// Space with words before it, or a prefix of letters at least `minPrefix` long.
+    public func accepts(_ query: PredictionQuery) -> Bool {
+        guard !query.followsNonSpaceBreak else { return false }
+        if query.currentWord.isEmpty { return query.atWordStartAfterSpace && !query.previousWords.isEmpty }
+        let current = query.currentWord.precomposedStringWithCanonicalMapping
+        return current.count >= minPrefix && current.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" }
     }
 
     public func predict(_ query: PredictionQuery) -> [PredictionCandidate] {
@@ -105,15 +150,66 @@ public final class PredictionEngine {
 
         if query.currentWord.isEmpty {
             guard query.atWordStartAfterSpace, !query.previousWords.isEmpty else { return [] }
-            return nextPredictions(after: query.previousWords, maxCount: Self.maxCandidates)
+            return extendWithPhrases(nextPredictions(after: query.previousWords, maxCount: Self.maxCandidates),
+                                     previousWords: query.previousWords)
         }
 
         let current = query.currentWord.precomposedStringWithCanonicalMapping
-        guard current.count >= Self.minPrefixLength,
+        guard current.count >= minPrefix,
               current.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else {
             return []
         }
-        return prefixCompletions(query: query, current: current, maxCount: Self.maxCandidates)
+        return extendWithPhrases(prefixCompletions(query: query, current: current, maxCount: Self.maxCandidates),
+                                 previousWords: query.previousWords)
+    }
+
+    // MARK: - Google-style phrase rows
+
+    /// Best continuation after `words` (personal first, then the built-in phrase table), matching at least
+    /// `minExtensionContext` trailing words, trimmed to `maxExtensionWords`.
+    func continuation(after words: [String]) -> String? {
+        var best: (text: String, ctx: Int, score: Double)?
+        func consider(_ text: String, _ ctx: Int, _ score: Double) {
+            guard ctx >= minExtensionContext, !text.isEmpty else { return }
+            if best == nil || ctx > best!.ctx || (ctx == best!.ctx && score > best!.score) { best = (text, ctx, score) }
+        }
+        if let personal {
+            for c in personal.phraseContinuations(after: words) { consider(c.continuation, c.contextLen, c.score + 1000) }
+        }
+        if !personalExtensionOnly {
+            for c in corpus.phraseContinuations(after: words) { consider(c.continuation, c.contextLen, c.rankScore) }
+        }
+        guard let best else { return nil }
+        let parts = best.text.split(whereSeparator: \.isWhitespace)
+        return parts.prefix(Self.maxExtensionWords).joined(separator: " ")
+    }
+
+    func extendWithPhrases(_ rows: [PredictionCandidate], previousWords: [String]) -> [PredictionCandidate] {
+        guard phraseExtension != .off, !rows.isEmpty else { return rows }
+        var out: [PredictionCandidate] = []
+        var seen = Set<String>()
+        func add(_ c: PredictionCandidate) {
+            let key = BuiltInPredictionCorpus.normalizeTrigger(c.display)
+            guard out.count < Self.maxCandidates, !seen.contains(key) else { return }
+            seen.insert(key)
+            out.append(c)
+        }
+        for row in rows {
+            guard row.kind != .shortcut, !Self.endsWithSentencePunctuation(row.display),
+                  let cont = continuation(after: previousWords + row.display.split(whereSeparator: \.isWhitespace).map(String.init))
+            else {
+                add(row)
+                continue
+            }
+            let text = row.display + " " + cont
+            let insertion = text + (Self.endsWithSentencePunctuation(text) ? "" : " ")
+            let words = text.split(whereSeparator: \.isWhitespace).count
+            add(PredictionCandidate(id: row.id + "+", display: text, insertion: insertion, deleteCount: row.deleteCount,
+                                    kind: words >= 4 ? .sentence : .phrase, score: row.score,
+                                    isPersonal: row.isPersonal || personalExtensionOnly))
+            if phraseExtension == .both { add(row) }
+        }
+        return out
     }
 
     // MARK: - Mode A: Next word / phrase / sentence after Space
@@ -232,6 +328,23 @@ public final class PredictionEngine {
             ))
         }
 
+        // 4b. One word ahead: the typed word is whole, so offer it plus the words that usually follow.
+        if lookAhead, corpus.isWord(current) {
+            for next in nextPredictions(after: query.previousWords + [current], maxCount: Self.maxCandidates) {
+                let text = current + " " + next.display
+                pool.append(PredictionCandidate(
+                    id: "ahead:\(text.lowercased())",
+                    display: text,
+                    insertion: text + (Self.endsWithSentencePunctuation(text) ? "" : " "),
+                    deleteCount: deleteCount,
+                    kind: next.kind == .word ? .phrase : .sentence,
+                    // Below the word's own completions: many prefixes are words too ("đi" of "điện").
+                    score: next.score - 1000,
+                    isPersonal: next.isPersonal
+                ))
+            }
+        }
+
         // 5. Vikey dictionary completions (English directly or pure-ASCII Telex Vietnamese)
         if let dictionary, current.allSatisfy(\.isASCII), current.count < 28 {
             // In English mode search English dictionary; in Vietnamese mode try English if word looks non-VN or search both.
@@ -293,7 +406,7 @@ public final class PredictionEngine {
         return .word
     }
 
-    private static func endsWithSentencePunctuation(_ text: String) -> Bool {
+    static func endsWithSentencePunctuation(_ text: String) -> Bool {
         guard let last = text.last else { return false }
         return [".", "!", "?", ",", ";", ":"].contains(last)
     }
