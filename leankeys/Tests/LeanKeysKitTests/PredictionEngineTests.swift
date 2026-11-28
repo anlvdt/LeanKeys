@@ -273,4 +273,20 @@ final class PredictionEngineTests: XCTestCase {
                                 atWordStartAfterSpace: true, isVietnamese: true)
         XCTAssertEqual(engine.predict(q).map(\.display), off.predict(q).map(\.display))
     }
+
+    func testLookAheadOffersTheNextWordOnceTheWordIsWhole() {
+        let engine = PredictionEngine(corpus: corpus, personal: nil, dictionary: nil, lookAhead: true)
+        XCTAssertTrue(corpus.isWord("cảm"))
+        let rows = engine.predict(PredictionQuery(previousWords: [], currentWord: "cảm", followsNonSpaceBreak: false,
+                                                  atWordStartAfterSpace: false, isVietnamese: true))
+        let ahead = rows.first { $0.display.hasPrefix("cảm ") }
+        XCTAssertEqual(ahead?.display, "cảm ơn")
+        XCTAssertEqual(ahead?.deleteCount, 3)
+        XCTAssertEqual(ahead?.insertion, "cảm ơn ")
+
+        let one = engine.predict(PredictionQuery(previousWords: ["cảm"], currentWord: "ơ", followsNonSpaceBreak: false,
+                                                 atWordStartAfterSpace: false, isVietnamese: true))
+        XCTAssertFalse(one.isEmpty, "with look-ahead the list no longer hides at the first letter")
+        XCTAssertEqual(PredictionEngine(corpus: corpus, personal: nil, dictionary: nil).minPrefix, 2)
+    }
 }

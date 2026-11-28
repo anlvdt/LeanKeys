@@ -1638,6 +1638,7 @@ private func keyboardCallback(
     let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
     defer { if keyCode == UInt16(KeyCode.tab) || keyCode == 0x24 || keyCode == 0x4C { DetectionCache.expire() } } // LEANKEYS-HOOK: engine-dispatch (Tab/Return may move focus to a sign-in field)
     if !PredictionController.listKeyCodes.contains(keyCode) { PredictionController.shared.clearSelection() } // LEANKEYS-HOOK: engine-dispatch (any other key edits the text: Enter must not take a row chosen before it)
+    PredictionController.shared.noteKeyEvent() // LEANKEYS-HOOK: debug-log (4A+ timing, ms only, debug log on)
 
     // Custom shortcut to toggle Vietnamese (default: Ctrl+Space)
     if matchesToggleShortcut(keyCode: keyCode, flags: flags) {

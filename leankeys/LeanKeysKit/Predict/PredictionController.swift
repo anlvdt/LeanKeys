@@ -55,6 +55,7 @@ public final class PredictionController: ObservableObject {
     private var pendingRefresh: DispatchWorkItem?
     private var refreshToken: UInt64 = 0
     private var navigator = SuggestionListNavigator()
+    private var trace = PredictionTrace()
     private var now: () -> CFAbsoluteTime = CFAbsoluteTimeGetCurrent
 
     public init(
@@ -70,7 +71,7 @@ public final class PredictionController: ObservableObject {
         self.personal = personal
         // Google-style rows: a word grows into the phrase the user typed before (learned phrases only).
         self.engine = PredictionEngine(corpus: corpus, personal: personal, dictionary: dictionary,
-                                       phraseExtension: .replace, minExtensionContext: 2)
+                                       phraseExtension: .replace, minExtensionContext: 2, lookAhead: true)
         self.panel = panel
         self.onLearnerQueue = onLearnerQueue
         self.onMain = onMain
@@ -196,6 +197,7 @@ public final class PredictionController: ObservableObject {
         pendingRefresh?.cancel()
         refreshToken &+= 1
         clearSelection()
+        trace.scheduled()
         let item = DispatchWorkItem { [weak self] in
             self?.refreshNow(router: router, bundleID: bundleID, isVietnamese: isVietnamese,
                              atWordStartAfterSpace: atWordStartAfterSpace)
@@ -217,6 +219,7 @@ public final class PredictionController: ObservableObject {
             return
         }
 
+        trace.refreshStarted()
         let currentWord = router.mirror.currentWord
         let previousWords = router.mirror.recentWordsBeforeCurrent
         let followsBreak = router.mirror.currentWordFollowsBreak
@@ -225,7 +228,7 @@ public final class PredictionController: ObservableObject {
             hide()
             return
         }
-        if !currentWord.isEmpty && currentWord.count < PredictionEngine.minPrefixLength {
+        if !currentWord.isEmpty && currentWord.count < engine.minPrefix {
             hide()
             return
         }
@@ -239,6 +242,7 @@ public final class PredictionController: ObservableObject {
             shortcuts: shortcutsProvider()
         )
         let candidates = engine.predict(query)
+        trace.predicted()
         guard !candidates.isEmpty else {
             hide()
             return
@@ -248,15 +252,20 @@ public final class PredictionController: ObservableObject {
         let token = refreshToken
         let now = CFAbsoluteTimeGetCurrent()
         if let cached = lastAnchor, now - lastAnchorTime < 0.08 {
+            trace.axCacheHit()
             present(candidates: candidates, anchor: cached, token: token)
             return
         }
 
         let locate = caretAnchor
         axQueue.async { [weak self] in
+            let axStart = CFAbsoluteTimeGetCurrent()
             let resolved = locate()
+            let axMs = (CFAbsoluteTimeGetCurrent() - axStart) * 1000
             DispatchQueue.main.async {
-                guard let self, self.enabled, self.refreshToken == token else { return }
+                guard let self else { return }
+                guard self.enabled, self.refreshToken == token else { self.trace.axDropped(); return }
+                self.trace.axResolved(ms: axMs)
                 self.lastAnchor = resolved
                 self.lastAnchorTime = CFAbsoluteTimeGetCurrent()
                 guard let resolved else {
@@ -275,9 +284,16 @@ public final class PredictionController: ObservableObject {
             navigator.listChanged(count: candidates.count, at: now())
         }
         currentCandidates = candidates
+        let showStart = CFAbsoluteTimeGetCurrent()
         panel.show(candidates: candidates, anchor: anchor, selectedIndex: navigator.selectedIndex) { [weak self] idx in
             self?.acceptFromClick(at: idx)
         }
+        trace.shown(showMs: (CFAbsoluteTimeGetCurrent() - showStart) * 1000, rows: candidates.count)
+    }
+
+    /// Event-tap hook: a key reached the tap now (debug-log timing only).
+    public func noteKeyEvent() {
+        trace.keyEvent()
     }
 
     /// Test hook: shows `candidates` as if a refresh had just resolved the caret.

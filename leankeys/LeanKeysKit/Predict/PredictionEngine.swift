@@ -107,6 +107,12 @@ public final class PredictionEngine {
     public var phraseExtension: PhraseExtension
     /// Shortest context (in words, the completed word included) a continuation must match to be glued on.
     public var minExtensionContext: Int
+    /// Stay one word ahead (spec 2026-11-28-prediction-dropdown): once the typed word is a whole word, offer
+    /// "word + next word" rows, and suggest from the first letter instead of hiding until the second.
+    public var lookAhead: Bool
+    /// Shortest typed prefix that gets suggestions (`minPrefixLength`, or 1 with `lookAhead`).
+    public var minPrefix: Int { lookAhead ? 1 : Self.minPrefixLength }
+
     /// Glue only phrases the user typed again and again (the learned model), never the built-in table: on the
     /// chat bench, rows glued from the built-in table were right past their first word 1–2 % of the time.
     public var personalExtensionOnly: Bool
@@ -116,13 +122,15 @@ public final class PredictionEngine {
                 dictionary: DictionaryCompleting? = VikeyDictionaryCompleter.shared,
                 phraseExtension: PhraseExtension = .off,
                 minExtensionContext: Int = 2,
-                personalExtensionOnly: Bool = true) {
+                personalExtensionOnly: Bool = true,
+                lookAhead: Bool = false) {
         self.corpus = corpus
         self.personal = personal
         self.dictionary = dictionary
         self.phraseExtension = phraseExtension
         self.minExtensionContext = minExtensionContext
         self.personalExtensionOnly = personalExtensionOnly
+        self.lookAhead = lookAhead
     }
 
     public func predict(_ query: PredictionQuery) -> [PredictionCandidate] {
@@ -135,7 +143,7 @@ public final class PredictionEngine {
         }
 
         let current = query.currentWord.precomposedStringWithCanonicalMapping
-        guard current.count >= Self.minPrefixLength,
+        guard current.count >= minPrefix,
               current.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else {
             return []
         }
@@ -305,6 +313,22 @@ public final class PredictionEngine {
                 score: item.score,
                 isPersonal: false
             ))
+        }
+
+        // 4b. One word ahead: the typed word is whole, so offer it plus the words that usually follow.
+        if lookAhead, corpus.isWord(current) {
+            for next in nextPredictions(after: query.previousWords + [current], maxCount: Self.maxCandidates) {
+                let text = current + " " + next.display
+                pool.append(PredictionCandidate(
+                    id: "ahead:\(text.lowercased())",
+                    display: text,
+                    insertion: text + (Self.endsWithSentencePunctuation(text) ? "" : " "),
+                    deleteCount: deleteCount,
+                    kind: next.kind == .word ? .phrase : .sentence,
+                    score: next.score + 100,
+                    isPersonal: next.isPersonal
+                ))
+            }
         }
 
         // 5. Vikey dictionary completions (English directly or pure-ASCII Telex Vietnamese)

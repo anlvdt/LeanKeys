@@ -52,8 +52,10 @@ final class PredictionLatencyBenchTests: XCTestCase {
         personal.enabled = true
         for l in lines[..<split] { personal.observe(CommittedPhrase(text: l), context: ctx) }
 
-        for (label, model, sticky) in [("personal", Optional(personal), false), ("builtin-only", nil, false), ("personal+sticky", Optional(personal), true), ("personal+filter-only", Optional(personal), true), ("personal+filter-then-3", Optional(personal), true)] {
-            let engine = PredictionEngine(corpus: .shared, personal: model, dictionary: VikeyDictionaryCompleter.shared)
+        for (label, model, sticky) in [("personal", Optional(personal), false), ("builtin-only", nil, false), ("personal+sticky", Optional(personal), true), ("personal+filter-only", Optional(personal), true), ("personal+filter-then-3", Optional(personal), true), ("personal+lookahead", Optional(personal), false)] {
+            let engine = PredictionEngine(corpus: .shared, personal: model, dictionary: VikeyDictionaryCompleter.shared,
+                                          lookAhead: label.hasSuffix("lookahead"))
+            var aheadShown = 0, aheadNextRight = 0
             var afterSpace: [Double] = [], midWord: [Double] = []
             var keys = 0, shown = 0, listChanged = 0, slot0Changed = 0, hideShowFlips = 0
             var words = 0, next1 = 0, next3 = 0, wordsCompletedEarly = 0, savedChars = 0, totalChars = 0
@@ -73,13 +75,13 @@ final class PredictionLatencyBenchTests: XCTestCase {
                     totalChars += w.count
                     var hitAt: Int?
                     let chars = Array(w)
-                    for k in 0...chars.count - 1 {
+                    for k in 0...chars.count { // k == count: the word is typed, Space not yet
                         // State at this keystroke: k == 0 is "right after the space before w".
                         let cur = String(chars[..<k])
                         keys += 1
                         let q = PredictionQuery(previousWords: prev, currentWord: cur, followsNonSpaceBreak: false,
                                                 atWordStartAfterSpace: k == 0, isVietnamese: true)
-                        let willRun = !(cur.isEmpty && prev.isEmpty) && !(cur.count == 1)  // app: refreshNow hides at 1 letter
+                        let willRun = !(cur.isEmpty && prev.isEmpty) && cur.count >= engine.minPrefix || (k == 0 && !prev.isEmpty)
                         var list: [PredictionCandidate] = []
                         if willRun {
                             let t0 = CFAbsoluteTimeGetCurrent()
@@ -109,6 +111,13 @@ final class PredictionLatencyBenchTests: XCTestCase {
                             }
                         }
                         let isShown = !texts.isEmpty
+                        if let top = texts.first, k > 0 {
+                            let tw = top.lowercased().split(separator: " ").map(String.init)
+                            if tw.count >= 2, tw[0] == cur.lowercased() {
+                                aheadShown += 1
+                                if wi + 1 < ws.count, tw[1] == ws[wi + 1].lowercased() { aheadNextRight += 1 }
+                            }
+                        }
                         rowsShown += texts.count
                         phraseRows += texts.filter { $0.contains(" ") }.count
                         if isShown { shown += 1 }
@@ -153,6 +162,8 @@ final class PredictionLatencyBenchTests: XCTestCase {
             let meanRun = Double(runs.reduce(0, +)) / Double(max(1, runs.count))
             let ge3 = 100.0 * Double(runs.filter { $0 >= 3 }.count) / Double(max(1, runs.count))
             print(String(format: "[bench] stability(%@) a shown list stays for %.2f keystrokes on average; %.1f%% of lists last >= 3 keystrokes", label, meanRun, ge3))
+            print(String(format: "[bench] ahead(%@) row 1 one word ahead on %.1f%% of keys; its next word right %.1f%%", label,
+                         100.0 * Double(aheadShown) / Double(keys), 100.0 * Double(aheadNextRight) / Double(max(1, aheadShown))))
             print(String(format: "[bench] rows(%@) %.1f%% of shown rows are 2+ words", label, 100.0 * Double(phraseRows) / Double(max(1, rowsShown))))
             if label == "personal" { for e in examples { print("[example] \(e)") } }
             dump("predict-\(label).json", ["afterSpace": afterSpace, "midWord": midWord, "runs": runs])
@@ -172,12 +183,13 @@ final class PredictionLatencyBenchTests: XCTestCase {
         let variants: [(String, PredictionEngine.PhraseExtension, Int)] = [
             ("off", .off, 2), ("replace ctx>=2", .replace, 2), ("both ctx>=2", .both, 2),
             ("replace ctx>=3", .replace, 3), ("personal-only replace ctx>=2", .replace, 2),
-            ("personal-only replace ctx>=1", .replace, 1),
+            ("personal-only replace ctx>=1", .replace, 1), ("app: replace ctx>=2 + lookahead", .replace, 2),
         ]
         for (name, mode, minCtx) in variants {
             let engine = PredictionEngine(corpus: .shared, personal: personal, dictionary: VikeyDictionaryCompleter.shared,
                                           phraseExtension: mode, minExtensionContext: minCtx)
-            engine.personalExtensionOnly = name.hasPrefix("personal-only") || mode == .off
+            engine.personalExtensionOnly = name.hasPrefix("personal-only") || name.hasPrefix("app") || mode == .off
+            engine.lookAhead = name.hasSuffix("lookahead")
             var total = 0, savedTab = 0, savedAny = 0
             var multi = 0, multiFirstRight = 0, multiExact = 0, phraseAccepts = 0
             var lat: [Double] = []
@@ -190,7 +202,7 @@ final class PredictionLatencyBenchTests: XCTestCase {
                     while wi < ws.count {
                         let chars = Array(ws[wi])
                         var took = false
-                        for k in 0..<chars.count where !(k == 1) && !(k == 0 && wi == 0) {
+                        for k in 0...chars.count where k >= engine.minPrefix || (k == 0 && wi > 0) {
                             let t0 = CFAbsoluteTimeGetCurrent()
                             let rows = engine.predict(PredictionQuery(previousWords: Array(ws[..<wi]), currentWord: String(chars[..<k]),
                                                                       followsNonSpaceBreak: false, atWordStartAfterSpace: k == 0,
@@ -288,6 +300,7 @@ final class PredictionLatencyBenchTests: XCTestCase {
         try XCTSkipUnless(AXIsProcessTrusted(), "needs Accessibility for the test runner")
         let ids = ["com.apple.TextEdit", "com.apple.Notes", "com.google.Chrome", "com.apple.Safari",
                    "com.microsoft.Word", "com.apple.Terminal", "com.anthropic.claudefordesktop"]
+            + (ProcessInfo.processInfo.environment["LEANKEYS_BENCH_AX_APPS"]?.split(separator: ",").map(String.init) ?? [])
         var out: [String: Any] = [:]
         for id in ids {
             guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first else { continue }
