@@ -229,4 +229,21 @@ final class PredictionEngineTests: XCTestCase {
                                                                 screens: [screen])
         XCTAssertEqual(clampedRight.x, 1440 - 260 - 8)
     }
+
+    func testPredictionLatencyUnderBudget() {
+        let engine = PredictionEngine(corpus: corpus, personal: nil, dictionary: VikeyDictionaryCompleter.shared)
+        let queries = [
+            PredictionQuery(previousWords: ["cảm", "ơn"], currentWord: "", followsNonSpaceBreak: false, atWordStartAfterSpace: true, isVietnamese: true),
+            PredictionQuery(previousWords: ["chúc", "bạn"], currentWord: "mộ", followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: true),
+            PredictionQuery(previousWords: [], currentWord: "chươ", followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: true),
+            PredictionQuery(previousWords: [], currentWord: "impr", followsNonSpaceBreak: false, atWordStartAfterSpace: false, isVietnamese: false),
+        ]
+        for q in queries { _ = engine.predict(q) }
+        let iterations = 50
+        let t0 = CFAbsoluteTimeGetCurrent()
+        for _ in 0..<iterations { for q in queries { _ = engine.predict(q) } }
+        let avgMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000.0 / Double(iterations * queries.count)
+        print("PredictionEngine avg latency: \(String(format: "%.4f", avgMs)) ms/query")
+        XCTAssertLessThan(avgMs, 0.5, "Prediction runs on the event-tap thread: keep each query under 0.5 ms")
+    }
 }

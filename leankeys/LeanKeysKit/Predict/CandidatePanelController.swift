@@ -18,6 +18,8 @@ public final class CandidatePanelController {
     private let state = CandidateBarState()
     private var panel: FloatingPanel?
     private var hostingController: NSHostingController<CandidateBarView>?
+    private var lastFrame: CGRect = .zero
+    private var lastTexts: [String] = []
 
     public private(set) var isVisible = false
 
@@ -37,14 +39,28 @@ public final class CandidatePanelController {
         guard let panel, let hostingController else { return }
 
         state.onAccept = onAccept
-        state.candidates = candidates
-        hostingController.rootView = CandidateBarView(state: state)
+        // Same bar as before, but skip SwiftUI re-layout and window resizing when nothing changed: `show` runs on
+        // the main thread, which also runs the keyboard event tap.
+        let texts = candidates.map(\.display)
+        let textsChanged = texts != lastTexts
+        if textsChanged {
+            state.candidates = candidates
+            hostingController.rootView = CandidateBarView(state: state)
+            lastTexts = texts
+        }
 
-        let fitting = hostingController.sizeThatFits(in: CGSize(width: 520, height: 48))
-        let panelSize = CGSize(width: max(120, min(520, ceil(fitting.width))),
+        var panelSize = lastFrame.size
+        if textsChanged || panelSize == .zero {
+            let fitting = hostingController.sizeThatFits(in: CGSize(width: 520, height: 48))
+            panelSize = CGSize(width: max(120, min(520, ceil(fitting.width))),
                                height: max(30, min(48, ceil(fitting.height))))
+        }
         let origin = Self.panelOrigin(panelSize: panelSize, caretRect: anchor.rect)
-        panel.setFrame(CGRect(origin: origin, size: panelSize), display: true)
+        let frame = CGRect(origin: origin, size: panelSize)
+        if frame != lastFrame {
+            panel.setFrame(frame, display: false)
+            lastFrame = frame
+        }
         if !panel.isVisible {
             panel.orderFrontRegardless()
         }
@@ -53,8 +69,11 @@ public final class CandidatePanelController {
 
     public func hide() {
         isVisible = false
+        guard let panel, panel.isVisible || !lastTexts.isEmpty else { return }
         state.candidates = []
-        panel?.orderOut(nil)
+        lastTexts = []
+        lastFrame = .zero
+        panel.orderOut(nil)
     }
 
     /// Computes panel origin in Cocoa coordinates: below caret by default, flipping above if near screen bottom,

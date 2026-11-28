@@ -224,12 +224,11 @@ public final class EngineRouter {
                 returnFixNote = "returnFix=0 field"
             }
         }
-        let effectiveKeyCode = AdvancedTelex.translatedKeyCode(
-            keyCode: keyCode,
-            currentWord: mirror.currentWord,
-            vietnamese: vietnamese,
-            enabled: advancedTelexCached
-        )
+        // Only build the mirror's current word when Advanced Telex is on: `intercept` runs on every key.
+        let effectiveKeyCode = advancedTelexCached && vietnamese
+            ? AdvancedTelex.translatedKeyCode(keyCode: keyCode, currentWord: mirror.currentWord,
+                                              vietnamese: vietnamese, enabled: true)
+            : keyCode
         let processed = vikey.process(keyCode: effectiveKeyCode, caps: caps, shift: shift)
         if let vikeyEngine { undoLearning?.afterPress(engine: vikeyEngine) }
         guard let edit = processed else {
