@@ -24,8 +24,6 @@
 //                  fed by lk_vikey_take_undo after every press and answering the shim's keep filter
 //                  (lk_vikey_set_fix_filter) and convert filter (lk_vikey_set_convert_filter). With --convert-wrong,
 //                  the ⌃⌫ presses per 500 messages are printed.
-//   --learn-direction  --learn, with a convert rule keyed by the raw keys and the direction (to English or to
-//                  Telex) instead of the keys alone: an experiment, the design (spec 5.3) keys by keys only.
 // Counts for --undo-bad-fix, --convert-wrong and --learn go to stderr.
 #include "lk_vikey.h"
 #include <algorithm>
@@ -120,9 +118,10 @@ struct Book {
 static bool learn = false;
 static Book book;
 static bool vetoed = false;
-static bool learnDirection = false;   // --learn-direction: a convert rule is keyed by the raw keys and the direction
-static std::u16string convertKey(const std::u16string& keys, bool toEnglish) {
-    return learnDirection ? keys + (toEnglish ? u"|E" : u"|V") : keys;
+// A convert rule carries its direction (Ruling 5): toRaw when it was learned on a Telex form (the conversion gives the raw
+// keys), toTelex when learned on a word shown as its raw keys. It applies only to a word shown in its from-form.
+static std::u16string convertKey(const std::u16string& keys, bool toRaw) {
+    return keys + (toRaw ? u"|raw" : u"|telex");
 }
 static std::u16string u16(const uint16_t* p, int n) { return std::u16string((const char16_t*)p, n); }
 
@@ -139,7 +138,7 @@ static int recordFix(const lk_fix* f) {
 }
 static int keepFilter(const lk_fix* f) { return recordFix(f); }
 static int convertFilter(const lk_fix* f) {
-    // afterLength > 0: converting gives the raw keys (the word shows something else), so the direction is to English.
+    // afterLength > 0: converting gives the raw keys (the word shows its Telex form), so the direction is toRaw.
     return book.applies(1, convertKey(u16(f->keys, f->keysLength), f->afterLength > 0), u16(f->previous, f->previousLength)) ? 1 : 0;
 }
 // Feed the learner what the shim reports (spec 5.3): kinds 0 and 1 are held by the shim until the next key.
@@ -151,9 +150,9 @@ static void pump() {
         if (u.kind == LK_UNDO_BACKSPACE) book.record(0, u16(u.fix.before, u.fix.beforeLength), prev, u.reverse);
         else {
             std::u16string k = u16(u.fix.keys, u.fix.keysLength);
-            bool toEnglish = lower(u16(u.fix.after, u.fix.afterLength)) == k;
-            if (u.kind == LK_UNDO_RULE_REVERSE) toEnglish = !toEnglish;   // the undone conversion went the other way
-            book.record(1, convertKey(k, toEnglish), prev, u.kind == LK_UNDO_RULE_REVERSE || u.reverse);
+            // after = what the conversion made (kinds 1 and 2): the raw keys when it went to raw.
+            bool toRaw = lower(u16(u.fix.after, u.fix.afterLength)) == k;
+            book.record(1, convertKey(k, toRaw), prev, u.kind == LK_UNDO_RULE_REVERSE || u.reverse);
         }
     }
 }
@@ -168,7 +167,6 @@ int main(int argc, char** argv) {
         else if (a == "--undo-bad-fix") undoBadFix = true;
         else if (a == "--convert-wrong") convertWrong = true;
         else if (a == "--learn") learn = true;
-        else if (a == "--learn-direction") learn = learnDirection = true;
         else if (a == "--start-en") startEn = true;
         else if (a == "--end" && i + 1 < argc) end = argv[++i];
         else if (a == "--langs" && i + 1 < argc) langsPath = argv[++i];
