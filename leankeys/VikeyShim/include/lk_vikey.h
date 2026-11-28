@@ -38,6 +38,7 @@ typedef struct {
     uint16_t before[64]; int beforeLength;     // the word on screen before Vikey changed it ("cos", "ít")
     uint16_t after[64];  int afterLength;      // the word Vikey made ("có", "its")
     uint16_t previous[64]; int previousLength; // the word before it on the same line, lower case; may be empty
+    uint16_t keys[64]; int keysLength;         // the raw keys that typed the word, lower case; empty when unknown
 } lk_fix;
 // Called when Vikey has just fixed a word (words over 64 UTF-16 units are never reported). Return 1 to keep `before`:
 // the shim undoes the fix inside the engine and types the break key again, all in the one edit the key returns, with
@@ -45,8 +46,17 @@ typedef struct {
 typedef int (*lk_fix_filter)(const lk_fix* fix);
 void lk_vikey_set_fix_filter(lk_fix_filter filter); // NULL = never veto (the default)
 // An undo: the user pressed Backspace twice right after a fix (Vikey puts `before` back; reverse = 0), or right after
-// a veto (the shim applies the fix after all: `after` comes back with its language; reverse = 1).
-typedef struct { lk_fix fix; int reverse; } lk_undo;
+// a veto (the shim applies the fix after all: `after` comes back with its language; reverse = 1). `kind`:
+//   LK_UNDO_BACKSPACE (0)    Backspace twice, or ⌃⌫ on a word Vikey had just fixed (it undoes the fix, reverse = 0).
+//   LK_UNDO_CONVERT (1)      ⌃⌫ on a word Vikey left alone: `before` is what was shown, `after` what ⌃⌫ made, `keys` the
+//                            raw keys. Held until the next key, and dropped when ⌃⌫ is pressed again (a change of mind).
+//   LK_UNDO_RULE_REVERSE (2) the user undid a conversion a learned rule had made (never held).
+// The events of kinds 0 and 1 that ⌃⌫ makes are held like 12.2a's: the next key (not ⌃⌫), a reset or a language change
+// releases them; ⌃⌫ pressed again drops them.
+#define LK_UNDO_BACKSPACE 0
+#define LK_UNDO_CONVERT 1
+#define LK_UNDO_RULE_REVERSE 2
+typedef struct { lk_fix fix; int reverse; int kind; } lk_undo;
 // 1 and fills `out` once per undo; 0 when there is none. One slot: a newer undo replaces one not yet taken.
 // No lock: call it on the thread that calls lk_vikey_press, right after the press.
 int  lk_vikey_take_undo(lk_undo* out);

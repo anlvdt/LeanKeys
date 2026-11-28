@@ -101,11 +101,22 @@ public final class VikeyEngine: TypingEngine {
 
     /// Spec 12.2: the user's ⌫⌫ undo of Vikey's fix of a word, once per undo; nil when there is none. Call it on the
     /// key-handling thread, right after `process` (the shim's undo slot has no lock).
-    public func takeUndo() -> (before: String, after: String, previous: String, reverse: Bool)? {
+    /// `kind`: 0 = ⌫⌫ (or ⌃⌫ on a word Vikey had just fixed), 1 = ⌃⌫ on a word Vikey left alone (`keys` are the raw
+    /// keys), 2 = the user undid a conversion a learned rule made. `keys` is empty when the shim does not know them.
+    public func takeUndo() -> (before: String, after: String, previous: String, keys: String, reverse: Bool, kind: Int32)? {
         var undo = lk_undo()
         guard lk_vikey_take_undo(&undo) == 1 else { return nil }
         return (Self.string(undo.fix.before, undo.fix.beforeLength), Self.string(undo.fix.after, undo.fix.afterLength),
-                Self.string(undo.fix.previous, undo.fix.previousLength), undo.reverse != 0)
+                Self.string(undo.fix.previous, undo.fix.previousLength), Self.string(undo.fix.keys, undo.fix.keysLength),
+                undo.reverse != 0, undo.kind)
+    }
+
+    /// The ⌃⌫ key (spec 5.1 of the convert-last-word design): the last word between its Telex form and its raw keys.
+    /// nil when there is no word to convert, and the key goes through to the app. Key-handling thread.
+    public func convertLastWord() -> EngineEdit? {
+        var raw = lk_edit()
+        guard lk_vikey_convert_last_word(ProcessInfo.processInfo.systemUptime, &raw) == 1 else { return nil }
+        return Self.edit(from: &raw)
     }
 
     /// A word from one of the shim's fixed UTF-16 buffers (lk_fix: 64 units each).

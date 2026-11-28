@@ -230,4 +230,78 @@ final class ConvertShimTests: XCTestCase {
         XCTAssertEqual(l.type("⌃"), "PÚ")
         XCTAssertEqual(lk_vikey_language(), 1)
     }
+
+    // MARK: Learning events (spec 5.3, 8.4)
+
+    private func takeEvent() -> (before: String, after: String, previous: String, keys: String, reverse: Bool, kind: Int32)? {
+        var undo = lk_undo()
+        guard lk_vikey_take_undo(&undo) == 1 else { return nil }
+        let f = undo.fix
+        return (VikeyEngine.string(f.before, f.beforeLength), VikeyEngine.string(f.after, f.afterLength),
+                VikeyEngine.string(f.previous, f.previousLength), VikeyEngine.string(f.keys, f.keysLength),
+                undo.reverse != 0, undo.kind)
+    }
+
+    func testConvertEventHeldUntilNextKey() {
+        let l = line(1)
+        XCTAssertEqual(l.type("toi uong beer ⌃"), "toi uong beer ")
+        XCTAssertNil(takeEvent(), "held until the next key")
+        l.type("n")
+        let e = takeEvent()
+        XCTAssertEqual(e?.kind, 1)
+        XCTAssertEqual(e?.before, "bể")
+        XCTAssertEqual(e?.after, "beer")
+        XCTAssertEqual(e?.keys, "beer")
+        XCTAssertEqual(e?.previous, "uong")
+        XCTAssertEqual(e?.reverse, false)
+        XCTAssertNil(takeEvent(), "one event per conversion")
+    }
+
+    func testToggleBackRecordsNothing() {
+        let l = line(1)
+        l.type("toi uong beer ⌃⌃n")
+        XCTAssertNil(takeEvent())
+    }
+
+    func testResetReleasesEvent() {
+        let l = line(1)
+        l.type("toi uong beer ⌃")
+        XCTAssertNil(takeEvent())
+        lk_vikey_reset_context()
+        XCTAssertEqual(takeEvent()?.kind, 1)
+        XCTAssertNil(takeEvent())
+    }
+
+    func testConvertOfJustFixedWordIsUndo() {
+        let l = line(0)
+        XCTAssertEqual(l.type("toi thich cos "), "toi thich có ", "precondition: Vikey fixes it")
+        XCTAssertEqual(l.type("⌃"), "toi thich cos ")
+        XCTAssertEqual(l.lastConvertResult, 1)
+        XCTAssertEqual(lk_vikey_language(), 0)
+        XCTAssertNil(takeEvent(), "held until the next key")
+        l.type(" ")
+        let e = takeEvent()
+        XCTAssertEqual(e?.kind, 0)
+        XCTAssertEqual(e?.before, "cos")
+        XCTAssertEqual(e?.after, "có")
+        XCTAssertEqual(e?.keys, "cos")
+        XCTAssertEqual(e?.reverse, false)
+    }
+
+    func testConvertWhileHeldUndo() {
+        let l = line(1)
+        XCTAssertEqual(l.type("test ⌫⌫"), "tét")
+        XCTAssertEqual(l.type("⌃"), "test")
+        XCTAssertEqual(l.lastConvertResult, 1)
+        l.type(" ")
+        XCTAssertNil(takeEvent(), "the held undo was dropped and nothing is held")
+    }
+
+    func testToggleBackOfJustFixedWordRecordsNothing() {
+        let l = line(0)
+        XCTAssertEqual(l.type("toi thich cos "), "toi thich có ")
+        XCTAssertEqual(l.type("⌃⌃"), "toi thich có ")
+        l.type("x")
+        XCTAssertNil(takeEvent())
+    }
 }
