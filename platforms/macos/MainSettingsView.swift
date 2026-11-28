@@ -1096,7 +1096,7 @@ struct SettingsPageView: View {
                                     subtitle: "Khi bàn phím rời không có fn",
                                     isEnabled: $appState.secondaryToggleShortcutEnabled,
                                     duplicateOf: appState.toggleShortcut)
-                if SettingsLayout.showsGoNhanhOnlySettings(active: EngineRouter.shared.active) { // LEANKEYS-HOOK: copy (Gõ Nhanh only: Vikey takes Esc as a word break, no restore)
+                if SettingsLayout.showsRestoreShortcut(active: EngineRouter.shared.active) { // LEANKEYS-HOOK: settings-engine
                 Divider().padding(.leading, 12)
                 RestoreShortcutRecorderRow(
                     shortcut: $appState.restoreShortcut,
@@ -1632,7 +1632,7 @@ struct ShortcutRecorderRow: View {
 // MARK: - Restore Shortcut Recorder Row
 
 struct RestoreShortcutRecorderRow: View {
-    static let title = "Trả từ đang gõ về phím gốc" // LEANKEYS-HOOK: copy (not "Hoàn tác": 4C's ⌫⌫ is the undo)
+    static var title: String { SettingsLayout.restoreRowTitle(active: EngineRouter.shared.active) } // LEANKEYS-HOOK: settings-engine
     @Binding var shortcut: KeyboardShortcut
     @Binding var isEnabled: Bool
     @Binding var isRecording: Bool
@@ -1644,15 +1644,15 @@ struct RestoreShortcutRecorderRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(Self.title).font(.system(size: 13)) // LEANKEYS-HOOK: copy
-                Text("Ví dụ: việt → vieejt · Bấm để đổi phím tắt") // LEANKEYS-HOOK: copy
+                Text(Self.title).font(.system(size: 13)) // LEANKEYS-HOOK: settings-engine
+                Text(SettingsLayout.restoreRowSubtitle(active: EngineRouter.shared.active)) // LEANKEYS-HOOK: settings-engine
                     .font(.system(size: 11))
                     .foregroundColor(Color(NSColor.secondaryLabelColor))
             }
             Spacer()
             HStack(spacing: 8) {
                 shortcutDisplay
-                Toggle(Self.title, isOn: $isEnabled) // LEANKEYS-HOOK: copy
+                Toggle(Self.title, isOn: $isEnabled) // LEANKEYS-HOOK: settings-engine
                     .toggleStyle(.switch)
                     .controlSize(.mini) // LEANKEYS-HOOK: settings-engine
                     .labelsHidden()

@@ -1,8 +1,19 @@
 import Foundation
 
 /// A learned "keep as typed" rule (spec 12.2): after the user undid Vikey's switch of `text` with ⌫⌫, leave it alone.
+public enum UndoRuleKind: String, Codable {
+    /// Leave `text` as typed after Vikey would switch it (spec 12.2).
+    case keep
+    /// Turn the raw keys `text` into the other form on the break key (convert-last-word design 5.3).
+    case convert
+}
+
 public struct UndoRule: Codable, Equatable, Identifiable {
-    public var id: String { previous + "\u{1F}" + text }
+    public var id: String {
+        // A keep rule's id is as before (existing callers); a convert rule's carries the kind and direction.
+        guard kind == .convert else { return previous + "\u{1F}" + text }
+        return "convert" + ((toRaw ?? false) ? "1" : "0") + "\u{1F}" + previous + "\u{1F}" + text
+    }
     /// The word before the switch, lowercase.
     public let text: String
     /// The word before it on the line, lowercase; "" for a rule that holds in any context.
@@ -10,6 +21,25 @@ public struct UndoRule: Codable, Equatable, Identifiable {
     /// Undos counted.
     public var count: Int
     public var lastUsed: Date
+    /// `.keep` for a rule learned from ⌫⌫; absent in files from before convert rules.
+    public var kind: UndoRuleKind = .keep
+    /// Convert rules only (nil for `.keep`): true turns a Telex form into its raw keys, false turns raw keys into
+    /// their Telex form. `text` is then the raw keys, lowercase.
+    public var toRaw: Bool? = nil
+}
+
+extension UndoRule {
+    private enum CodingKeys: String, CodingKey { case text, previous, count, lastUsed, kind, toRaw }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+        previous = try c.decode(String.self, forKey: .previous)
+        count = try c.decode(Int.self, forKey: .count)
+        lastUsed = try c.decode(Date.self, forKey: .lastUsed)
+        kind = try c.decodeIfPresent(UndoRuleKind.self, forKey: .kind) ?? .keep
+        toRaw = try c.decodeIfPresent(Bool.self, forKey: .toRaw)
+    }
 }
 
 /// The learned "keep as typed" rules (spec 12.2–12.3).
@@ -32,11 +62,23 @@ public final class UndoRuleBook {
         let text: String
     }
 
+    private struct ConvertKey: Hashable {
+        let previous: String
+        let keys: String
+        let toRaw: Bool
+    }
+
+    /// File version 2 adds the optional keys; `rules` stays the keep rules only, so a version 1 reader still works.
     private struct Snapshot: Codable {
-        var v = 1
+        var v = 2
         var rules: [UndoRule]
         var blocked: [String: Int]
+        var convert: [UndoRule]?
+        var convertBlocked: [String: Int]?
+        var pinned: [String]?
     }
+
+    static let pinCapacity = 500
 
     private let store: LearnStore?
     private let now: () -> Date
@@ -47,6 +89,11 @@ public final class UndoRuleBook {
     private var entries: [Key: UndoRule] = [:]
     /// Text → same-direction undos still needed before its rules apply again.
     private var blocked: [String: Int] = [:]
+    private var convertEntries: [ConvertKey: UndoRule] = [:]
+    /// "1"/"0" (toRaw) + US + keys → same-direction manual converts still needed.
+    private var convertBlocked: [String: Int] = [:]
+    /// Lowercase word → the word as pasted.
+    private var pins: [String: String] = [:]
     private var savePending = false
     /// The store could not be read or decoded at launch: nothing is saved this session, so its file is never
     /// overwritten, until "Xoá tất cả" erases it (`removeAll`; ruling R16).
@@ -77,6 +124,19 @@ public final class UndoRuleBook {
                 }
                 blocked = snapshot.blocked.filter { $0.value > 0 && !Self.isSecretShaped($0.key) }
                 purged = purged || blocked.count != snapshot.blocked.filter { $0.value > 0 }.count
+                for rule in snapshot.convert ?? [] where rule.kind == .convert && !rule.text.isEmpty && rule.count > 0 {
+                    if Self.isSecretShaped(rule.text) || Exclusions.looksLikeSecret(rule.previous) {
+                        purged = true
+                        continue
+                    }
+                    guard let toRaw = rule.toRaw else { continue }
+                    convertEntries[ConvertKey(previous: rule.previous, keys: rule.text, toRaw: toRaw)] = rule
+                }
+                convertBlocked = (snapshot.convertBlocked ?? [:]).filter { $0.value > 0 }
+                for word in snapshot.pinned ?? [] {
+                    guard Self.pinnable(word), pins.count < Self.pinCapacity else { purged = true; continue }
+                    pins[word.lowercased()] = word
+                }
                 evictOverCapacity()
                 if purged { scheduleSave() }
             }
@@ -91,6 +151,13 @@ public final class UndoRuleBook {
         guard text.hasPrefix("cap:") else { return Exclusions.looksLikeSecret(text) }
         return text.dropFirst(4).split(separator: " ").contains { Exclusions.looksLikeSecret(String($0)) }
     }
+
+    private static func pinnable(_ word: String) -> Bool {
+        (2...38).contains(word.count) && word.unicodeScalars.allSatisfy { $0.isASCII && $0.properties.isAlphabetic }
+            && !isSecretShaped(word)
+    }
+
+    private static func blockKey(_ keys: String, _ toRaw: Bool) -> String { (toRaw ? "1" : "0") + "\u{1F}" + keys }
 
     /// Called on the main queue after a change.
     public var onChange: (() -> Void)? {
@@ -111,8 +178,12 @@ public final class UndoRuleBook {
                 blocked[text] = 2
             } else {
                 let date = now()
-                if !previous.isEmpty { bump(Key(previous: previous, text: text), at: date) }
+                if !previous.isEmpty {
+                    bump(Key(previous: previous, text: text), at: date)
+                    eraseConvert(previous: previous, keys: text)
+                }
                 bump(Key(previous: "", text: text), at: date)
+                eraseConvert(previous: "", keys: text)
                 evictOverCapacity()
                 if let left = blocked[text] { blocked[text] = left > 1 ? left - 1 : nil }
             }
@@ -137,17 +208,105 @@ public final class UndoRuleBook {
         return hit
     }
 
+    /// One manual ⌃⌫ convert of the raw keys `keys` (typed after `previous`), in direction `toRaw`. `reverse` marks the
+    /// undo of a convert this book applied: it drops that text's convert rules of that direction and blocks them.
+    public func recordConvert(keys: String, previous: String, toRaw: Bool, reverse: Bool) {
+        let text = keys.lowercased()
+        guard !text.isEmpty, !Self.isSecretShaped(text) else { return }
+        let previous = Exclusions.looksLikeSecret(previous) ? "" : previous.lowercased()
+        let blockKey = Self.blockKey(text, toRaw)
+        lock.withLock {
+            if reverse {
+                convertEntries = convertEntries.filter { !($0.key.keys == text && $0.key.toRaw == toRaw) }
+                convertBlocked[blockKey] = 2
+            } else {
+                let date = now()
+                if !previous.isEmpty {
+                    bumpConvert(ConvertKey(previous: previous, keys: text, toRaw: toRaw), at: date)
+                    eraseKeep(previous: previous, text: text)
+                }
+                bumpConvert(ConvertKey(previous: "", keys: text, toRaw: toRaw), at: date)
+                eraseKeep(previous: "", text: text)
+                evictOverCapacity()
+                if let left = convertBlocked[blockKey] { convertBlocked[blockKey] = left > 1 ? left - 1 : nil }
+            }
+        }
+        didChange()
+    }
+
+    /// Whether to convert the raw keys `keys` (typed after `previous`) in direction `toRaw`. A hit marks the rule used.
+    public func shouldConvert(keys: String, previous: String, toRaw: Bool) -> Bool {
+        let text = keys.lowercased()
+        let previous = previous.lowercased()
+        let hit: Bool = lock.withLock {
+            guard convertBlocked[Self.blockKey(text, toRaw)] == nil else { return false }
+            if !previous.isEmpty, markConvertUsed(ConvertKey(previous: previous, keys: text, toRaw: toRaw)) { return true }
+            let any = ConvertKey(previous: "", keys: text, toRaw: toRaw)
+            guard let rule = convertEntries[any], rule.count >= 2 else { return false }
+            return markConvertUsed(any)
+        }
+        if hit { scheduleSave() }
+        return hit
+    }
+
+    /// Adds pasted words (one per line) to "Từ của tôi": ASCII letters only, 2–38 of them, at most 500 words, no
+    /// duplicates (compared in lowercase). They apply anywhere, are never evicted and replace learned rules for the
+    /// same text. Returns how many lines were added and skipped.
+    public func pin(_ lines: [String]) -> (added: Int, skipped: Int) {
+        var added = 0, skipped = 0
+        lock.withLock {
+            for line in lines {
+                let word = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                let lower = word.lowercased()
+                guard Self.pinnable(word), pins[lower] == nil, pins.count < Self.pinCapacity else {
+                    skipped += 1
+                    continue
+                }
+                pins[lower] = word
+                entries = entries.filter { $0.key.text != lower }
+                convertEntries = convertEntries.filter { $0.key.keys != lower }
+                added += 1
+            }
+        }
+        if added > 0 { didChange() }
+        return (added, skipped)
+    }
+
+    public func unpin(_ word: String) {
+        let removed = lock.withLock { pins.removeValue(forKey: word.lowercased()) != nil }
+        if removed { didChange() }
+    }
+
+    /// The pinned words as pasted, sorted.
+    public var pinnedWords: [String] {
+        lock.withLock { Array(pins.values) }.sorted { $0.lowercased() < $1.lowercased() }
+    }
+
+    /// Whether `keys` (matched in lowercase) is a pinned word.
+    public func isPinned(_ keys: String) -> Bool {
+        let lower = keys.lowercased()
+        return lock.withLock { pins[lower] != nil }
+    }
+
     /// The rules worth showing: every context rule, and contextless counts of 2 or more, except for blocked texts
     /// (they apply nowhere yet). Most recently used first.
     public var rules: [UndoRule] {
-        let (all, blocks) = lock.withLock { (entries, blocked) }
-        return all.values.filter { blocks[$0.text] == nil && (!$0.previous.isEmpty || $0.count >= 2) }
+        let (all, blocks, converts, convertBlocks) = lock.withLock { (entries, blocked, convertEntries, convertBlocked) }
+        let keeps = all.values.filter { blocks[$0.text] == nil && (!$0.previous.isEmpty || $0.count >= 2) }
+        let convs = converts.values.filter {
+            convertBlocks[Self.blockKey($0.text, $0.toRaw ?? false)] == nil && (!$0.previous.isEmpty || $0.count >= 2)
+        }
+        return (keeps + convs)
             .sorted { $0.lastUsed != $1.lastUsed ? $0.lastUsed > $1.lastUsed : $0.id < $1.id }
     }
 
     public func remove(_ rule: UndoRule) {
         let removed = lock.withLock {
-            entries.removeValue(forKey: Key(previous: rule.previous, text: rule.text)) != nil
+            if rule.kind == .convert {
+                return convertEntries.removeValue(
+                    forKey: ConvertKey(previous: rule.previous, keys: rule.text, toRaw: rule.toRaw ?? false)) != nil
+            }
+            return entries.removeValue(forKey: Key(previous: rule.previous, text: rule.text)) != nil
         }
         if removed { didChange() }
     }
@@ -158,6 +317,9 @@ public final class UndoRuleBook {
         let eraseUnreadable: Bool = lock.withLock {
             entries = [:]
             blocked = [:]
+            convertEntries = [:]
+            convertBlocked = [:]
+            pins = [:]
             return !persistent && store != nil
         }
         if eraseUnreadable {
@@ -191,10 +353,47 @@ public final class UndoRuleBook {
         return true
     }
 
+    private func bumpConvert(_ key: ConvertKey, at date: Date) {
+        if var rule = convertEntries[key] {
+            rule.count += 1
+            rule.lastUsed = date
+            convertEntries[key] = rule
+        } else {
+            convertEntries[key] = UndoRule(text: key.keys, previous: key.previous, count: 1, lastUsed: date,
+                                           kind: .convert, toRaw: key.toRaw)
+        }
+    }
+
+    private func markConvertUsed(_ key: ConvertKey) -> Bool {
+        guard var rule = convertEntries[key], rule.count >= 1 else { return false }
+        rule.lastUsed = now()
+        convertEntries[key] = rule
+        return true
+    }
+
+    /// Recording a convert for `(previous, text)` replaces the keep rule for it.
+    private func eraseKeep(previous: String, text: String) {
+        entries[Key(previous: previous, text: text)] = nil
+    }
+
+    /// Recording a keep for `(previous, keys)` replaces the convert rules for it, in both directions.
+    private func eraseConvert(previous: String, keys: String) {
+        convertEntries[ConvertKey(previous: previous, keys: keys, toRaw: true)] = nil
+        convertEntries[ConvertKey(previous: previous, keys: keys, toRaw: false)] = nil
+    }
+
+    /// The least recently used entry goes first, whichever kind it is. Pins are not entries.
     private func evictOverCapacity() {
-        while entries.count > Self.capacity {
-            guard let oldest = entries.min(by: { $0.value.lastUsed < $1.value.lastUsed })?.key else { return }
-            entries[oldest] = nil
+        while entries.count + convertEntries.count > Self.capacity {
+            let oldKeep = entries.min(by: { $0.value.lastUsed < $1.value.lastUsed })
+            let oldConvert = convertEntries.min(by: { $0.value.lastUsed < $1.value.lastUsed })
+            if let k = oldKeep, oldConvert == nil || k.value.lastUsed <= oldConvert!.value.lastUsed {
+                entries[k.key] = nil
+            } else if let c = oldConvert {
+                convertEntries[c.key] = nil
+            } else {
+                return
+            }
         }
     }
 
@@ -216,11 +415,13 @@ public final class UndoRuleBook {
         guard schedule else { return }
         saveQueue.async { [self] in
             // Copy-on-write copies: the lock is held for no real work.
-            let (saved, savedBlocks) = lock.withLock {
+            let (saved, savedBlocks, savedConverts, savedConvertBlocks, savedPins) = lock.withLock {
                 savePending = false
-                return (entries, blocked)
+                return (entries, blocked, convertEntries, convertBlocked, Array(pins.values))
             }
-            let snapshot = Snapshot(rules: Array(saved.values), blocked: savedBlocks)
+            let snapshot = Snapshot(rules: Array(saved.values), blocked: savedBlocks,
+                                    convert: Array(savedConverts.values), convertBlocked: savedConvertBlocks,
+                                    pinned: savedPins)
             guard let data = try? JSONEncoder().encode(snapshot) else { return }
             try? store?.save(data)
         }

@@ -292,10 +292,11 @@ static bool repairDoubleKey(const ScreenModel& before, double now, VKEdit& e) {
 static const size_t kFixWordMax = sizeof(((lk_fix*)nullptr)->before) / sizeof(uint16_t);
 
 struct Fix {
-    std::u16string before, after, previous;
+    std::u16string before, after, previous, keys;   // keys: the raw keys, lower case; empty when unknown
 };
 
 static lk_fix_filter fixFilter = nullptr;
+static lk_convert_filter convertFilter = nullptr;
 static bool hasLastFix = false;       // Vikey's fix of the last key, which Backspace twice may still undo
 static Fix lastFix;
 struct Veto {
@@ -306,8 +307,21 @@ struct Veto {
     bool capsLock = false;             // the Caps Lock rule vetoed, not the fix filter: no undo event on reverse
 };
 static Veto veto;
+// Spec 5.3: a word a learned convert rule changed at its break key ("beer " shown "bể " by Vikey, typed "beer "),
+// which ⌫⌫ or ⌃⌫ right after gives back as Vikey had it. Like Veto it counts the Backspaces since; any other key, a
+// reset or a language change ends it. The event it makes (kind 2) is queued at once, never held (spec 8.4).
+struct RuleConvert {
+    bool active = false;
+    Fix fix;                           // before: what Vikey showed, after: what the rule made
+    std::u16string breaks;             // the break character typed after the word
+    int languageBefore = 1;            // vLanguage before the rule converted
+    int backspaces = 0;                // Backspaces since the conversion
+};
+static RuleConvert ruleConvert;
 static bool hasPendingUndo = false;
 static lk_undo pendingUndo;
+static Uint16 lastFixKey = 0;         // the break key that made `lastFix` (⌃⌫ on the fixed word types it again)
+static bool lastFixShift = false;
 // Spec 12.2a: Vikey's ⌫⌫ undo of an English word it put back at the break ("tét" -> "test ", ⌫⌫ shows "tét"; a
 // doubled letter: "trafic" -> "traffic "), held until the next key tells an undo from an edit (editAfterUndo): a
 // letter means the user was deleting the Space and the last letter to change the word; any other key, a reset or a
@@ -318,6 +332,25 @@ struct HeldUndo {
     int backspaces = 0;                // further Backspaces after the undo
 };
 static HeldUndo heldUndo;
+// The learning event of a ⌃⌫ (kind 1: a word Vikey left alone; kind 0: a word Vikey had just fixed, which ⌃⌫ undoes),
+// held as 12.2a's: the next key the user presses, a reset or a language change releases it (the learner may take it
+// then); ⌃⌫ again (a change of mind) drops it.
+struct HeldConvert {
+    bool active = false;
+    Fix fix;
+    int kind = LK_UNDO_BACKSPACE;
+};
+static HeldConvert heldConvert;
+// The ⌃⌫ key's last conversion ("cos " -> "cos ", `shownBefore` "có", `shownAfter` "cos", `breaks` " "), kept so that ⌃⌫
+// again with no other key between gives the word back as it was (`languageBefore` too). Cleared by every key the user
+// presses (pressUser), by a reset and by a language change (forgetFixes). `keys` and `previous` (the word before it,
+// lower case) are for the learner that hears of a conversion.
+struct LastConvert {
+    bool active = false;
+    std::u16string shownBefore, shownAfter, breaks, keys, previous;
+    int languageBefore = 1;
+};
+static LastConvert lastConvert;
 
 static void copyWord(const std::u16string& w, uint16_t* out, int* length) {
     for (size_t i = 0; i < w.size(); i++) out[i] = (uint16_t)w[i];
@@ -330,12 +363,14 @@ static lk_fix toC(const Fix& f) {
     copyWord(f.before, c.before, &c.beforeLength);
     copyWord(f.after, c.after, &c.afterLength);
     copyWord(f.previous, c.previous, &c.previousLength);
+    if (f.keys.size() <= kFixWordMax) copyWord(f.keys, c.keys, &c.keysLength);   // longer: unknown
     return c;
 }
 
-static void queueUndo(const Fix& f, bool reverse) {
+static void queueUndo(const Fix& f, bool reverse, int kind = LK_UNDO_BACKSPACE) {
     pendingUndo.fix = toC(f);
     pendingUndo.reverse = reverse ? 1 : 0;
+    pendingUndo.kind = kind;
     hasPendingUndo = true;
 }
 
@@ -345,10 +380,26 @@ static void releaseHeldUndo() {
     heldUndo = HeldUndo();
 }
 
+// A held ⌃⌫ event stands: the learner may take it now.
+static void releaseHeldConvert() {
+    if (heldConvert.active) queueUndo(heldConvert.fix, false, heldConvert.kind);
+    heldConvert = HeldConvert();
+}
+
 static void forgetFixes() {
     hasLastFix = false;
     veto = Veto();
+    ruleConvert = RuleConvert();
     releaseHeldUndo();
+    releaseHeldConvert();
+    lastConvert = LastConvert();
+}
+
+static void rememberLastFix(const Fix& fix, Uint16 key, bool shift) {
+    lastFix = fix;
+    hasLastFix = true;
+    lastFixKey = key;
+    lastFixShift = shift;
 }
 
 // The fix Vikey made on this key, if Backspace can undo it: rememberFix (Driver.cpp) armed the undo on this very key
@@ -361,6 +412,10 @@ static bool fixOfLastKey(const VKEdit& e, Fix& fix) {
     fix.before = driver->*member(UndoTextTag());
     fix.after = wordEndingAt(model.line, end);
     fix.previous = previousWordBefore(end - fix.after.size());
+    fix.keys.clear();
+    if (model.wordKeysKnown) {
+        for (char16_t c : model.wordKeys) fix.keys += toLower(c);
+    }
     return !fix.before.empty() && !fix.after.empty() && fix.before.size() <= kFixWordMax &&
            fix.after.size() <= kFixWordMax && fix.previous.size() <= kFixWordMax;
 }
@@ -749,10 +804,320 @@ static bool editAfterUndo(double now, VKEdit& e) {
     return true;
 }
 
+// MARK: - ⌃⌫: convert the last word
+//
+// ⌃⌫ turns the last word into its raw keys when it shows a Telex form ("có" -> "cos", "bể" -> "beer", "mĩ" -> "mix") and
+// into the Telex form of its keys when it shows them as typed ("pus" -> "pú"). The word after a break or being typed
+// alike: the break characters after it are typed again.
+
+static bool isBreakChar(char16_t c) {
+    switch (c) {
+        case u' ': case u',': case u'.': case u';': case u'?': case u'!': case u')': case u']': case u'"': case u'\'':
+        case u'”': return true;
+        default: return false;
+    }
+}
+
+// What typing `keys` (Telex, lower case = no Shift) shows in Vietnamese with auto switch off, as lk_vikey_types_as_is
+// replays it: "pus" -> "pú", "Cos" -> "Có", "sdt" -> "sdt". false when the engine's output cannot be followed. The
+// driver (⌫⌫ undo, English look-back) is copied and put back, and the engine's globals are kept; the engine's own
+// per-word state is out of reach (vendor/ is untouched), so it starts a fresh word, which is what it holds after a
+// break. A caller with no break (the word being typed) puts its word back with rebuildEngineWord.
+static bool renderTelex(const std::u16string& keys, std::u16string& shown) {
+    shown.clear();
+    if (keys.empty() || keys.size() >= (size_t)MAX_BUFF - 2) return false;
+    std::vector<std::pair<Uint16, bool>> presses;
+    for (char16_t c : keys) {
+        if (!isAsciiLetter(c)) return false;
+        presses.push_back({kLetterKeys[(c | 32) - 'a'], c >= 'A' && c <= 'Z'});
+    }
+    const VikeyDriver savedDriver = *driver;
+    const vKeyHookState hook = HookState;
+    const int language = vLanguage, byTyping = vAutoSwitchByTyping, request = vAutoSwitchRequest,
+              lastSide = vAutoSwitchLastSide, undoCount = vAutoSwitchUndoCount, restoredCount = vAutoSwitchRestoredCount;
+    vLanguage = 1;
+    vAutoSwitchByTyping = 0;
+    startNewSession();
+    char16_t screen[MAX_BUFF * 2];
+    int len = 0;
+    bool ok = true;
+    for (const auto& p : presses) {
+        vAutoSwitchRequest = -1;
+        vKeyHandleEvent(vKeyEvent::Keyboard, vKeyEventState::KeyDown, p.first, p.second ? 1 : 0, false);
+        const Uint32 caps = p.second ? CAPS_MASK : 0;
+        if (HookState.code == vDoNothing) { screen[len++] = (char16_t)keyCodeToCharacter(p.first | caps); continue; }
+        len -= HookState.backspaceCount;
+        if (len < 0 || len + HookState.newCharCount + 1 > (int)(sizeof(screen) / sizeof(screen[0]))) { ok = false; break; }
+        for (int c = HookState.newCharCount - 1; c >= 0; c--) {
+            const Uint32 d = HookState.charData[c];
+            screen[len++] = (d & CHAR_CODE_MASK) ? (char16_t)(d & 0xFFFF) : (char16_t)keyCodeToCharacter(d);
+        }
+        if (HookState.code == vRestore || HookState.code == vRestoreAndStartNewSession)
+            screen[len++] = (char16_t)keyCodeToCharacter(p.first | caps);
+    }
+    if (ok) shown.assign(screen, screen + len);
+    HookState = hook;
+    vLanguage = language; vAutoSwitchByTyping = byTyping; vAutoSwitchRequest = request;
+    vAutoSwitchLastSide = lastSide; vAutoSwitchUndoCount = undoCount; vAutoSwitchRestoredCount = restoredCount;
+    *driver = savedDriver;
+    startNewSession();
+    return ok;
+}
+
+// `e` replaces `target` and the `breaks` after it by `newWord` and the same breaks, in `newLanguage`, and the engine
+// and the model follow. Without breaks the word is still being typed, so the engine holds it in the new language
+// (rebuildEngineWord); after breaks it is finished, and the language switch is Vikey's own (comeBackAfterDoubledKey:
+// the next word starts fresh, nothing dropped). A fix Vikey armed for ⌫⌫ is dropped: it belongs to the old word.
+static void moveWord(const std::u16string& target, const std::u16string& newWord, const std::u16string& breaks,
+                     int newLanguage, double now, VKEdit& e) {
+    const int languageBefore = vLanguage;
+    e = VKEdit();
+    e.deleteCount = (int)(target.size() + breaks.size());
+    e.text = newWord + breaks;
+    applyToModel(e);
+    if (breaks.empty()) {
+        rebuildEngineWord(newWord, newLanguage, now);
+    } else {
+        driver->*member(UndoActiveTag()) = false;
+        vLanguage = newLanguage;
+        startNewSession();
+        vAutoSwitchForget();
+    }
+    e.languageChanged = vLanguage != languageBefore;
+    hasLastFix = false;
+    veto = Veto();
+    ruleConvert = RuleConvert();
+    heldUndo = HeldUndo();
+    doubledKeyFlip = false;
+    model.wordStartLanguage = newLanguage;
+    model.lastKey = model.keyBefore = kNoKey;
+    model.lastKeyReplaced = false;
+    model.languageAfterLastKey = vLanguage;
+    model.wordBeforeLastKey.clear();
+    model.wordCapsLock = false;
+}
+
+static std::u16string lowerCase(std::u16string s) {
+    for (char16_t& c : s) c = toLower(c);
+    return s;
+}
+
+// What converting `target` (the word on screen, `breaks` after it) gives, from the raw `keys` that typed it: the keys
+// when it shows something else, the Telex form of the keys when it shows them as typed. false when that makes no other
+// word (the engine is then at a fresh word, or holds `target` again when there are no breaks).
+static bool decideConvert(const std::u16string& target, const std::u16string& keys, const std::u16string& breaks,
+                          double now, std::u16string& newWord, int& newLanguage) {
+    newLanguage = 0;
+    if (lowerCase(target) == lowerCase(keys)) {
+        newLanguage = 1;
+        const bool rendered = renderTelex(keys, newWord);
+        if (!rendered || newWord == target) {
+            // renderTelex left the engine at a fresh word; with no break the word still on screen is the one it holds.
+            if (breaks.empty()) rebuildEngineWord(target, vLanguage, now);
+            return false;
+        }
+    } else {
+        newWord = keys;
+    }
+    return newWord != target;
+}
+
+// Convert `target` as decideConvert says, and move the engine and the model. `hold`: the conversion is a learning
+// event (kind 1), held for the next key.
+static bool convertWord(const std::u16string& target, const std::u16string& keys, const std::u16string& breaks,
+                        bool hold, double now, VKEdit& e) {
+    std::u16string newWord;
+    int newLanguage = 0;
+    if (!decideConvert(target, keys, breaks, now, newWord, newLanguage)) return false;
+    const int languageBefore = vLanguage;
+    LastConvert done;
+    done.active = true;
+    done.shownBefore = target;
+    done.shownAfter = newWord;
+    done.breaks = breaks;
+    done.keys = keys;
+    done.previous = previousWordBefore(model.line.size() - breaks.size() - target.size());
+    done.languageBefore = languageBefore;
+    moveWord(target, newWord, breaks, newLanguage, now, e);
+    lastConvert = done;
+    releaseHeldConvert();
+    if (hold) {
+        heldConvert.active = true;
+        heldConvert.kind = LK_UNDO_CONVERT;
+        heldConvert.fix.before = target;
+        heldConvert.fix.after = newWord;
+        heldConvert.fix.previous = done.previous.size() <= kFixWordMax ? done.previous : std::u16string();
+        heldConvert.fix.keys = lowerCase(keys);
+    }
+    return true;
+}
+
+// ⌃⌫ or the second Backspace right after a rule converted a word: Vikey's word comes back in its language, and the
+// learner hears of the change of mind (kind 2) at once. `e` is the edit, with `deleteExtra` characters of the word's
+// tail already off the screen (the break character a Backspace took). false when the screen is not as the rule left it.
+static bool reverseRuleConvert(double now, size_t deleteExtra, VKEdit& e) {
+    if (!ruleConvert.active) return false;
+    const RuleConvert r = ruleConvert;
+    ruleConvert = RuleConvert();
+    const std::u16string tail = r.fix.after + r.breaks.substr(0, r.breaks.size() - deleteExtra);
+    if (model.line.size() < tail.size() || model.line.compare(model.line.size() - tail.size(), tail.size(), tail) != 0)
+        return false;
+    // The breaks still on screen go with the word and come back with it.
+    const std::u16string kept = r.breaks.substr(0, r.breaks.size() - deleteExtra);
+    moveWord(r.fix.after, r.fix.before, kept, r.languageBefore, now, e);
+    // Any held ⌃⌫ event was released before a rule could convert, so this is the one event in the slot (spec 8.4).
+    queueUndo(r.fix, true, LK_UNDO_RULE_REVERSE);
+    return true;
+}
+
+// The raw keys of the word just typed (model.wordKeys), each with the case of the letter it types. Caps Lock gives
+// lower-case keys for capitals on screen ("COS" is c, o, s with Caps Lock), so every key of a word typed with it is a
+// capital; otherwise a key takes the case of the letter shown at its position.
+static std::u16string casedWordKeys(const std::u16string& target) {
+    std::u16string keys = model.wordKeys;
+    for (size_t i = 0; i < keys.size(); i++) {
+        if (model.wordCapsLock || (i < target.size() && isUpper(target[i]))) keys[i] = (char16_t)(keys[i] & ~32);
+    }
+    return keys;
+}
+
+// ⌃⌫ on the word Vikey fixed at the last key ("cos " -> "có "): Vikey's own undo, inside the engine as vetoFix does it
+// (Backspace twice: the break character goes, then the typed word and its language come back), and the break typed
+// again; one edit. Vikey's fix is a ⌫⌫ undo to the learner: a kind 0 event for `lastFix`, held for the next key, and
+// ⌃⌫ again gives the fix back like any conversion. false (nothing done) when the word is not the one Vikey fixed.
+static bool undoLastFix(const std::u16string& target, const std::u16string& breaks, bool hold, double now, VKEdit& e) {
+    if (!hasLastFix || breaks.size() != 1 || target != lastFix.after) return false;
+    const Fix fix = lastFix;
+    const Uint16 key = lastFixKey;
+    const bool shift = lastFixShift;
+    const int languageBefore = vLanguage;
+    const std::u16string previous = fix.previous;
+    e = VKEdit();
+    for (int i = 0; i < 2; i++) e = composeEdits(e, pressTracked(KEY_DELETE, false, now));
+    e = composeEdits(e, pressTracked(key, shift, now));
+    e.languageChanged = vLanguage != languageBefore;
+    // The undo is done: nothing of Vikey's armed for ⌫⌫ belongs to the word any more.
+    driver->*member(UndoActiveTag()) = false;
+    hasLastFix = false;
+    veto = Veto();
+    heldUndo = HeldUndo();
+    doubledKeyFlip = false;
+    model.lastKey = model.keyBefore = kNoKey;
+    model.lastKeyReplaced = false;
+    model.languageAfterLastKey = vLanguage;
+    model.wordBeforeLastKey.clear();
+    LastConvert done;
+    done.active = true;
+    done.shownBefore = fix.after;
+    done.shownAfter = fix.before;
+    done.breaks = breaks;
+    done.keys = fix.keys;
+    done.previous = previous;
+    done.languageBefore = languageBefore;
+    lastConvert = done;
+    releaseHeldConvert();
+    if (hold) {
+        heldConvert.active = true;
+        heldConvert.kind = LK_UNDO_BACKSPACE;
+        heldConvert.fix = fix;
+    }
+    return true;
+}
+
+// ⌃⌫: the word before the break characters at the end of the line, converted as above. false when there is none.
+static bool convertLastWord(double now, VKEdit& e) {
+    // Right after a learned rule converted the word: ⌃⌫ is a change of mind (spec 5.3).
+    if (ruleConvert.active && reverseRuleConvert(now, 0, e)) return true;
+    ruleConvert = RuleConvert();
+    if (lastConvert.active) {
+        // Again, no key between: back to the word and language from before.
+        const LastConvert c = lastConvert;
+        const std::u16string tail = c.shownAfter + c.breaks;
+        if (model.line.size() >= tail.size() && model.line.compare(model.line.size() - tail.size(), tail.size(), tail) == 0) {
+            moveWord(c.shownAfter, c.shownBefore, c.breaks, c.languageBefore, now, e);
+            lastConvert = LastConvert();
+            heldConvert = HeldConvert();   // a change of mind: nothing to learn
+            return true;
+        }
+        lastConvert = LastConvert();
+    }
+    size_t end = model.line.size();
+    while (end > 0 && isBreakChar(model.line[end - 1])) end--;
+    const std::u16string breaks = model.line.substr(end);
+    const std::u16string target = wordEndingAt(model.line, end);
+    if (target.empty() || target.size() > kFixWordMax || breaks.size() > kFixWordMax) return false;
+    // While a 12.2a undo is held, ⌃⌫ drops it (moveWord clears it) and nothing is held in its place.
+    const bool hold = !heldUndo.active;
+    if (undoLastFix(target, breaks, hold, now, e)) return true;
+
+    // The keys that typed it: the record of the last word typed, else the word itself when it is plain letters, else
+    // its Telex keys, each with the case of the letter it types.
+    std::u16string keys;
+    if (heldUndo.active && heldUndo.backspaces == 0 && target == heldUndo.fix.before) {
+        // ⌫⌫ just showed the word as Vikey had it ("tét"): the keys are the word it put back ("test").
+        keys = heldUndo.fix.after;
+    } else if (model.wordKeysKnown && !model.wordKeys.empty()) {
+        keys = casedWordKeys(target);
+    } else if (isAscii(target)) {
+        keys = target;
+    } else {
+        std::vector<std::pair<Uint16, bool>> presses;
+        if (!keyPresses(target, 1, presses)) return false;
+        for (const auto& p : presses) {
+            for (size_t k = 0; k < 26; k++) if (kLetterKeys[k] == p.first) keys += (char16_t)((p.second ? 'A' : 'a') + k);
+        }
+    }
+    if (keys.empty()) return false;
+    return convertWord(target, keys, breaks, hold, now, e);
+}
+
+// The break key `e` just typed ended a word Vikey left alone: ask the convert filter (spec 5.2) and, on 1, make `e` the
+// one edit that types the converted word and the break (the break is not on screen yet, so one character less is
+// deleted than moveWord counts) and arm ruleConvert. `languageBefore`: vLanguage before the key. Nothing happens
+// (the engine untouched) unless the keys of a plain word before a single break character are known.
+static void convertAtBreak(int languageBefore, double now, VKEdit& e) {
+    if (e.deleteCount != 0 || e.text.size() != 1 || model.line.empty() || !model.wordKeysKnown ||
+        model.wordKeys.empty() || model.line.back() != e.text[0] || !isBreakChar(e.text[0])) return;
+    const size_t end = model.line.size() - 1;
+    const std::u16string target = wordEndingAt(model.line, end);
+    if (target.empty() || target.size() > kFixWordMax) return;
+    const std::u16string keys = casedWordKeys(target);
+    if (keys.size() > kFixWordMax) return;
+    const std::u16string breaks = e.text;
+    // The engine is never replayed to ask the filter (renderTelex cannot give back the engine's own state, which ⌫ over
+    // the break still needs): `after` is the keys when the word shows something else, and left empty when the
+    // conversion is the Telex form of the keys, which only renders once the filter said 1.
+    const bool toTelex = lowerCase(target) == lowerCase(keys);
+    Fix fix;
+    fix.before = target;
+    if (!toTelex) fix.after = keys;
+    fix.previous = previousWordBefore(end - target.size());
+    fix.keys = lowerCase(keys);
+    if (fix.previous.size() > kFixWordMax) fix.previous.clear();
+    const lk_fix c = toC(fix);
+    if (convertFilter(&c) != 1) return;
+    std::u16string newWord;
+    int newLanguage = 0;
+    if (!decideConvert(target, keys, breaks, now, newWord, newLanguage) || newWord.size() > kFixWordMax) return;
+    fix.after = newWord;
+    const int languageNow = vLanguage;
+    const bool capsLock = model.wordCapsLock;
+    moveWord(target, newWord, breaks, newLanguage, now, e);
+    e.deleteCount -= (int)breaks.size();
+    e.languageChanged = vLanguage != languageBefore;
+    model.wordCapsLock = capsLock;
+    ruleConvert.active = true;
+    ruleConvert.fix = fix;
+    ruleConvert.breaks = breaks;
+    ruleConvert.languageBefore = languageNow;
+}
+
 static VKEdit pressUserKey(uint16_t macKeyCode, int shift, double now);
 
 // One key the user pressed: Vikey's edit with the shim's repairs, vetoes and undo bookkeeping.
 static VKEdit pressUser(uint16_t macKeyCode, int shift, double now) {
+    lastConvert = LastConvert();
+    releaseHeldConvert();
     if (heldUndo.active) {
         VKEdit edit;
         if (macKeyCode == KEY_DELETE) heldUndo.backspaces++;
@@ -768,9 +1133,14 @@ static VKEdit pressUserKey(uint16_t macKeyCode, int shift, double now) {
     VKEdit e;
     if (backspace && reverseVeto(now, e)) {
         hasLastFix = false;
+    } else if (backspace && ruleConvert.active && ruleConvert.backspaces == 1 && ruleConvert.breaks.size() == 1 &&
+               reverseRuleConvert(now, 1, e)) {
+        // ⌫⌫ after a rule's conversion: Vikey's word is back (the first Backspace took the break character).
     } else {
         if (backspace && veto.active) veto.backspaces++;
         else veto = Veto();
+        if (backspace && ruleConvert.active) ruleConvert.backspaces++;
+        else ruleConvert = RuleConvert();
         if (!backspace) hasLastFix = false;
         const int undosBefore = driver->undos;
         const bool letterKey = isLetterKey(macKeyCode);
@@ -833,8 +1203,11 @@ static VKEdit pressUserKey(uint16_t macKeyCode, int shift, double now) {
             } else if (fixFilter) {
                 const lk_fix c = toC(fix);
                 if (fixFilter(&c) == 1) vetoFix(before, macKeyCode, shift != 0, now, e, fix);
-                else { lastFix = fix; hasLastFix = true; }
-            } else { lastFix = fix; hasLastFix = true; }
+                else rememberLastFix(fix, macKeyCode, shift != 0);
+            } else { rememberLastFix(fix, macKeyCode, shift != 0); }
+        } else if (convertFilter && !letterKey) {
+            // Vikey left the finished word alone: a learned rule may still convert it (spec 5.2).
+            convertAtBreak(languageBefore, now, e);
         }
     }
     return e;
@@ -874,6 +1247,42 @@ void lk_vikey_press(uint16_t macKeyCode, int shift, double now, lk_edit* out) {
     out->languageChanged = e.languageChanged ? 1 : 0;
 }
 
+int lk_vikey_convert_last_word(double now, lk_edit* out) {
+    if (!out) return 0;
+    out->deleteCount = 0; out->length = 0; out->languageChanged = 0;
+    if (!driver) return 0;
+    VKEdit e;
+    if (!convertLastWord(now, e)) {
+        // The key goes to the app, which edits the text itself; rendering to decide may have disturbed the engine, so
+        // the typing context starts over.
+        lk_vikey_reset_context();
+        return 0;
+    }
+    const int cap = (int)(sizeof(out->text) / sizeof(out->text[0]));
+    if (e.text.size() > (size_t)cap) {
+        // Too long for one edit: the screen and the shim's copy would part, so start over, as lk_vikey_press does.
+        lk_vikey_reset_context();
+        out->languageChanged = e.languageChanged ? 1 : 0;
+        return 0;
+    }
+    out->deleteCount = e.deleteCount;
+    const int n = (int)e.text.size();
+    for (int i = 0; i < n; i++) out->text[i] = (uint16_t)e.text[i];
+    out->length = n;
+    out->languageChanged = e.languageChanged ? 1 : 0;
+    return 1;
+}
+
+void lk_vikey_set_last_word_case(const uint16_t* units, int length) {
+    if (!units || length <= 0 || (size_t)length > kFixWordMax) return;
+    const std::u16string cased((const char16_t*)units, (size_t)length);
+    size_t end = model.line.size();
+    while (end > 0 && isBreakChar(model.line[end - 1])) end--;
+    const std::u16string word = wordEndingAt(model.line, end);
+    if (word.size() != cased.size() || lowerCase(word) != lowerCase(cased)) return;
+    model.line.replace(end - word.size(), word.size(), cased);
+}
+
 void lk_vikey_set_caps_lock(int on) {
     capsLockForNextKey = on != 0;
 }
@@ -896,6 +1305,10 @@ void lk_vikey_set_caps_words(const uint16_t* units, int count) {
             word += (char16_t)units[i];
         }
     }
+}
+
+void lk_vikey_set_convert_filter(lk_convert_filter filter) {
+    convertFilter = filter;
 }
 
 void lk_vikey_set_fix_filter(lk_fix_filter filter) {

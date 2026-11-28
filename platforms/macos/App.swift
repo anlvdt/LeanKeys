@@ -1,3 +1,4 @@
+import LeanKeysKit // LEANKEYS-HOOK: settings-engine
 import SwiftUI
 
 @main
@@ -47,5 +48,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             SettingsKey.advancedMode: false,
             SettingsKey.sessionTapMode: false,
         ])
+        _ = ConvertKeyDefault.apply(.standard, shortcutKey: SettingsKey.restoreShortcut, enabledKey: SettingsKey.restoreShortcutEnabled) // LEANKEYS-HOOK: settings-engine
     }
 }

@@ -33,3 +33,4 @@ FILE	.github/FUNDING.yml
 auto-fix	platforms/macos/RustBridge.swift
 auto-fix	platforms/macos/MainSettingsView.swift
 auto-fix	platforms/macos/AdvancedSettingsView.swift
+settings-engine	platforms/macos/App.swift

@@ -121,6 +121,21 @@ final class AutoCapitalizerTests: XCTestCase {
         XCTAssertEqual(line(router).type("tooi owr haf nooij "), "tôi ở Hà Nội ")
     }
 
+    /// Final review F2 (ruling 13): ⌃⌫ converts the word LeanKeys capitalised, capital kept both ways.
+    func testConvertKeepsTheCapitalLeanKeysWrote() {
+        let router = makeRouter()
+        let field = line(router)
+        XCTAssertEqual(field.type("tooi owr haf nooij "), "tôi ở Hà Nội ")
+        func convert() -> String {
+            guard let (bs, chars, _) = router.convertLastWord() else { XCTFail("nothing to convert"); return String(field.text) }
+            field.text.removeLast(bs)
+            field.text.append(contentsOf: chars)
+            return String(field.text)
+        }
+        XCTAssertEqual(convert(), "tôi ở Hà Nooij ", "the capital survives the conversion to the raw keys")
+        XCTAssertEqual(convert(), "tôi ở Hà Nội ", "and the second ⌃⌫ gives back what was on screen")
+    }
+
     /// Review Focus 2: the replacement lands before the ".", which the key still types.
     func testPunctuationBreak() {
         let router = makeRouter()

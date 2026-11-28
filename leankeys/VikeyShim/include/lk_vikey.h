@@ -38,15 +38,34 @@ typedef struct {
     uint16_t before[64]; int beforeLength;     // the word on screen before Vikey changed it ("cos", "ít")
     uint16_t after[64];  int afterLength;      // the word Vikey made ("có", "its")
     uint16_t previous[64]; int previousLength; // the word before it on the same line, lower case; may be empty
+    uint16_t keys[64]; int keysLength;         // the raw keys that typed the word, lower case; empty when unknown
 } lk_fix;
 // Called when Vikey has just fixed a word (words over 64 UTF-16 units are never reported). Return 1 to keep `before`:
 // the shim undoes the fix inside the engine and types the break key again, all in the one edit the key returns, with
 // the language as it was before the key. 0 lets the fix stand.
 typedef int (*lk_fix_filter)(const lk_fix* fix);
 void lk_vikey_set_fix_filter(lk_fix_filter filter); // NULL = never veto (the default)
+// Called at a break key when Vikey made no fix of the word just finished and its raw keys are known (a word with a
+// Backspace in it, or pasted, is not): `before` is the word as shown, `after` what converting it gives when that needs no
+// rendering (the raw keys, when the word shows something else); EMPTY (afterLength 0) when the word shows its keys as
+// typed, since its Telex form is only rendered once the filter returns 1. Also `keys`, `previous`. Return 1 to convert it
+// within the break key's own edit (language follows the direction); ⌫⌫ or ⌃⌫ right after gives the word back as Vikey
+// had it and queues a LK_UNDO_RULE_REVERSE event at once. A place-name rule of the shim goes first; 0 changes nothing.
+typedef int (*lk_convert_filter)(const lk_fix* fix);
+void lk_vikey_set_convert_filter(lk_convert_filter filter); // NULL = never convert (the default)
 // An undo: the user pressed Backspace twice right after a fix (Vikey puts `before` back; reverse = 0), or right after
-// a veto (the shim applies the fix after all: `after` comes back with its language; reverse = 1).
-typedef struct { lk_fix fix; int reverse; } lk_undo;
+// a veto (the shim applies the fix after all: `after` comes back with its language; reverse = 1). `kind`:
+//   LK_UNDO_BACKSPACE (0)    Backspace twice, or ⌃⌫ on a word Vikey had just fixed (it undoes the fix, reverse = 0).
+//   LK_UNDO_CONVERT (1)      ⌃⌫ on a word Vikey left alone: `before` is what was shown, `after` what ⌃⌫ made, `keys` the
+//                            raw keys. Held until the next key, and dropped when ⌃⌫ is pressed again (a change of mind).
+//   LK_UNDO_RULE_REVERSE (2) the user undid a conversion a learned rule had made (never held; reverse = 1, switch on
+//                            `kind`: `before` is what Vikey showed, `after` what the rule made, `keys` the raw keys).
+// The events of kinds 0 and 1 that ⌃⌫ makes are held like 12.2a's: the next key (not ⌃⌫), a reset or a language change
+// releases them; ⌃⌫ pressed again drops them.
+#define LK_UNDO_BACKSPACE 0
+#define LK_UNDO_CONVERT 1
+#define LK_UNDO_RULE_REVERSE 2
+typedef struct { lk_fix fix; int reverse; int kind; } lk_undo;
 // 1 and fills `out` once per undo; 0 when there is none. One slot: a newer undo replaces one not yet taken.
 // No lock: call it on the thread that calls lk_vikey_press, right after the press.
 int  lk_vikey_take_undo(lk_undo* out);
@@ -78,6 +97,22 @@ int  lk_vikey_word_score(int vietnamese, const char* letters);
 // its private per-word state from outside vendor/, so afterwards the typing context is reset, as after a click
 // (lk_vikey_reset_context): the word being typed, Backspace history and look-back are forgotten.
 int  lk_vikey_types_as_is(const char* letters);
+
+// The ⌃⌫ key: converts the last word between its Telex form and its raw keys ("có " <-> "cos ", "pú" <-> "pus"), in
+// one edit (delete the word and the break characters after it, type the new word and the same breaks; `languageChanged`
+// when the language changes: the raw keys are English, the Telex form Vietnamese). The word is the letter run before the
+// break characters (Space , . ; ? ! ) ] " ' ”) at the end of the line the shim has followed. 1 and `out` filled when
+// there is a word to convert; 0 and an empty `out` when there is none (no word, a line the shim lost track of, a word
+// longer than 64 letters, or keys Telex does not change: "sdt", "ok"), and the key then goes through to the app, which
+// edits the text itself: a 0 return resets the typing context, as lk_vikey_reset_context does. Pressed
+// again with no other key between, it gives the word and language from before the first press back. Main
+// (key-handling) thread only: it replays keys through the engine, as lk_vikey_press does.
+int  lk_vikey_convert_last_word(double now, lk_edit* out);
+
+// The app changed the case of the word just typed on screen (auto capitalisation: "hà nội " -> "Hà Nội "): the shim's
+// copy of the line takes the cased `units` for the last word (before the break characters), so ⌃⌫ converts what is
+// on screen. Ignored unless the word there has the same length and the same letters apart from case.
+void lk_vikey_set_last_word_case(const uint16_t* units, int length);
 
 #ifdef __cplusplus
 }
